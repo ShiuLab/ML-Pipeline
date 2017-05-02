@@ -33,8 +33,6 @@ OUTPUT:
 import sys
 import pandas as pd
 import numpy as np
-from math import sqrt
-from sklearn.metrics import (precision_recall_curve, f1_score)
 import time
 
 class fun(object):
@@ -45,6 +43,7 @@ class fun(object):
     """ Perform a parameter sweep using grid search CV implemented in SK-learn
     """
     from sklearn.model_selection import GridSearchCV
+    from sklearn.preprocessing import StandardScaler
     from sklearn.ensemble import RandomForestClassifier
     from sklearn.svm import LinearSVC
 
@@ -53,8 +52,8 @@ class fun(object):
     ### NOTE: The returned top_params will be in alphabetical order - to be consistent add any additional 
     ###       parameters to test in alphabetical order
     if ALG == 'RF':
-      parameters = {'max_depth':(3, 5, 10, 50, 100), 'max_features': (0.1, 0.25, 0.5, 0.75, 0.9999, 'sqrt', 'log2'),'n_estimators':(50, 100, 500)}
-      #parameters = {'max_depth':(2, 5), 'max_features': (0.1, 0.5), 'n_estimators':(10, 50)}
+      #parameters = {'max_depth':(3, 5, 10, 50, 100), 'max_features': (0.1, 0.25, 0.5, 0.75, 0.9999, 'sqrt', 'log2'),'n_estimators':(50, 100, 500)}
+      parameters = {'max_depth':(2, 5), 'max_features': (0.1, 0.5), 'n_estimators':(10, 50)}
     
     elif ALG == "SVC":
       #parameters = {'C':(0.1, 1), 'loss':('hinge', 'squared_hinge'), 'max_iter':(10,100)}
@@ -80,6 +79,7 @@ class fun(object):
       if ALG == 'RF':
         model = RandomForestClassifier()
       elif ALG == "SVC":
+        x = StandardScaler().fit_transform(x)
         model = LinearSVC()
       
       grid_search = GridSearchCV(model, parameters, scoring = gs_score, cv = 10, n_jobs = n_jobs, pre_dispatch=2*n_jobs)
@@ -107,16 +107,21 @@ class fun(object):
 
 
 
-  def RandomForest(df, classes, n_estimators, max_depth, max_features, criterion, n_jobs, j):
+  def RandomForest(df, classes, POS, n_estimators, max_depth, max_features, n_jobs, j):
     from sklearn.ensemble import RandomForestClassifier
     from sklearn.model_selection import cross_val_predict
-    from sklearn.metrics import accuracy_score, f1_score, confusion_matrix
+    from sklearn.metrics import accuracy_score, f1_score, roc_auc_score, confusion_matrix
 
     y = df['Class']
     x = df.drop(['Class'], axis=1) 
     
     # Create the classifier
-    clf = RandomForestClassifier(n_estimators=int(n_estimators), max_depth=max_depth, max_features=max_features, criterion=criterion, random_state=j, n_jobs=n_jobs)
+    clf = RandomForestClassifier(n_estimators=int(n_estimators), 
+      max_depth=max_depth, 
+      max_features=max_features,
+      criterion='gini', 
+      random_state=j, 
+      n_jobs=n_jobs)
     
     # Obtain the predictions using 10 fold cross validation (uses KFold cv by default):
     cv_pred = cross_val_predict(estimator=clf, X=x, y=y, cv=10)
@@ -124,42 +129,53 @@ class fun(object):
     # Gather scoring metrics
     cm = confusion_matrix(y, cv_pred, labels=classes)
     accuracy = accuracy_score(y, cv_pred)
-    macro_f1 = f1_score(y, cv_pred, average='macro')  # use macro instead of weighted because models are balanced
+    macro_f1 = f1_score(y, cv_pred, average='macro')  # 
     f1 = f1_score(y, cv_pred, average=None)  # Returns F1 for each class
-  
+    
     # Calculate additional scores for binary predictions 
     if len(df['Class'].unique()) == 2:
+      clf.fit(x,y)
       importances = clf.feature_importances_
-      return [cm, accuracy, macro_f1, f1, importances]
+      print(POS)
+      AucRoc = roc_auc_score(y, cv_pred,  pos_label = POS)
+      return [cm, accuracy, macro_f1, f1, AucRoc, importances]
     
     else:
       return [cm, accuracy, macro_f1, f1]
 
 
-  def LinearSVC(df, classes, C, loss, max_iter, n_jobs, j):
+  def LinearSVC(df, classes, POS, C, loss, max_iter, n_jobs, j):
     from sklearn.svm import LinearSVC
     from sklearn.model_selection import cross_val_predict
-    from sklearn.metrics import accuracy_score, f1_score, confusion_matrix
-
-    y = df['Class']
-    x = df.drop(['Class'], axis=1)  
+    from sklearn.metrics import accuracy_score, f1_score, roc_auc_score, confusion_matrix
+    from sklearn.preprocessing import StandardScaler
     
+    y = df['Class']
+    x = StandardScaler().fit_transform(df.drop(['Class'], axis=1))
+
     # Create the classifier
-    clf = LinearSVC(C=float(C), loss=loss, penalty='l2', max_iter=int(max_iter), random_state=j)
+    clf = LinearSVC(C=float(C), 
+      loss=loss, 
+      penalty='l2', 
+      max_iter=int(max_iter), 
+      random_state=j)
 
     #Obtain the predictions using 10 fold cross validation (uses KFold cv by default):
     cv_pred = cross_val_predict(estimator=clf, X=x, y=y, cv=10, n_jobs = n_jobs)
 
+    #return(y, cv_pred)
     # Gather scoring metrics
     cm = confusion_matrix(y, cv_pred, labels=classes)
     accuracy = accuracy_score(y, cv_pred)
     macro_f1 = f1_score(y, cv_pred, average='macro')  # use macro instead of weighted because models are balanced
     f1 = f1_score(y, cv_pred, average=None)  # Returns F1 for each class
-  
+    
     # Calculate additional scores for binary predictions 
     if len(df['Class'].unique()) == 2:
-      importances = clf.coef_
-      return [cm, accuracy, macro_f1, f1, importances]
+      clf.fit(x,y)
+      importances = clf.feature_importances_
+      AucRoc = roc_auc_score(y, cv_pred,  pos_label = POS)
+      return [cm, accuracy, macro_f1, f1, AucRoc, importances]
     
     else:
       return [cm, accuracy, macro_f1, f1]
