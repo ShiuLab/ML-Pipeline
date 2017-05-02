@@ -1,33 +1,16 @@
 """
 PURPOSE:
-Bianary classifications using RandomForestClassifier and LinearSVC implemented in sci-kit learn. 
 
-Optional grid seach function (-gs True) to run a parameter sweep on a subset of the balanced datasets
+Functions for SKlearn machine learning pipeline
 
-To access pandas, numpy, and sklearn packages on HPS first run:
-$ export PATH=/mnt/home/azodichr/miniconda3/bin:$PATH
+GridSearch
+RandomForest
+LinearSVC
+Performance
+Performance_MC
+PR_Curve - NOT FUNCTIONAL
+Plot_ConMatrix
 
-
-INPUTS:
-  
-  REQUIRED:
-  -df       Feature & class dataframe for ML. See "" for an example dataframe
-  -save     Unique save name (caution - will overwrite!)
-  
-  OPTIONAL:
-  -feat     Import file with list of features to keep if desired. Default: keep all.
-  -gs       Set to True if parameter sweep is desired. Default = False
-  -alg      Algorithm to use. Currently available: RandomForest (RF)(Default), LinearSVC (SVC)
-  -n        Number of random balanced datasets to run. Default = 50
-  -pos      String for what codes for the positive example (i.e. UUN) Default = 1
-  -neg      String for what codes for the negative example (i.e. NNN) Default = 0
-  -class    String for what column has the class. Default = Class
-
-
-OUTPUT:
-  -SAVE_imp           Importance scores for each feature
-  -SAVE_GridSearch    Results from parameter sweep sorted by F1
-  -RESULTS_XX.txt     Accumulates results from all ML runs done in a specific folder - use unique save names! XX = RF or SVC
 
 """
 import sys
