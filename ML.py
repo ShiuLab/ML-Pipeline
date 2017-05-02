@@ -101,6 +101,7 @@ def main():
 			features = ['Class'] + features
 		df = df.loc[:,features]
 
+
 	# Set up dataframe of unknown instances that the final model will be applied to
 	if CL_APPLY != 'none':
 		df_unknowns = df[(df['Class'].isin(CL_APPLY))]
@@ -161,7 +162,7 @@ def main():
 		elif ALG == "SVC":
 			parameters_used = [C, loss, max_iter]
 			result = ML.fun.LinearSVC(df1, classes, POS, C, loss, max_iter, n_jobs, j)
-	
+		
 		results.append(result)
 
 	print("ML Pipeline time: %f seconds" % (time.time() - start_time))
@@ -171,37 +172,32 @@ def main():
 	####### Unpack ML results #######
 
 	## Make empty dataframes
-	conf_matrices = pd.DataFrame(columns = np.insert(arr = classes, obj = 0, values = 'Class'))
+	conf_matrices = pd.DataFrame(columns = np.insert(arr = classes.astype(np.str), obj = 0, values = 'Class'))
+	imp = pd.DataFrame(index = list(df.drop(['Class'], axis=1)))
 	accuracies = []
-	f1_array = np.array([np.insert(arr = classes, obj = 0, values = 'Macro')])
 	auc_array = []
+	f1_array = np.array([np.insert(arr = classes.astype(np.str), obj = 0, values = 'Macro')])
 	
-	# For binary classifications also gather importance scores
-	if len(df['Class'].unique()) == 2:
-		imp = pd.DataFrame(index = names(df.drop(['Class'], axis=1) ))
-		print(imp)
-
-	for r in results:  
-		# 0: confusion matrix, 1: accuracy, 2: macro_F1, 3: F1s, 4: AUCROCs, 5: Imp scores
-		# Pull confusion matricies from each model
-		cmatrix = pd.DataFrame(r[0], columns = classes) #, index = classes)
-		cmatrix['Class'] = classes
-		conf_matrices = pd.concat([conf_matrices, cmatrix])
+	count = 0
+	for r in results:
+		count += 1
+		if 'cm' in r:
+			cmatrix = pd.DataFrame(r['cm'], columns = classes) #, index = classes)
+			cmatrix['Class'] = classes
+			conf_matrices = pd.concat([conf_matrices, cmatrix])
 		
-		# Pull accuracies from each model
-		accuracies.append(r[1])
+		if 'accuracy' in r:
+			accuracies.append(r['accuracy'])
 
-		# Pull F-measures from each model
-		f1_temp_array = np.insert(arr = r[3], obj = 0, values = r[2])
-		f1_array = np.append(f1_array, [f1_temp_array], axis=0)
+		if 'macro_f1' in r:
+			f1_temp_array = np.insert(arr = r['f1'], obj = 0, values = r['macro_f1'])
+			f1_array = np.append(f1_array, [f1_temp_array], axis=0)
 
-
-		# If binary classification pull importance scores from each model
-		if len(df['Class'].unique()) == 2:
-			# Pull AUC-ROC from each model
-			auc_array.append(r[4])
-
-			imp = pd.concat([imp, pd.DataFrame(r[5])], axis=1, join_axes = [imp.index])
+		if 'AucRoc' in r:
+			auc_array.append(r['AucRoc'])
+		
+		if 'importances' in r:
+			imp[count] = r['importances'][0]
 	
 	cm_mean = conf_matrices.groupby('Class').mean()
 	cm_mean.to_csv(SAVE + "_cm.csv")
@@ -210,6 +206,7 @@ def main():
 	f1.columns = f1.iloc[0]
 	f1 = f1[1:]
 	f1.columns = [str(col) + '_F1' for col in f1.columns]
+	f1 = f1.astype(float)
 
 	
 	# Plot confusion matrix (% class predicted as each class)
@@ -217,18 +214,14 @@ def main():
 	if CM == 'T' or CM == 'True' or CM == 'true' or CM == 't':
 		cm_mean.to_csv(SAVE + "_cm.csv")
 		done = ML.fun.Plot_ConMatrix(cm_mean, SAVE)
-		print(done)
 	
-
-	# Calculate mean importance scores and sort
-	#imp_df = pd.DataFrame(imp_array[1:,:], columns=imp_array[0,:], dtype = float)  
-	#imp_mean_df = pd.DataFrame(imp_df.mean(axis=0, numeric_only=True), columns = ['importance'], index = imp_df.columns.values)
-	#imp_mean_df = imp_mean_df.sort_values('importance', 0, ascending = False)
-	#print("Top five most important features:")
-	#print(imp_mean_df.head(5))
-	
-	#imp_out = SAVE + "_imp"
-	#imp_mean_df.to_csv(imp_out, sep = "\t", index=True)
+	try:
+		imp['mean_imp'] = imp.mean(axis=1)
+		imp = imp.sort_values('mean_imp', 0, ascending = False)
+		imp_out = SAVE + "_imp.csv"
+		imp['mean_imp'].to_csv(imp_out, sep = ",", index=True)
+	except:
+		pass
 
 	# Calculate accuracy and f1 stats
 	AC = np.mean(accuracies)
@@ -241,6 +234,7 @@ def main():
 	except:
 		MacAUC = MacAUC_std = 'Na'
 
+
 	print("\nML Results: \nAccuracy: %03f (+/- stdev %03f)\nF1 (macro): %03f (+/- stdev %03f)\nAUC-ROC (macro): %03f (+/- stdev %03f)" % (
 		AC, AC_std, MacF1, MacF1_std, MacAUC, MacAUC_std))
 
@@ -251,19 +245,18 @@ def main():
 
 
 	# Write detailed results file
-	out = open(SAVE + "_results.csv", 'w')
+	out = open(SAVE + "_results.txt", 'w')
 	out.write('ID: %s\nAlgorithm: %s\nClasses trained on: %s\nNumber of features: %i\nMin class size: %i\nNumber of models: %i\n' % (
 		SAVE, ALG, classes, n_features, min_size, n)) #, AC, AC_std, MacF1, MacF1_std))
 	out.write('Grid Search Used: %s\nParameters used:%s\n' % (GS, parameters_used))
-	out.write('\nModel Performance Measures\n\nAccuracy (std): %.5f\t%.5f\nMacro_AUC-ROC (std): %.5f\t%.5f\nMacro_F1 (macro): %03f (+/- stdev %03f)\n' % (
+	out.write('\nModel Performance Measures\n\nAccuracy (std): %.5f\t%.5f\nAUC-ROC (std): %.5f\t%.5f\nMacro_F1 (std): %.5f\t%.5f\n' % (
 		AC, AC_std, MacAUC, MacAUC_std, MacF1, MacF1_std))
 
 	for cl in classes:
-		out.write('F1_%s (std): %.5f\t%.5f\n' % (cl, f1[cl+'_F1'].mean(), f1[cl+'_F1'].std()))
-		out.write('AUCROC_%s (std): %.5f\t%.5f\n' % (cl, aucroc[cl+'_AUCROC'].mean(), aucroc[cl+'_AUCROC'].std()))
+		out.write('F1_%s (std): %.5f\t%.5f\n' % (cl, f1[str(cl)+'_F1'].mean(), f1[str(cl)+'_F1'].std()))
 	out.write('\nConfusion Matrix:\n')
 	out.close()
-	out = open(SAVE + "_results.csv", 'a')
+	out = open(SAVE + "_results.txt", 'a')
 	cm_mean.to_csv(out, sep='\t')
 
 	

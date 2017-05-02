@@ -52,7 +52,7 @@ class fun(object):
     ### NOTE: The returned top_params will be in alphabetical order - to be consistent add any additional 
     ###       parameters to test in alphabetical order
     if ALG == 'RF':
-      #parameters = {'max_depth':(3, 5, 10, 50, 100), 'max_features': (0.1, 0.25, 0.5, 0.75, 0.9999, 'sqrt', 'log2'),'n_estimators':(50, 100, 500)}
+      #parameters = {'max_depth':(3, 5, 10, 50), 'max_features': (0.1, 0.25, 0.5, 0.75, 0.9999, 'sqrt', 'log2'),'n_estimators':(50, 100, 500)}
       parameters = {'max_depth':(2, 5), 'max_features': (0.1, 0.5), 'n_estimators':(10, 50)}
     
     elif ALG == "SVC":
@@ -110,7 +110,6 @@ class fun(object):
   def RandomForest(df, classes, POS, n_estimators, max_depth, max_features, n_jobs, j):
     from sklearn.ensemble import RandomForestClassifier
     from sklearn.model_selection import cross_val_predict
-    from sklearn.metrics import accuracy_score, f1_score, roc_auc_score, confusion_matrix
 
     y = df['Class']
     x = df.drop(['Class'], axis=1) 
@@ -126,33 +125,25 @@ class fun(object):
     # Obtain the predictions using 10 fold cross validation (uses KFold cv by default):
     cv_pred = cross_val_predict(estimator=clf, X=x, y=y, cv=10)
     
-    # Gather scoring metrics
-    cm = confusion_matrix(y, cv_pred, labels=classes)
-    accuracy = accuracy_score(y, cv_pred)
-    macro_f1 = f1_score(y, cv_pred, average='macro')  # 
-    f1 = f1_score(y, cv_pred, average=None)  # Returns F1 for each class
-    
-    # Calculate additional scores for binary predictions 
-    if len(df['Class'].unique()) == 2:
+    if len(classes) == 2:
       clf.fit(x,y)
-      importances = clf.feature_importances_
-      print(POS)
-      AucRoc = roc_auc_score(y, cv_pred,  pos_label = POS)
-      return [cm, accuracy, macro_f1, f1, AucRoc, importances]
-    
+      result = fun.Performance(y, cv_pred, clf, classes, POS)
     else:
-      return [cm, accuracy, macro_f1, f1]
+      result = fun.Performance_MC(y, cv_pred, classes)
+    
+    return result
+
 
 
   def LinearSVC(df, classes, POS, C, loss, max_iter, n_jobs, j):
     from sklearn.svm import LinearSVC
     from sklearn.model_selection import cross_val_predict
-    from sklearn.metrics import accuracy_score, f1_score, roc_auc_score, confusion_matrix
     from sklearn.preprocessing import StandardScaler
+    from sklearn.preprocessing import label_binarize
     
     y = df['Class']
     x = StandardScaler().fit_transform(df.drop(['Class'], axis=1))
-
+    
     # Create the classifier
     clf = LinearSVC(C=float(C), 
       loss=loss, 
@@ -163,24 +154,62 @@ class fun(object):
     #Obtain the predictions using 10 fold cross validation (uses KFold cv by default):
     cv_pred = cross_val_predict(estimator=clf, X=x, y=y, cv=10, n_jobs = n_jobs)
 
-    #return(y, cv_pred)
+    if len(classes) == 2:
+      clf.fit(x,y)
+      result = fun.Performance(y, cv_pred, clf, classes, POS)
+    
+    # Else gather multiclass performance metrics
+    else:
+      result = fun.Performance_MC(y, cv_pred, classes)
+    
+    return result
+
+
+
+  def Performance(y, cv_pred, clf, classes, POS):
+    from sklearn.metrics import accuracy_score, f1_score, roc_auc_score, confusion_matrix
+    from sklearn.metrics import roc_curve
+
     # Gather scoring metrics
     cm = confusion_matrix(y, cv_pred, labels=classes)
     accuracy = accuracy_score(y, cv_pred)
-    macro_f1 = f1_score(y, cv_pred, average='macro')  # use macro instead of weighted because models are balanced
+    macro_f1 = f1_score(y, cv_pred, average='macro')  # 
+    f1 = f1_score(y, cv_pred, average=None)  # Returns F1 for each class
+
+    # For AUC - must convert y to 1s and 0s:
+    temp = np.array([POS])
+    NEG = np.setdiff1d(classes,temp)[0]
+    y1 = y.replace(to_replace = [POS, NEG], value = [1,0])
+    cv_pred1 = cv_pred
+    cv_pred1[cv_pred1 == POS] = 1
+    cv_pred1[cv_pred1 == NEG] = 0
+    AucRoc = roc_auc_score(y1, cv_pred1) #,  pos_label = POS)
+
+    try:
+      importances = clf.feature_importances_
+    except:
+      try:
+        importances = clf.coef_
+      except:
+        print("Cannot get importance scores")
+        return {'cm':cm, 'accuracy':accuracy,'macro_f1':macro_f1,'f1':f1, 'AucRoc':AucRoc}
+    
+    
+    return {'cm':cm, 'accuracy':accuracy,'macro_f1':macro_f1,'f1':f1, 'AucRoc':AucRoc, 'importances':importances}
+  
+
+
+  def Performance_MC(y, cv_pred, classes):
+    from sklearn.metrics import accuracy_score, f1_score, confusion_matrix
+
+    cm = confusion_matrix(y, cv_pred, labels=classes)
+    accuracy = accuracy_score(y, cv_pred)
+    macro_f1 = f1_score(y, cv_pred, average='macro')  # 
     f1 = f1_score(y, cv_pred, average=None)  # Returns F1 for each class
     
-    # Calculate additional scores for binary predictions 
-    if len(df['Class'].unique()) == 2:
-      clf.fit(x,y)
-      importances = clf.feature_importances_
-      AucRoc = roc_auc_score(y, cv_pred,  pos_label = POS)
-      return [cm, accuracy, macro_f1, f1, AucRoc, importances]
-    
-    else:
-      return [cm, accuracy, macro_f1, f1]
+    return {'cm':cm, 'accuracy':accuracy,'macro_f1':macro_f1,'f1':f1}
 
-   
+
 
   def PR_Curve(y_pred, SAVE):
     import matplotlib.pyplot as plt
