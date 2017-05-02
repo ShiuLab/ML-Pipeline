@@ -24,8 +24,8 @@ python ML_classification.py -df example_MC.txt -alg [RF/SVC] -class Biotech_clus
 
 ## TO DO LIST
 
--Make pipeline for regression
--Add to preprocessing section to allow for imputing NAs, dropping NAs, normalizing/scaling features, etc
--Apply model to "unknowns" to make predictions
--Add additional classification models: SVC with kernel, Naive Bayes, basic neural network (1-2 layers)
--Output for AUC-ROC and Precision-Recall figures... (Either figures directly or data)
+- Make pipeline for regression
+- Add to preprocessing section to allow for imputing NAs, dropping NAs, normalizing/scaling features, etc
+- Apply model to "unknowns" to make predictions
+- Add additional classification models: SVC with kernel, Naive Bayes, basic neural network (1-2 layers)
+- Output for AUC-ROC and Precision-Recall figures... (Either figures directly or data)
