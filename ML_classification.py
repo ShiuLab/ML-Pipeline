@@ -177,8 +177,8 @@ def main():
 	imp = pd.DataFrame(index = list(df.drop(['Class'], axis=1)))
 	accuracies = []
 	auc_array = []
-	f1_array = np.array([np.insert(arr = classes.astype(np.str), obj = 0, values = 'Macro')])
-	
+	f1_array = np.array([np.insert(arr = classes.astype(np.str), obj = 0, values = 'M')])
+
 	count = 0
 	for r in results:
 		count += 1
@@ -227,8 +227,8 @@ def main():
 	# Calculate accuracy and f1 stats
 	AC = np.mean(accuracies)
 	AC_std = np.std(accuracies)
-	MacF1 = f1['Macro_F1'].mean()
-	MacF1_std = f1['Macro_F1'].std()
+	MacF1 = f1['M_F1'].mean()
+	MacF1_std = f1['M_F1'].std()
 	try:
 		MacAUC = np.mean(auc_array)
 		MacAUC_std = np.std(auc_array)
