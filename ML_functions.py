@@ -28,19 +28,23 @@ class fun(object):
     from sklearn.model_selection import GridSearchCV
     from sklearn.preprocessing import StandardScaler
     from sklearn.ensemble import RandomForestClassifier
-    from sklearn.svm import LinearSVC
+    from sklearn.svm import SVC
 
     start_time = time.time()
 
     ### NOTE: The returned top_params will be in alphabetical order - to be consistent add any additional 
     ###       parameters to test in alphabetical order
     if ALG == 'RF':
-      #parameters = {'max_depth':(3, 5, 10, 50), 'max_features': (0.1, 0.25, 0.5, 0.75, 0.9999, 'sqrt', 'log2'),'n_estimators':(50, 100, 500)}
-      parameters = {'max_depth':(2, 5), 'max_features': (0.1, 0.5), 'n_estimators':(10, 50)}
+      parameters = {'max_depth':[3, 5, 10, 50],
+        'max_features': [0.1, 0.25, 0.5, 0.75, 0.9999, 'sqrt', 'log2'],
+        'n_estimators':[50, 100, 500]}
+      #parameters = {'max_depth':[2, 5], 'max_features': [0.1, 0.5], 'n_estimators':[10, 50]}
     
     elif ALG == "SVC":
-      #parameters = {'C':(0.1, 1), 'loss':('hinge', 'squared_hinge'), 'max_iter':(10,100)}
-      parameters = {'C':(0.01, 0.1, 0.5, 1, 10, 50, 100), 'loss':('hinge', 'squared_hinge'), 'max_iter':(10,100,1000)}
+      #parameters = {'kernel': ('linear'),'C':[0.1, 1], 'loss':('hinge', 'squared_hinge'), 'max_iter':(10,100)}
+      parameters = [{'kernel': ['linear'], 'C':[0.01, 0.1, 0.5, 1, 10, 50, 100]},
+        {'kernel': ['poly'], 'C':[0.01, 0.1, 0.5, 1, 10, 50, 100],'degree': [2,3], 'gamma': np.logspace(-9,3,13)},
+        {'kernel': ['rbf'], 'C': [0.01, 0.1, 0.5, 1, 10, 50, 100], 'gamma': np.logspace(-9,3,13)}]
 
     else:
       print('Grid search is not available for the algorithm selected')
@@ -63,7 +67,7 @@ class fun(object):
         model = RandomForestClassifier()
       elif ALG == "SVC":
         x = StandardScaler().fit_transform(x)
-        model = LinearSVC()
+        model = SVC()
       
       grid_search = GridSearchCV(model, parameters, scoring = gs_score, cv = 10, n_jobs = n_jobs, pre_dispatch=2*n_jobs)
       grid_search.fit(x, y)
@@ -85,7 +89,7 @@ class fun(object):
     print("Parameter sweep time: %f seconds" % (time.time() - start_time))
     outName = SAVE + "_GridSearch"
     gs_results_mean.to_csv(outName)
-
+    print(top_params)
     return top_params
 
 
@@ -118,8 +122,8 @@ class fun(object):
 
 
 
-  def LinearSVC(df, classes, POS, C, loss, max_iter, n_jobs, j):
-    from sklearn.svm import LinearSVC
+  def LinearSVC(df, classes, POS, C, degree, gamma, kernel, n_jobs, j):
+    from sklearn.svm import SVC
     from sklearn.model_selection import cross_val_predict
     from sklearn.preprocessing import StandardScaler
     from sklearn.preprocessing import label_binarize
@@ -128,10 +132,10 @@ class fun(object):
     x = StandardScaler().fit_transform(df.drop(['Class'], axis=1))
     
     # Create the classifier
-    clf = LinearSVC(C=float(C), 
-      loss=loss, 
-      penalty='l2', 
-      max_iter=int(max_iter), 
+    clf = SVC(kernel = kernel,
+      C=float(C), 
+      degree = degree,
+      gamma = gamma, 
       random_state=j)
 
     #Obtain the predictions using 10 fold cross validation (uses KFold cv by default):

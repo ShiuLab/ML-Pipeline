@@ -40,7 +40,7 @@ import ML_functions as ML
 def main():
 	
 	# Default code parameters
-	n, FEAT, CL_TRAIN, CL_APPLY, n_jobs, class_col, CM, POS = 50, 'all', 'all','none', 50, 'Class', 'False', 1
+	n, FEAT, CL_TRAIN, CL_APPLY, n_jobs, class_col, CM, POS = 50, 'all', 'all','none', 28, 'Class', 'False', 1
 
 	# Default parameters for Grid search
 	GS, gs_score, gs_n = 'F', None, 25
@@ -102,6 +102,8 @@ def main():
 			features = ['Class'] + features
 		df = df.loc[:,features]
 
+	print("Snapshot of data being used:")
+	print(df.head())
 
 	# Set up dataframe of unknown instances that the final model will be applied to
 	if CL_APPLY != 'none':
@@ -112,7 +114,7 @@ def main():
 		df = df[(df['Class'].isin(CL_TRAIN))]
 
 	# Determine minimum class size (for making balanced datasets)
-	min_size = (df.groupby('Class').size()).min()
+	min_size = (df.groupby('Class').size()).min() - 1
 	print('Balanced dataset will include %i instances of each class' % min_size)
 
 	# Remove instances with NaN values
@@ -136,8 +138,8 @@ def main():
 				str(max_depth), str(max_features), str(n_estimators)))
 
 		elif ALG == "SVC":
-			C, loss, max_iter = params2use
-			print("Parameters selected: C=%s, loss=%s, max_iter=%s" % (str(C), str(loss), str(max_iter)))
+			C, degree, gamma, kernel = params2use
+			print("Parameters selected: Kernel=%s, C=%s, degree=%s, gamma=%s" % (str(kernel), str(C), str(degree), str(gamma)))
 
 
 	
@@ -161,8 +163,8 @@ def main():
 			parameters_used = [n_estimators, max_depth, max_features]
 			result = ML.fun.RandomForest(df1, classes, POS, n_estimators, max_depth, max_features, n_jobs, j)
 		elif ALG == "SVC":
-			parameters_used = [C, loss, max_iter]
-			result = ML.fun.LinearSVC(df1, classes, POS, C, loss, max_iter, n_jobs, j)
+			parameters_used = [C, degree, gamma, kernel]
+			result = ML.fun.LinearSVC(df1, classes, POS, C, degree, gamma, kernel, n_jobs, j)
 		
 		results.append(result)
 
@@ -216,13 +218,14 @@ def main():
 		cm_mean.to_csv(SAVE + "_cm.csv")
 		done = ML.fun.Plot_ConMatrix(cm_mean, SAVE)
 	
-	try:
-		imp['mean_imp'] = imp.mean(axis=1)
-		imp = imp.sort_values('mean_imp', 0, ascending = False)
-		imp_out = SAVE + "_imp.csv"
-		imp['mean_imp'].to_csv(imp_out, sep = ",", index=True)
-	except:
-		pass
+	if len(classes) == 2:
+		try:
+			imp['mean_imp'] = imp.mean(axis=1)
+			imp = imp.sort_values('mean_imp', 0, ascending = False)
+			imp_out = SAVE + "_imp.csv"
+			imp['mean_imp'].to_csv(imp_out, sep = ",", index=True)
+		except:
+			pass
 
 	# Calculate accuracy and f1 stats
 	AC = np.mean(accuracies)
