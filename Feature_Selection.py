@@ -7,13 +7,18 @@ Must set path to Miniconda in HPC:  export PATH=/mnt/home/azodichr/miniconda3/bi
 
 INPUT:
   -df       Feature dataframe for ML. Format -> Col 1 = example.name, Col 2 = Class, Col 3-... = Features.
-  -f        Feature selection method to use (Available = Chi2, DecisionTree)
-  -n        Number of features you would like to keep
+  -f        Feature selection method to use (Available = Chi2, DecisionTree, L1 (need -p, -type))
+
 
 OPTIONAL INPUT:
   -feat     Default: all (i.e. everything in the dataframe given). Can import txt file with list of features to keep.
   -pos      String for what codes for the positive example (i.e. UUN) Default = 1
   -neg      String for what codes for the negative example (i.e. NNN) Default = 0
+  -type     r = regression, c = classification
+  -p        Parameter value for L1.
+            If type = r: need alpha value, try 0.01, 0.001. (larger = fewer features selected)
+            If type = c: need C which controls the sparcity, try 0.01, 0.1 (smaller = fewer features selected)
+  -n        Number of features you would like to keep
 
 OUTPUT:
   -df_f.txt    New dataframe with columns only from feature selection
@@ -94,6 +99,40 @@ def Chi2(df, n):
   df = df.loc[:,good]
   return(df)
 
+def L1(df, PARAMETER, TYPE):
+  """Apply a linear model with a L1 penalty and select features who's coefficients aren't 
+  shrunk to zero
+  . Unlike Chi2, this method accounts for the effect of all of the
+  other features when determining if a feature is a good predictor.
+  For a regression problem, it uses linear_model.Lasso
+  For a classification problem, it uses svm.LinearSVC """
+
+  from sklearn.feature_selection import SelectFromModel
+  from sklearn.svm import LinearSVC
+  from sklearn.linear_model import Lasso
+
+  X_all = df.drop('Class', axis=1).values  
+  Y_all = df.loc[:, 'Class'].values
+  print(Y_all)
+
+  if TYPE == 'c' or TYPE == 'classification':
+    estimator = LinearSVC(C = PARAMETER, penalty='l1', dual=False).fit(X_all, Y_all)
+  elif TYPE == 'r' or TYPE == 'regression':
+    estimator = Lasso(alpha = PARAMETER).fit(X_all, Y_all)
+  
+  model = SelectFromModel(estimator, prefit=True)
+  keep = model.get_support([])
+
+  X_new = model.transform(X_all)
+  feat_names = np.array(list(df)[1:])
+  good = feat_names[keep]
+  
+  print('Number of features selected using l2 (parameter = %s): %i' % (str(PARAMETER), X_new.shape[1]))
+  print("Features selected using l2: %s" % str(good))
+  df2 = pd.DataFrame(data = X_new, columns=good, index=df.index)
+  df2.insert(0, 'Class', Y_all, )
+  return(df2)
+
 
 if __name__ == "__main__":
   
@@ -114,6 +153,10 @@ if __name__ == "__main__":
           N = int(sys.argv[i+1])
         if sys.argv[i] == '-feat':
           FEAT = sys.argv[i+1]
+        if sys.argv[i] == '-p':
+          PARAMETER = float(sys.argv[i+1])        
+        if sys.argv[i] == '-type':
+          TYPE = sys.argv[i+1]
 
   if len(sys.argv) <= 1:
     print(__doc__)
@@ -124,6 +167,8 @@ if __name__ == "__main__":
     df = pd.read_csv(DF, sep='\t', index_col = 0)
   else:
     df = DF
+
+  print('Original dataframe contained %i features' % df.shape[1])
 
   #Recode class as 1 for positive and 0 for negative, then divide into two dataframes.
   df["Class"] = df["Class"].replace(pos, 1)
@@ -140,11 +185,17 @@ if __name__ == "__main__":
 
   if F == "decisiontree" or F == "DecisionTree":
     df_feat = DecisionTree(df, N)
+    save_name = DF.split("/")[-1] + "_" + F + "_" + str(N)
   elif F == "chi2" or F == "Chi2":
     df_feat = Chi2(df, N)
+    save_name = DF.split("/")[-1] + "_" + F + "_" + str(N)
+  elif F == "L1" or F == "l1":
+    df_feat = L1(df, PARAMETER, TYPE)
+    save_name = DF.split("/")[-1] + "_" + F + "_" + TYPE + '_' + str(PARAMETER)
   else:
     print("Feature selection method not available in this script")
 
-  save_name = DF.split("/")[-1] + "_" + F + "_" + str(N)
+
+  
   df_feat.to_csv(save_name, sep='\t', quoting=None)
 
