@@ -53,10 +53,11 @@ class fun(object):
 		### NOTE: The returned top_params will be in alphabetical order - to be consistent add any additional 
 		###       parameters to test in alphabetical order
 		if ALG == 'RF':
+			#parameters = {'max_depth':[2, 5], 'max_features': [0.1, 0.5], 'n_estimators':[10, 50]}
 			parameters = {'max_depth':[3, 5, 10, 50],
 				'max_features': [0.1, 0.25, 0.5, 0.75, 0.9999, 'sqrt', 'log2'],
 				'n_estimators':[50, 100, 500]}
-			#parameters = {'max_depth':[2, 5], 'max_features': [0.1, 0.5], 'n_estimators':[10, 50]}
+			
 		
 		elif ALG == "SVM":
 			#parameters = {'kernel': ('linear'),'C':[0.1, 1], 'loss':('hinge', 'squared_hinge'), 'max_iter':(10,100)}
@@ -72,11 +73,9 @@ class fun(object):
 		
 		bal_ids_list = []
 		for j in range(n):
-			
 			print("  Round %s of %s"%(j+1,n))
 			
 			# Build balanced dataframe and define x & y
-			
 			df1 = pd.DataFrame(columns=list(df))
 			for cl in classes:
 				temp = df[df['Class'] == cl].sample(min_size, random_state=j)
@@ -90,7 +89,7 @@ class fun(object):
 			# Build model, run grid search with 10-fold cross validation and fit
 			if ALG == 'RF':
 				model = RandomForestClassifier()
-			elif ALG == "SVC":
+			elif ALG == "SVM":
 				x = StandardScaler().fit_transform(x)
 				model = SVC(probability=True)
 			
@@ -131,7 +130,7 @@ class fun(object):
 			n_jobs=n_jobs)
 		return clf
 	
-	def DefineClf_LinearSVC(kernel,C,degree,gamma,j):
+	def DefineClf_SVM(kernel,C,degree,gamma,j):
 		from sklearn.svm import SVC
 		clf = SVC(kernel = kernel,
 			C=float(C), 
@@ -264,22 +263,85 @@ class fun(object):
 
 
 
-	def PR_Curve(y_pred, SAVE):
+	def Plots(df_proba, POS, NEG, n, SAVE):
 		import matplotlib.pyplot as plt
+		from sklearn.metrics import roc_curve, auc, confusion_matrix
 		plt.switch_backend('agg')
-
 		
-		f1_summary = f1_score(y_true, y_pred_round)
-		plt.plot(recall, precision, color='navy', label='Precision-Recall curve')
-		plt.xlabel('Recall')
-		plt.ylabel('Precision')
-		plt.ylim([0.0, 1.05])
-		plt.xlim([0.0, 1.0])
-		plt.title('PR Curve: %s\nSummary F1 = %0.2f' % (SAVE, f1_summary))
+		print("Generating ROC & PR curves")
+		y = df_proba['Class']
+		FPRs = {}
+		TPRs = {}
+		precisions = {}
+		
+		# For each balanced dataset
+		for i in range(0, n): 
+			FPR = []
+			TPR = []
+			precis = []
+			name = 'score_' + str(i)
+			
+			# Get decision matrix & scores at each threshold between 0 & 1
+			for j in np.arange(0, 1, 0.01):
+				temp = df_proba[name].copy()
+				temp[df_proba[name] >= j] = POS
+				temp[df_proba[name] < j] = NEG
+				matrix = confusion_matrix(y, temp, labels = [POS,NEG])
+				TP = matrix[0,0]
+				FP = matrix[1,0]
+				TN = matrix[1,1]
+				FN = matrix[0,1]
+				
+				FPR.append(FP/(FP + TN))
+				TPR.append(TP/(TP + FN))
+				precis.append(TP/(TP+FP))
+			
+			FPRs[name] = FPR
+			TPRs[name] = TPR
+			precisions[name] = precis
+
+		# Convert metric dictionaries into dataframes
+		FPRs_df = pd.DataFrame.from_dict(FPRs, orient='columns')
+		TPRs_df = pd.DataFrame.from_dict(TPRs, orient='columns')
+		precisions_df = pd.DataFrame.from_dict(precisions, orient='columns')
+		# Get summary stats 
+		FPR_mean = FPRs_df.mean(axis=1)
+		FPR_sd = FPRs_df.std(axis=1)
+		TPR_mean = TPRs_df.mean(axis=1)
+		TPR_sd = TPRs_df.std(axis=1)
+		precis_mean = precisions_df.mean(axis=1)
+		precis_sd = precisions_df.std(axis=1)
+
+		# Plot the ROC Curve
+		plt.title('ROC Curve: ' + SAVE)
+		plt.plot(FPR_mean, TPR_mean, lw=2, color= 'blue', label=SAVE)
+		plt.fill_between(FPR_mean, TPR_mean-TPR_sd, TPR_mean+TPR_sd, facecolor='blue', alpha=0.5, label='SD_TPR')
+		plt.plot([0,1],[0,1],'r--', label = 'Random Expectation')
+		plt.legend(loc='lower right')
+		plt.xlim([0,1])
+		plt.ylim([0,1])
+		plt.ylabel('True Positive Rate')
+		plt.xlabel('False Positive Rate')
 		plt.show()
-		# save a PDF file named for the CSV file (but in the current directory)
+		filename = SAVE + "_ROCcurve.png"
+		plt.savefig(filename)
+		plt.clf()
+		
+		# Plot the Precision-Recall Curve
+		plt.title('PR Curve: ' + SAVE)
+		plt.plot(TPR_mean, precis_mean, lw=2, color= 'blue', label=SAVE)
+		plt.fill_between(TPR_mean, precis_mean-precis_sd, precis_mean+precis_sd, facecolor='blue', alpha=0.5, label='SD_Precision')
+		plt.legend(loc='lower right')
+		plt.xlim([0,1])
+		plt.ylim([0,1])
+		plt.ylabel('Precision')
+		plt.xlabel('Recall')
+		plt.show()
 		filename = SAVE + "_PRcurve.png"
 		plt.savefig(filename)
+		plt.close()
+
+
 
 	def Plot_ConMatrix(cm, SAVE):
 		import matplotlib.pyplot as plt

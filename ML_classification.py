@@ -39,7 +39,7 @@ import ML_functions as ML
 def main():
 	
 	# Default code parameters
-	n, FEAT, CL_TRAIN, apply, n_jobs, class_col, CM, POS = 50, 'all', 'all','none', 28, 'Class', 'False', 1
+	n, FEAT, CL_TRAIN, apply, n_jobs, class_col, CM, POS, plots = 50, 'all', 'all','none', 28, 'Class', 'False', 1, 'False'
 	
 	# Default parameters for Grid search
 	GS, gs_score, gs_n, cv_num = 'F', 'roc_auc', 25, 10
@@ -49,12 +49,7 @@ def main():
 	
 	# Default Linear SVC parameters
 	kernel, C, degree, gamma, loss, max_iter = 'linear', 1, 2, 1, 'hinge', "500"
-<<<<<<< HEAD
 
-=======
-	# 'gamma': np.logspace(-9,3,13)
-	
->>>>>>> 1c2cb72d65621ac34999b2ed437b4e0c56eb4848
 	for i in range (1,len(sys.argv),2):
 		if sys.argv[i] == "-df":
 			DF = sys.argv[i+1]
@@ -86,9 +81,11 @@ def main():
 			n_jobs = int(sys.argv[i+1])
 		if sys.argv[i] == "-cm":
 			CM = sys.argv[i+1]
+		if sys.argv[i] == "-plots":
+			plots = sys.argv[i+1]
 		if sys.argv[i] == "-pos":
 			POS = sys.argv[i+1]
-	
+
 	if len(sys.argv) <= 1:
 		print(__doc__)
 		exit()
@@ -108,12 +105,12 @@ def main():
 			features = ['Class'] + features
 		df = df.loc[:,features]
 	
-	print("Snapshot of data being used:")
-	print(df.head())
 	
 	# Remove instances with NaN or NA values
 	df = df.replace("?",np.nan)
 	df = df.dropna(axis=0)
+
+
 	
 	# Set up dataframe of unknown instances that the final models will be applied to
 	if CL_TRAIN != 'all' and apply != 'none':
@@ -151,6 +148,8 @@ def main():
 			gs_score = 'f1_macro'
 		classes = np.array(CL_TRAIN)
 	
+	print("Snapshot of data being used:")
+	print(df.head())
 	print("CLASSES:",classes)
 	print("POS:",POS,type(POS))
 	print("NEG:",NEG,type(NEG))
@@ -182,11 +181,12 @@ def main():
 			print("Parameters selected: Kernel=%s, C=%s, degree=%s, gamma=%s" % (str(kernel), str(C), str(degree), str(gamma)))
 		
 		print("Grid search complete. Time: %f seconds" % (time.time() - start_time))
+	
 	else:
 		balanced_ids = ML.fun.EstablishBalanced(df,classes,min_size,n)
 	
+
 	####### Run ML models #######
-	
 	start_time = time.time()
 	print("\n\n===>  ML Pipeline started  <===")
 	
@@ -215,7 +215,7 @@ def main():
 			# result = ML.fun.RandomForest_ManCV(df1, classes, POS, cv_num, n_estimators, max_depth, max_features, n_jobs, j, df_notSel, apply_unk, df_unknowns)
 		elif ALG == "SVM":
 			parameters_used = [C, degree, gamma, kernel]
-			clf = ML.fun.DefineClf_LinearSVC(kernel,C,degree,gamma,j)
+			clf = ML.fun.DefineClf_SVM(kernel,C,degree,gamma,j)
 			# result = ML.fun.LinearSVC(df1, classes, POS, C, degree, gamma, kernel, n_jobs, j)
 		
 		# Run ML algorithm on balanced datasets.
@@ -224,9 +224,13 @@ def main():
 		df_proba = pd.concat([df_proba,current_scores],axis = 1)
 	
 	print("ML Pipeline time: %f seconds" % (time.time() - start_time))
-	
+
+	# Caluclate mean (std) of predicted probabilities and determine which class was predicted based on the threshold set.
+	proba_columns = [c for c in df_proba.columns if c.startswith('score_')]
+	df_proba.insert(loc=1, column = 'Mean', value = df_proba[proba_columns].mean(axis=1)) 
+	df_proba.insert(loc=2, column = 'stdev', value = df_proba[proba_columns].std(axis=1)) 
+	df_proba.insert(loc=3, column = 'Predicted', value = df_proba['Class'])
 	print(df_proba.head())
-	# sys.exit()
 	
 	####### Unpack ML results #######
 	
@@ -258,9 +262,6 @@ def main():
 		if 'importances' in r:
 			imp[count] = r['importances'][0]
 	
-	cm_mean = conf_matrices.groupby('Class').mean()
-	cm_mean.to_csv(SAVE + "_cm.csv")
-	
 	f1 = pd.DataFrame(f1_array)
 	f1.columns = f1.iloc[0]
 	f1 = f1[1:]
@@ -270,10 +271,15 @@ def main():
 	
 	# Plot confusion matrix (% class predicted as each class)
 	cm_mean = conf_matrices.groupby('Class').mean()
-	if CM == 'T' or CM == 'True' or CM == 'true' or CM == 't':
+	if CM.lower() == 'true' or CM.lower() == 't':
 		cm_mean.to_csv(SAVE + "_cm.csv")
 		done = ML.fun.Plot_ConMatrix(cm_mean, SAVE)
+
+	# Plot ROC & PR curves
+	if plots.lower() == 'true' or plots.lower() == 't':
+		pr = ML.fun.Plots(df_proba, POS, NEG, n, SAVE)
 	
+	# If binary prediction output importance scores
 	if len(classes) == 2:
 		try:
 			imp['mean_imp'] = imp.mean(axis=1)
@@ -317,7 +323,7 @@ def main():
 	cm_mean.to_csv(out, sep='\t')
 	
 	out_scores = open(SAVE + "_scores.txt","w")
-	out_scores.write("ID\t"+pd.DataFrame.to_csv(df_proba,sep="\t"))
+	out_scores.write("ID"+pd.DataFrame.to_csv(df_proba,sep="\t"))
 	out_scores.close()
 
 if __name__ == '__main__':
