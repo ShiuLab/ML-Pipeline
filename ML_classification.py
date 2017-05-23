@@ -22,13 +22,15 @@ INPUTS:
 	-n        # of random balanced datasets to run. Default = 50
 	-class    String for what column has the class. Default = Class
 	-apply    To which non-training class labels should the models be applied? Enter 'all' or a list (comma-delimit if >1)
-	-cm       T/F - Do you want to output the confusion matrix & confusion matrix figure?
+	-cm       T/F - Do you want to output the confusion matrix & confusion matrix figure? (Default = False)
+	-plots    T/F - Do you want to output ROC and PR curve plots for each model? (Default = False)
 
 OUTPUT:
 	-SAVE_imp           Importance scores for each feature
 	-SAVE_GridSearch    Results from parameter sweep sorted by F1
 	-RESULTS_XX.txt     Accumulates results from all ML runs done in a specific folder - use unique save names! XX = RF or SVC
 """
+
 import sys
 import pandas as pd
 import numpy as np

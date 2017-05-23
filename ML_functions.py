@@ -8,7 +8,7 @@ RandomForest
 LinearSVC
 Performance
 Performance_MC
-PR_Curve - NOT FUNCTIONAL
+Plots (PR & ROC)
 Plot_ConMatrix
 
 """
