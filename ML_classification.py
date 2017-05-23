@@ -49,7 +49,7 @@ def main():
 	n_estimators, max_depth, max_features = 100, 10, "sqrt"
 
 	# Default Linear SVC parameters
-	C, loss, max_iter = 1, 'hinge', "500"
+	kernel, C, degree, gamma, loss, max_iter = 'linear', 1, 2, 1, 'hinge', "500"
 
 	for i in range (1,len(sys.argv),2):
 		if sys.argv[i] == "-df":
