@@ -34,6 +34,7 @@ OUTPUT:
 import sys
 import pandas as pd
 import numpy as np
+from datetime import datetime
 import time
 
 import ML_functions as ML
@@ -41,10 +42,10 @@ import ML_functions as ML
 def main():
 	
 	# Default code parameters
-	n, FEAT, CL_TRAIN, apply, n_jobs, class_col, CM, POS, plots = 50, 'all', 'all','none', 28, 'Class', 'False', 1, 'False'
+	n, FEAT, CL_TRAIN, apply, n_jobs, class_col, CM, POS, plots, cv_num  = 50, 'all', 'all','none', 28, 'Class', 'False', 1, 'False', 10
 	
 	# Default parameters for Grid search
-	GS, gs_score, gs_n, cv_num = 'F', 'roc_auc', 25, 10
+	GS, gs_score, gs_n= 'F', 'roc_auc', 25
 	
 	# Default Random Forest parameters
 	n_estimators, max_depth, max_features = 100, 10, "sqrt"
@@ -137,6 +138,10 @@ def main():
 			for clss in classes:
 				if clss != POS:
 					NEG = clss
+					try:
+						NEG = int(NEG)
+					except:
+						pass
 					break
 		else:
 			NEG = 'multiclass_no_NEG'
@@ -149,6 +154,8 @@ def main():
 			NEG = 'multiclass_no_NEG'
 			gs_score = 'f1_macro'
 		classes = np.array(CL_TRAIN)
+
+	classes.sort()
 	
 	print("Snapshot of data being used:")
 	print(df.head())
@@ -227,62 +234,98 @@ def main():
 	
 	print("ML Pipeline time: %f seconds" % (time.time() - start_time))
 
-	# Caluclate mean (std) of predicted probabilities and determine which class was predicted based on the threshold set.
-	proba_columns = [c for c in df_proba.columns if c.startswith('score_')]
-	df_proba.insert(loc=1, column = 'Mean', value = df_proba[proba_columns].mean(axis=1)) 
-	df_proba.insert(loc=2, column = 'stdev', value = df_proba[proba_columns].std(axis=1)) 
-	df_proba.insert(loc=3, column = 'Predicted', value = df_proba['Class'])
-	print(df_proba.head())
+
 	
 	####### Unpack ML results #######
 	
 	## Make empty dataframes
 	conf_matrices = pd.DataFrame(columns = np.insert(arr = classes.astype(np.str), obj = 0, values = 'Class'))
 	imp = pd.DataFrame(index = list(df.drop(['Class'], axis=1)))
+	threshold_array = []
+	AucRoc_array = []
+	AucPRc_array = []
 	accuracies = []
-	auc_array = []
 	f1_array = np.array([np.insert(arr = classes.astype(np.str), obj = 0, values = 'M')])
 	
 	count = 0
 	for r in results:
 		count += 1
 		if 'cm' in r:
-			cmatrix = pd.DataFrame(r['cm'], columns = classes) #, index = classes)
+			cmatrix = pd.DataFrame(r['cm'], columns = classes)
 			cmatrix['Class'] = classes
 			conf_matrices = pd.concat([conf_matrices, cmatrix])
 		
+		# For binary predictions
+		if 'importances' in r:
+			imp[count] = r['importances'][0]
+		if 'AucRoc' in r:
+			AucRoc_array.append(r['AucRoc'])
+		if 'AucPRc' in r:
+			AucPRc_array.append(r['AucPRc'])
+		if 'threshold' in r:
+			threshold_array.append(r['threshold'])
+
+		# For Multi-class predictions
 		if 'accuracy' in r:
 			accuracies.append(r['accuracy'])
-		
 		if 'macro_f1' in r:
 			f1_temp_array = np.insert(arr = r['f1'], obj = 0, values = r['macro_f1'])
 			f1_array = np.append(f1_array, [f1_temp_array], axis=0)
-		
-		if 'AucRoc' in r:
-			auc_array.append(r['AucRoc'])
-		
-		if 'importances' in r:
-			imp[count] = r['importances'][0]
-	
-	f1 = pd.DataFrame(f1_array)
-	f1.columns = f1.iloc[0]
-	f1 = f1[1:]
-	f1.columns = [str(col) + '_F1' for col in f1.columns]
-	f1 = f1.astype(float)
-	
-	
-	# Plot confusion matrix (% class predicted as each class)
-	cm_mean = conf_matrices.groupby('Class').mean()
-	if CM.lower() == 'true' or CM.lower() == 't':
-		cm_mean.to_csv(SAVE + "_cm.csv")
-		done = ML.fun.Plot_ConMatrix(cm_mean, SAVE)
 
-	# Plot ROC & PR curves
-	if plots.lower() == 'true' or plots.lower() == 't':
-		pr = ML.fun.Plots(df_proba, POS, NEG, n, SAVE)
+	cm_mean = conf_matrices.groupby('Class').mean()
+
+	# Multiclass Output
+	if len(classes) > 2:
+		f1 = pd.DataFrame(f1_array)
+		f1.columns = f1.iloc[0]
+		f1 = f1[1:]
+		f1.columns = [str(col) + '_F1' for col in f1.columns]
+		f1 = f1.astype(float)		
+		
+		# Calculate accuracy and f1 stats
+		AC = np.mean(accuracies)
+		AC_std = np.std(accuracies)
+		MacF1 = f1['M_F1'].mean()
+		MacF1_std = f1['M_F1'].std()
+
+		print("\nML Results: \nAccuracy: %03f (+/- stdev %03f)\nF1 (macro): %03f (+/- stdev %03f)\nAUC-ROC (macro): %03f (+/- stdev %03f)" % (
+		AC, AC_std, MacF1, MacF1_std, MacAUC, MacAUC_std))
+
+
+	# Binary Prediction Output
+	else: 
+		# Get AUC for ROC and PR curve
+		ROC = [np.mean(AucRoc_array), np.std(AucRoc_array), np.std(AucRoc_array)/np.sqrt(len(AucRoc_array))]
+		PRc = [np.mean(AucPRc_array), np.std(AucPRc_array), np.std(AucPRc_array)/np.sqrt(len(AucPRc_array))]
+		
+		# Find mean threshold
+		final_threshold = np.mean(threshold_array)
+
+		# Determine final prediction call - using the final_threshold on the mean predicted probability.
+		proba_columns = [c for c in df_proba.columns if c.startswith('score_')]
+		df_proba.insert(loc=1, column = 'Mean', value = df_proba[proba_columns].mean(axis=1)) 
+		df_proba.insert(loc=2, column = 'stdev', value = df_proba[proba_columns].std(axis=1))
+		Pred_name =  'Predicted_' + str(final_threshold)
+		df_proba.insert(loc=3, column = Pred_name, value = df_proba['Class'])
+		df_proba[Pred_name][df_proba.Mean >= final_threshold] = POS
+		df_proba[Pred_name][df_proba.Mean < final_threshold] = NEG
+		df_proba.to_csv(SAVE + "_scores.txt", sep="\t")
 	
-	# If binary prediction output importance scores
-	if len(classes) == 2:
+
+		# Get model preformance scores using final_threshold
+		TP,TN,FP,FN,TPR,FPR,FNR,Pr,Ac,F1 = ML.fun.Model_Performance_Thresh(df_proba, final_threshold, balanced_ids, POS, NEG)
+		
+
+		# Plot confusion matrix (% class predicted as each class) based on balanced dataframes
+		if CM.lower() == 'true' or CM.lower() == 't':
+			cm_mean.to_csv(SAVE + "_cm.csv")
+			done = ML.fun.Plot_ConMatrix(cm_mean, SAVE)
+
+		# Plot ROC & PR curves
+		if plots.lower() == 'true' or plots.lower() == 't':
+			pr = ML.fun.Plots(df_proba, balanced_ids, ROC, PRc, POS, NEG, n, SAVE)
+		
+		# Export importance scores
 		try:
 			imp['mean_imp'] = imp.mean(axis=1)
 			imp = imp.sort_values('mean_imp', 0, ascending = False)
@@ -290,43 +333,37 @@ def main():
 			imp['mean_imp'].to_csv(imp_out, sep = ",", index=True)
 		except:
 			pass
+
+		# Save to summary RESULTS file with all models run from the same directory
+		open("RESULTS.txt",'a').write('%s\t%s\t%s\t%i\t%i\t%i\t%i\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' % (
+			str(datetime.now()), SAVE, [POS,NEG], n_features, min_size, cv_num , n, '\t'.join(str(x) for x in ROC),
+				'\t'.join(str(x) for x in PRc), '\t'.join(str(x) for x in Ac), '\t'.join(str(x) for x in F1),
+				'\t'.join(str(x) for x in Pr), '\t'.join(str(x) for x in TPR), '\t'.join(str(x) for x in FPR),
+				'\t'.join(str(x) for x in FNR), '\t'.join(str(x) for x in TP), '\t'.join(str(x) for x in TN),
+				'\t'.join(str(x) for x in FP), '\t'.join(str(x) for x in FN)))
+
+		# Save detailed results file 
+		out = open(SAVE + "_results.txt", 'w')
+		out.write('ID: %s\nAlgorithm: %s\nTrained on classes: %s\nApplied to additional classes: %s\nNumber of features: %i\n' % (
+			SAVE, ALG, classes, apply, n_features))
+		out.write('Min class size: %i\nCV folds: %i\nNumber of models: %i\nGrid Search Used: %s\nParameters used:%s\n' % (
+			min_size, cv_num, n, GS, parameters_used))
+		out.write('\nMetric\tMean\tSD\tSE\n')
+		out.write('AucROC\t%s\nAucPRc\t%s\nAccuracy\t%s\nF1\t%s\nPrecision\t%s\nTPR\t%s\nFPR\t%s\nFNR\t%s\n' % (
+			'\t'.join(str(x) for x in ROC),'\t'.join(str(x) for x in PRc), '\t'.join(str(x) for x in Ac), '\t'.join(str(x) for x in F1),
+			'\t'.join(str(x) for x in Pr), '\t'.join(str(x) for x in TPR), '\t'.join(str(x) for x in FPR), '\t'.join(str(x) for x in FNR)))
+		out.write('TP\t%s\nTN\t%s\nFP\t%s\nFN\t%s\n' % (
+			'\t'.join(str(x) for x in TP), '\t'.join(str(x) for x in TN), '\t'.join(str(x) for x in FP), '\t'.join(str(x) for x in FN)))
+		out.write('\nMean Balanced Confusion Matrix:\n')
+		out.close()
+		cm_mean.to_csv(SAVE + "_results.txt", mode='a', sep='\t')
+
+		print("\n\n===>  ML Results  <===")
+		print("Accuracy: %03f (+/- stdev %03f)\nF1: %03f (+/- stdev %03f)\nAUC-ROC: %03f (+/- stdev %03f)\nAUC-PRC: %03f (+/- stdev %03f)" % (
+			Ac[0], Ac[1], F1[0], F1[1], ROC[0], ROC[1], PRc[0], PRc[1]))
 	
-	# Calculate accuracy and f1 stats
-	AC = np.mean(accuracies)
-	AC_std = np.std(accuracies)
-	MacF1 = f1['M_F1'].mean()
-	MacF1_std = f1['M_F1'].std()
-	try:
-		MacAUC = np.mean(auc_array)
-		MacAUC_std = np.std(auc_array)
-	except:
-		MacAUC = MacAUC_std = 'Na'
 	
-	print("\nML Results: \nAccuracy: %03f (+/- stdev %03f)\nF1 (macro): %03f (+/- stdev %03f)\nAUC-ROC (macro): %03f (+/- stdev %03f)" % (
-		AC, AC_std, MacF1, MacF1_std, MacAUC, MacAUC_std))
 	
-	# Write summary results to main RESULTS.txt file
-	open("RESULTS.txt",'a').write('%s\t%i\t%i\t%i\t%.5f\t%.5f\t%.5f\t%.5f\t%.5f\t%.5f\n' % (
-		SAVE, n_features, min_size, n, AC, AC_std, MacAUC, MacAUC_std, MacF1, MacF1_std))
-	
-	# Write detailed results file
-	out = open(SAVE + "_results.txt", 'w')
-	out.write('ID: %s\nAlgorithm: %s\nClasses trained on: %s\nNumber of features: %i\nMin class size: %i\nNumber of models: %i\n' % (
-		SAVE, ALG, classes, n_features, min_size, n)) #, AC, AC_std, MacF1, MacF1_std))
-	out.write('Grid Search Used: %s\nParameters used:%s\n' % (GS, parameters_used))
-	out.write('\nModel Performance Measures\n\nAccuracy (std): %.5f\t%.5f\nAUC-ROC (std): %.5f\t%.5f\nMacro_F1 (std): %.5f\t%.5f\n' % (
-		AC, AC_std, MacAUC, MacAUC_std, MacF1, MacF1_std))
-	
-	for cl in classes:
-		out.write('F1_%s (std): %.5f\t%.5f\n' % (cl, f1[str(cl)+'_F1'].mean(), f1[str(cl)+'_F1'].std()))
-	out.write('\nConfusion Matrix:\n')
-	out.close()
-	out = open(SAVE + "_results.txt", 'a')
-	cm_mean.to_csv(out, sep='\t')
-	
-	out_scores = open(SAVE + "_scores.txt","w")
-	out_scores.write("ID"+pd.DataFrame.to_csv(df_proba,sep="\t"))
-	out_scores.close()
 
 if __name__ == '__main__':
 	main()
