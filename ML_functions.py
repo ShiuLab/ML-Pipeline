@@ -58,12 +58,15 @@ class fun(object):
 				'max_features': [0.1, 0.25, 0.5, 0.75, 0.9999, 'sqrt', 'log2'],
 				'n_estimators':[50, 100, 500]}
 			
-		
 		elif ALG == "SVM":
-			#parameters = {'kernel': ('linear'),'C':[0.1, 1], 'loss':('hinge', 'squared_hinge'), 'max_iter':(10,100)}
-			parameters = [{'kernel': ['linear'], 'C':[0.01, 0.1, 0.5, 1, 10, 50, 100]},
-				{'kernel': ['poly'], 'C':[0.01, 0.1, 0.5, 1, 10, 50, 100],'degree': [2,3], 'gamma': np.logspace(-9,3,13)},
-				{'kernel': ['rbf'], 'C': [0.01, 0.1, 0.5, 1, 10, 50, 100], 'gamma': np.logspace(-9,3,13)}]
+			parameters = {'kernel': ['linear'], 'C':[0.01, 0.1, 0.5, 1, 10, 50, 100]}
+
+		elif ALG == 'SVMpoly':
+			parameters = {'kernel': ['poly'], 'C':[0.01, 0.1, 0.5, 1, 10, 50, 100],'degree': [2,3,4], 'gamma': np.logspace(-5,1,7)}
+
+		elif ALG == 'SVMrbf':
+			parameters = {'kernel': ['rbf'], 'C': [0.01, 0.1, 0.5, 1, 10, 50, 100], 'gamma': np.logspace(-5,1,7)}
+				
 		
 		else:
 			print('Grid search is not available for the algorithm selected')
@@ -89,7 +92,7 @@ class fun(object):
 			# Build model, run grid search with 10-fold cross validation and fit
 			if ALG == 'RF':
 				model = RandomForestClassifier()
-			elif ALG == "SVM":
+			elif ALG == "SVM" or ALG == 'SVMrbf' or ALG == 'SVMpoly':
 				x = StandardScaler().fit_transform(x)
 				model = SVC(probability=True)
 			
@@ -107,7 +110,7 @@ class fun(object):
 		# Break params into seperate columns
 		gs_results2 = pd.concat([gs_results.drop(['params'], axis=1), gs_results['params'].apply(pd.Series)], axis=1)
 		param_names = list(gs_results2)[1:]
-		print('Parameters tested: %s' % param_names)
+		#print('Parameters tested: %s' % param_names)
 		
 		# Find the mean score for each set of parameters & select the top set
 		gs_results_mean = gs_results2.groupby(param_names).mean()
@@ -115,10 +118,9 @@ class fun(object):
 		top_params = gs_results_mean.index[0]
 		
 		print("Parameter sweep time: %f seconds" % (time.time() - start_time))
-		outName = SAVE + "_GridSearch"
+		outName = SAVE + "_GridSearch.txt"
 		gs_results_mean.to_csv(outName)
-		print(top_params)
-		return top_params,bal_ids_list
+		return top_params,bal_ids_list, param_names
 	
 	def DefineClf_RandomForest(n_estimators,max_depth,max_features,j,n_jobs):
 		from sklearn.ensemble import RandomForestClassifier
@@ -310,7 +312,7 @@ class fun(object):
 		from sklearn.metrics import roc_curve, auc, confusion_matrix
 		plt.switch_backend('agg')
 		
-		print("Generating ROC & PR curves")
+		
 		FPRs = {}
 		TPRs = {}
 		precisions = {}
@@ -353,11 +355,11 @@ class fun(object):
 
 		# Plot the ROC Curve
 		plt.title('ROC Curve: ' + SAVE)
-		plt.plot(FPR_mean, TPR_mean, lw=2, color= 'blue', label='AUC-ROC: ' + str(ROC[0]))
-		plt.fill_between(FPR_mean, TPR_mean-TPR_sd, TPR_mean+TPR_sd, facecolor='blue', alpha=0.5, label='SD_TPR')
-		#plt.plot(FPRs_df.median(axis=1), TPRs_df.mean(axis=1), lw=2, color= 'blue', label='AUC-ROC: ' + str(ROC[0]))
+		plt.plot(FPR_mean, TPR_mean, lw=3, color= 'black', label='AUC-ROC: ' + str(round(ROC[0], 3)))
+		plt.fill_between(FPR_mean, TPR_mean-TPR_sd, TPR_mean+TPR_sd, facecolor='black', alpha=0.4, linewidth = 0, label='SD_TPR')
+		#plt.plot(FPRs_df.median(axis=1), TPRs_df.mean(axis=1), lw=2, color= 'blue', label='AUC-ROC: ' + str(round(ROC[0], 3)))
 		#plt.fill_between(FPRs_df.median(axis=1), TPRs_df.min(axis=1), TPRs_df.max(axis=1), facecolor='blue', alpha=0.5, label='SD_TPR')
-		plt.plot([0,1],[0,1],'r--', label = 'Random Expectation')
+		plt.plot([0,1],[0,1],'r--', lw = 2, label = 'Random Expectation')
 		plt.legend(loc='lower right')
 		plt.xlim([0,1])
 		plt.ylim([0,1])
@@ -370,11 +372,11 @@ class fun(object):
 		
 		# Plot the Precision-Recall Curve
 		plt.title('PR Curve: ' + SAVE)
-		plt.plot(TPR_mean, precis_mean, lw=2, color= 'blue', label='AUC-PRc: ' + str(PRc[0]))
-		plt.fill_between(TPR_mean, precis_mean-precis_sd, precis_mean+precis_sd, facecolor='blue', alpha=0.5, label='SD_Precision')
-		#plt.plot(TPRs_df.median(axis=1), precisions_df.median(axis=1), lw=2, color= 'blue', label='AUC-PRc: ' + str(PRc[0]))
+		plt.plot(TPR_mean, precis_mean, lw=3, color= 'black', label='AUC-PRc: ' + str(round(PRc[0], 3)))
+		plt.fill_between(TPR_mean, precis_mean-precis_sd, precis_mean+precis_sd, facecolor='black', alpha=0.4, linewidth = 0, label='SD_Precision')
+		#plt.plot(TPRs_df.median(axis=1), precisions_df.median(axis=1), lw=2, color= 'blue', label='AUC-PRc: ' + str(round(PRc[0], 3)))
 		#plt.fill_between(TPRs_df.median(axis=1), precisions_df.min(axis=1), precisions_df.max(axis=1), facecolor='blue', alpha=0.5, label='SD_Precision')
-		plt.plot([0,1],[0.5,0.5],'r--', label = 'Random Expectation')
+		plt.plot([0,1],[0.5,0.5],'r--', lw=2, label = 'Random Expectation')
 		plt.legend(loc='upper right')
 		plt.xlim([0,1])
 		plt.ylim([0.45,1])

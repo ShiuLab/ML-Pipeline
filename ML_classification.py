@@ -9,7 +9,7 @@ INPUTS:
 	
 	REQUIRED ALL:
 	-df       Feature & class dataframe for ML. See "" for an example dataframe
-	-alg      Available: RF, SVM (LinearSVC)
+	-alg      Available: RF, SVM (linear), SVMpoly, SVMrbf
 	
 	OPTIONAL:
 	
@@ -24,14 +24,15 @@ INPUTS:
 	-apply    To which non-training class labels should the models be applied? Enter 'all' or a list (comma-delimit if >1)
 	-cm       T/F - Do you want to output the confusion matrix & confusion matrix figure? (Default = False)
 	-plots    T/F - Do you want to output ROC and PR curve plots for each model? (Default = False)
+	-tag      String for the TAG column in the RESULTS.txt output.
 
 OUTPUT:
 	-SAVE_imp           Importance scores for each feature
 	-SAVE_GridSearch    Results from parameter sweep sorted by F1
-	-RESULTS_XX.txt     Accumulates results from all ML runs done in a specific folder - use unique save names! XX = RF or SVC
+	-RESULTS.txt     Accumulates results from all ML runs done in a specific folder - use unique save names! XX = RF or SVC
 """
 
-import sys
+import sys, os
 import pandas as pd
 import numpy as np
 from datetime import datetime
@@ -42,7 +43,7 @@ import ML_functions as ML
 def main():
 	
 	# Default code parameters
-	n, FEAT, CL_TRAIN, apply, n_jobs, class_col, CM, POS, plots, cv_num  = 50, 'all', 'all','none', 28, 'Class', 'False', 1, 'False', 10
+	n, FEAT, CL_TRAIN, apply, n_jobs, class_col, CM, POS, plots, cv_num, TAG = 50, 'all', 'all','none', 28, 'Class', 'False', 1, 'False', 10, ''
 	
 	# Default parameters for Grid search
 	GS, gs_score, gs_n= 'F', 'roc_auc', 25
@@ -88,6 +89,8 @@ def main():
 			plots = sys.argv[i+1]
 		if sys.argv[i] == "-pos":
 			POS = sys.argv[i+1]
+		if sys.argv[i] == "-tag":
+			TAG = sys.argv[i+1]
 
 	if len(sys.argv) <= 1:
 		print(__doc__)
@@ -174,20 +177,28 @@ def main():
 	####### Run parameter sweep using a grid search #######
 	
 	if GS.lower() == 'true' or GS.lower() == 't':
-		
 		start_time = time.time()
 		print("\n\n===>  Grid search started  <===") 
 		
-		params2use,balanced_ids = ML.fun.GridSearch(df, SAVE, ALG, classes, min_size, gs_score, n, cv_num, n_jobs, POS, NEG)
+		params2use,balanced_ids, param_names = ML.fun.GridSearch(df, SAVE, ALG, classes, min_size, gs_score, n, cv_num, n_jobs, POS, NEG)
 		
+		# Print results from grid search
 		if ALG == 'RF':
 			max_depth, max_features, n_estimators = params2use
 			print("Parameters selected: max_depth=%s, max_features=%s, n_estimators(trees)=%s" % (
 				str(max_depth), str(max_features), str(n_estimators)))
 	
-		elif ALG == "SVM":
+		elif ALG == 'SVM':
+			C, kernel = params2use
+			print("Parameters selected: Kernel=%s, C=%s" % (str(kernel), str(C)))
+		
+		elif ALG == "SVMpoly":
 			C, degree, gamma, kernel = params2use
 			print("Parameters selected: Kernel=%s, C=%s, degree=%s, gamma=%s" % (str(kernel), str(C), str(degree), str(gamma)))
+		
+		elif ALG == "SVMrbf":
+			C, gamma, kernel = params2use
+			print("Parameters selected: Kernel=%s, C=%s, gamma=%s" % (str(kernel), str(C), str(gamma)))
 		
 		print("Grid search complete. Time: %f seconds" % (time.time() - start_time))
 	
@@ -221,11 +232,9 @@ def main():
 		if ALG == "RF":
 			parameters_used = [n_estimators, max_depth, max_features]
 			clf = ML.fun.DefineClf_RandomForest(n_estimators,max_depth,max_features,j,n_jobs)
-			# result = ML.fun.RandomForest_ManCV(df1, classes, POS, cv_num, n_estimators, max_depth, max_features, n_jobs, j, df_notSel, apply_unk, df_unknowns)
-		elif ALG == "SVM":
+		elif ALG == "SVM" or ALG == 'SVMrbf' or ALG == 'SVMpoly':
 			parameters_used = [C, degree, gamma, kernel]
 			clf = ML.fun.DefineClf_SVM(kernel,C,degree,gamma,j)
-			# result = ML.fun.LinearSVC(df1, classes, POS, C, degree, gamma, kernel, n_jobs, j)
 		
 		# Run ML algorithm on balanced datasets.
 		result,current_scores = ML.fun.BuildModel_Apply_Performance(df1, clf, cv_num, df_notSel, apply_unk, df_unknowns, classes, POS, NEG, j)
@@ -323,6 +332,7 @@ def main():
 
 		# Plot ROC & PR curves
 		if plots.lower() == 'true' or plots.lower() == 't':
+			print("\nGenerating ROC & PR curves")
 			pr = ML.fun.Plots(df_proba, balanced_ids, ROC, PRc, POS, NEG, n, SAVE)
 		
 		# Export importance scores
@@ -334,18 +344,29 @@ def main():
 		except:
 			pass
 
+		timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+		
 		# Save to summary RESULTS file with all models run from the same directory
-		open("RESULTS.txt",'a').write('%s\t%s\t%s\t%i\t%i\t%i\t%i\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' % (
-			str(datetime.now()), SAVE, [POS,NEG], n_features, min_size, cv_num , n, '\t'.join(str(x) for x in ROC),
-				'\t'.join(str(x) for x in PRc), '\t'.join(str(x) for x in Ac), '\t'.join(str(x) for x in F1),
-				'\t'.join(str(x) for x in Pr), '\t'.join(str(x) for x in TPR), '\t'.join(str(x) for x in FPR),
-				'\t'.join(str(x) for x in FNR), '\t'.join(str(x) for x in TP), '\t'.join(str(x) for x in TN),
-				'\t'.join(str(x) for x in FP), '\t'.join(str(x) for x in FN)))
+		
+		if not os.path.isfile('RESULTS.txt'):
+			out2 = open('RESULTS.txt', 'a')
+			out2.write('DateTime\tID\tTag\tClasses\tFeatureNum\tBalancedSize\tCVfold\tBalancedRuns\tAUCROC\tAUCROC_sd\ttAUCROC_se\t')
+			out2.write('AUCPRc\tAUCPRc_sd\tAUCPRc_se\tAc\tAc_sd\tAc_se\tF1\tF1_sd\tF1_se\tPr\tPr_sd\tPr_se\tTPR\tTPR_sd\tTPR_se\t')
+			out2.write('FPR\tFPR_sd\tFPR_se\tFNR\tFNR_sd\tFNR_se\tTP\tTP_sd\tTP_se\tTN\tTN_sd\tTN_se\tFP\tFP_sd\tFP_se\t')
+			out2.write('FN\tFN_sd\tFN_se\n')
+			out2.close()
+		out2 = open('RESULTS.txt', 'a')
+		out2.write('%s\t%s\t%s\t%s\t%i\t%i\t%i\t%i\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' % (
+			timestamp, SAVE, TAG, [POS,NEG], n_features, min_size, cv_num , n, 
+			'\t'.join(str(x) for x in ROC), '\t'.join(str(x) for x in PRc), '\t'.join(str(x) for x in Ac), '\t'.join(str(x) for x in F1),
+			'\t'.join(str(x) for x in Pr), '\t'.join(str(x) for x in TPR), '\t'.join(str(x) for x in FPR),
+			'\t'.join(str(x) for x in FNR), '\t'.join(str(x) for x in TP), '\t'.join(str(x) for x in TN),
+			'\t'.join(str(x) for x in FP), '\t'.join(str(x) for x in FN)))
 
 		# Save detailed results file 
 		out = open(SAVE + "_results.txt", 'w')
-		out.write('ID: %s\nAlgorithm: %s\nTrained on classes: %s\nApplied to additional classes: %s\nNumber of features: %i\n' % (
-			SAVE, ALG, classes, apply, n_features))
+		out.write('%s\nID: %s\nTag: %s\nAlgorithm: %s\nTrained on classes: %s\nApplied to: %s\nNumber of features: %i\n' % (
+			timestamp, SAVE, TAG, ALG, classes, apply, n_features))
 		out.write('Min class size: %i\nCV folds: %i\nNumber of models: %i\nGrid Search Used: %s\nParameters used:%s\n' % (
 			min_size, cv_num, n, GS, parameters_used))
 		out.write('\nMetric\tMean\tSD\tSE\n')
