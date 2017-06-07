@@ -30,6 +30,7 @@ OUTPUT:
 	-SAVE_imp           Importance scores for each feature
 	-SAVE_GridSearch    Results from parameter sweep sorted by F1
 	-RESULTS.txt     Accumulates results from all ML runs done in a specific folder - use unique save names! XX = RF or SVC
+
 """
 
 import sys, os
@@ -43,13 +44,13 @@ import ML_functions as ML
 def main():
 	
 	# Default code parameters
-	n, FEAT, CL_TRAIN, apply, n_jobs, class_col, CM, POS, plots, cv_num, TAG = 50, 'all', 'all','none', 28, 'Class', 'False', 1, 'False', 10, ''
+	n, FEAT, CL_TRAIN, apply, n_jobs, class_col, CM, POS, plots, cv_num, TAG = 50, 'all', 'all','none', 14, 'Class', 'False', 1, 'False', 10, ''
 	
 	# Default parameters for Grid search
-	GS, gs_score, gs_n= 'F', 'roc_auc', 25
+	GS, gs_score = 'F', 'roc_auc'
 	
 	# Default Random Forest parameters
-	n_estimators, max_depth, max_features = 100, 10, "sqrt"
+	n_estimators, max_depth, max_features = 500, 10, "sqrt"
 	
 	# Default Linear SVC parameters
 	kernel, C, degree, gamma, loss, max_iter = 'linear', 1, 2, 1, 'hinge', "500"
@@ -132,7 +133,7 @@ def main():
 	# Remove classes that won't be included in the training (e.g. unknowns)
 	if CL_TRAIN != 'all':
 		df = df[(df['Class'].isin(CL_TRAIN))]
-	
+
 	# Generate training classes list. If binary, establish POS and NEG classes. Set grid search scoring: roc_auc for binary, f1_macro for multiclass
 	if CL_TRAIN == 'all':
 		classes = df['Class'].unique()
@@ -165,8 +166,7 @@ def main():
 	print("CLASSES:",classes)
 	print("POS:",POS,type(POS))
 	print("NEG:",NEG,type(NEG))
-	
-	n_features = len(df['Class'].unique()) - 1
+	n_features = len(list(df)) - 1
 	
 	# Determine minimum class size (for making balanced datasets)
 	min_size = (df.groupby('Class').size()).min() - 1
@@ -184,9 +184,9 @@ def main():
 		
 		# Print results from grid search
 		if ALG == 'RF':
-			max_depth, max_features, n_estimators = params2use
-			print("Parameters selected: max_depth=%s, max_features=%s, n_estimators(trees)=%s" % (
-				str(max_depth), str(max_features), str(n_estimators)))
+			max_depth, max_features = params2use
+			print("Parameters selected: max_depth=%s, max_features=%s" % (
+				str(max_depth), str(max_features)))
 	
 		elif ALG == 'SVM':
 			C, kernel = params2use
@@ -205,11 +205,14 @@ def main():
 	else:
 		balanced_ids = ML.fun.EstablishBalanced(df,classes,min_size,n)
 	
+	bal_id = pd.DataFrame(balanced_ids)
+	bal_id.to_csv(SAVE + '_BalancedIDs.csv', index=False, header=False)
 
+	 
 	####### Run ML models #######
 	start_time = time.time()
 	print("\n\n===>  ML Pipeline started  <===")
-	
+
 	results = []
 	df_proba = pd.DataFrame(data=df['Class'], index=df.index, columns=['Class'])
 	if apply_unk == True:
@@ -239,8 +242,8 @@ def main():
 		# Run ML algorithm on balanced datasets.
 		result,current_scores = ML.fun.BuildModel_Apply_Performance(df1, clf, cv_num, df_notSel, apply_unk, df_unknowns, classes, POS, NEG, j)
 		results.append(result)
-		df_proba = pd.concat([df_proba,current_scores],axis = 1)
-	
+		df_proba = pd.concat([df_proba,current_scores], axis = 1)
+
 	print("ML Pipeline time: %f seconds" % (time.time() - start_time))
 
 
@@ -350,14 +353,14 @@ def main():
 		
 		if not os.path.isfile('RESULTS.txt'):
 			out2 = open('RESULTS.txt', 'a')
-			out2.write('DateTime\tID\tTag\tClasses\tFeatureNum\tBalancedSize\tCVfold\tBalancedRuns\tAUCROC\tAUCROC_sd\ttAUCROC_se\t')
+			out2.write('DateTime\tID\tTag\tAlg\tClasses\tFeatureNum\tBalancedSize\tCVfold\tBalancedRuns\tAUCROC\tAUCROC_sd\ttAUCROC_se\t')
 			out2.write('AUCPRc\tAUCPRc_sd\tAUCPRc_se\tAc\tAc_sd\tAc_se\tF1\tF1_sd\tF1_se\tPr\tPr_sd\tPr_se\tTPR\tTPR_sd\tTPR_se\t')
 			out2.write('FPR\tFPR_sd\tFPR_se\tFNR\tFNR_sd\tFNR_se\tTP\tTP_sd\tTP_se\tTN\tTN_sd\tTN_se\tFP\tFP_sd\tFP_se\t')
 			out2.write('FN\tFN_sd\tFN_se\n')
 			out2.close()
 		out2 = open('RESULTS.txt', 'a')
-		out2.write('%s\t%s\t%s\t%s\t%i\t%i\t%i\t%i\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' % (
-			timestamp, SAVE, TAG, [POS,NEG], n_features, min_size, cv_num , n, 
+		out2.write('%s\t%s\t%s\t%s\t%s\t%i\t%i\t%i\t%i\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' % (
+			timestamp, SAVE, TAG, ALG, [POS,NEG], n_features, min_size, cv_num , n, 
 			'\t'.join(str(x) for x in ROC), '\t'.join(str(x) for x in PRc), '\t'.join(str(x) for x in Ac), '\t'.join(str(x) for x in F1),
 			'\t'.join(str(x) for x in Pr), '\t'.join(str(x) for x in TPR), '\t'.join(str(x) for x in FPR),
 			'\t'.join(str(x) for x in FNR), '\t'.join(str(x) for x in TP), '\t'.join(str(x) for x in TN),

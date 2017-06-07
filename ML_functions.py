@@ -53,10 +53,7 @@ class fun(object):
 		### NOTE: The returned top_params will be in alphabetical order - to be consistent add any additional 
 		###       parameters to test in alphabetical order
 		if ALG == 'RF':
-			#parameters = {'max_depth':[2, 5], 'max_features': [0.1, 0.5], 'n_estimators':[10, 50]}
-			parameters = {'max_depth':[3, 5, 10, 50],
-				'max_features': [0.1, 0.25, 0.5, 0.75, 0.9999, 'sqrt', 'log2'],
-				'n_estimators':[50, 100, 500]}
+			parameters = {'max_depth':[3, 5, 10, 50], 'max_features': [0.1, 0.25, 0.5, 0.75, 0.9999, 'sqrt', 'log2']}
 			
 		elif ALG == "SVM":
 			parameters = {'kernel': ['linear'], 'C':[0.01, 0.1, 0.5, 1, 10, 50, 100]}
@@ -186,7 +183,6 @@ class fun(object):
 			if apply_unk == True:
 				df_unk_scores = pd.DataFrame(data=unk_proba[:,POS_IND],index=df_unknowns.index,columns=score_columns)
 				current_scores =  pd.concat([current_scores,df_unk_scores], axis = 0)
-			
 			result = fun.Performance(y, cv_pred, scores, clf, classes, POS, POS_IND, NEG)
 		else:
 			
@@ -204,7 +200,6 @@ class fun(object):
 			
 			
 			result = fun.Performance_MC(y, cv_pred, classes)
-		
 		return result,current_scores
 
 	def Performance(y, cv_pred, scores, clf, classes, POS, POS_IND, NEG):

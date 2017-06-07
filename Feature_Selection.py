@@ -101,8 +101,7 @@ def Chi2(df, n):
 
 def L1(df, PARAMETER, TYPE):
   """Apply a linear model with a L1 penalty and select features who's coefficients aren't 
-  shrunk to zero
-  . Unlike Chi2, this method accounts for the effect of all of the
+  shrunk to zero. Unlike Chi2, this method accounts for the effect of all of the
   other features when determining if a feature is a good predictor.
   For a regression problem, it uses linear_model.Lasso
   For a classification problem, it uses svm.LinearSVC """
