@@ -29,6 +29,8 @@ python ML_classification.py -df example_MC.txt -alg [ALG] -class Biotech_cluster
 ## Post-Processing
 
 ### AUC-ROC & AUC-PR Plots
+Use this code to build plots with multiple results files.
+
 <pre><code>export PATH=/mnt/home/azodichr/miniconda3/bin:$PATH
 python ML_plots.py [SAVE_NAME] name1 [Path_to_1st_scores_file] name3 [Path_to_2nd_scores_file] etc.</code></pre>
 
