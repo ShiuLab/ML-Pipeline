@@ -260,8 +260,6 @@ class fun(object):
 		TP,TN,FP,FN,TPR,FPR,FNR,Precision,Accuracy,F1  = [],[],[],[],[],[],[],[],[],[]
 		
 		df_proba_thresh = df_proba.copy()
-		for c in df_proba_thresh.columns:
-			print(c)
 		proba_columns = [c for c in df_proba_thresh.columns if c.startswith('score_')]
 		for proba_column in proba_columns:
 			df_proba_thresh[df_proba[proba_column] >= final_threshold] = POS
