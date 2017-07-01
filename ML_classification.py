@@ -12,16 +12,18 @@ INPUTS:
 	-alg      Available: RF, SVM (linear), SVMpoly, SVMrbf
 	
 	OPTIONAL:
-	
-	-pos      name of positive class (default = 1 or first class provided with -cl_train)
+	-p        # of processors, default = 1
 	-cl_train List of classes to include in the training set. Default = all classes. If binary, first label = positive class.
-	-save     Save name. Default = [df]_[alg] (caution - will overwrite!)
-	-feat     Import file with list of features to keep if desired. Default: keep all.
-	-cv       # of cross-validation folds. Default = 10
+	-pos      name of positive class (default = 1 or first class provided with -cl_train)
 	-gs       Set to True if parameter sweep is desired. Default = False
-	-n        # of random balanced datasets to run. Default = 50
-	-class    String for what column has the class. Default = Class
+	-cv       # of cross-validation folds. Default = 10
+	-bal      # of random balanced datasets to run. Default = 50
 	-apply    To which non-training class labels should the models be applied? Enter 'all' or a list (comma-delimit if >1)
+	-save     Save name. Default = [df]_[alg] (caution - will overwrite!)
+	-class    String for what column has the class. Default = Class
+	-feat     Import file with list of features to keep if desired. Default: keep all.
+	
+	PLOT OPTIONS:
 	-cm       T/F - Do you want to output the confusion matrix & confusion matrix figure? (Default = False)
 	-plots    T/F - Do you want to output ROC and PR curve plots for each model? (Default = False)
 	-tag      String for the TAG column in the RESULTS.txt output.
@@ -44,7 +46,7 @@ import ML_functions as ML
 def main():
 	
 	# Default code parameters
-	n, FEAT, CL_TRAIN, apply, n_jobs, class_col, CM, POS, plots, cv_num, TAG = 50, 'all', 'all','none', 14, 'Class', 'False', 1, 'False', 10, ''
+	n, FEAT, CL_TRAIN, apply, n_jobs, class_col, CM, POS, plots, cv_num, TAG = 50, 'all', 'all','none', 1, 'Class', 'False', 1, 'False', 10, ''
 	
 	# Default parameters for Grid search
 	GS, gs_score = 'F', 'roc_auc'
@@ -59,39 +61,43 @@ def main():
 		if sys.argv[i] == "-df":
 			DF = sys.argv[i+1]
 			SAVE = DF
-		if sys.argv[i] == '-save':
+		elif sys.argv[i] == '-save':
 			SAVE = sys.argv[i+1]
-		if sys.argv[i] == '-feat':
+		elif sys.argv[i] == '-feat':
 			FEAT = sys.argv[i+1]
-		if sys.argv[i] == "-gs":
+		elif sys.argv[i] == "-gs":
 			GS = sys.argv[i+1]
-		if sys.argv[i] == "-gs_score":
+		elif sys.argv[i] == "-gs_score":
 			gs_score = sys.argv[i+1]
-		if sys.argv[i] == '-cl_train':
+		elif sys.argv[i] == '-cl_train':
 			CL_TRAIN = sys.argv[i+1].split(',')
 			POS = CL_TRAIN[0]
-		if sys.argv[i] == '-apply':
+		elif sys.argv[i] == '-apply':
 			apply = sys.argv[i+1].lower()
 			if apply != "all":
 				apply = sys.argv[i+1].split(',')
-		if sys.argv[i] == "-class":
+		elif sys.argv[i] == "-class":
 			class_col = sys.argv[i+1]
-		if sys.argv[i] == "-n":
+		elif sys.argv[i] == "-n":
 			n = int(sys.argv[i+1])
-		if sys.argv[i] == "-alg":
+		elif sys.argv[i] == "-bal":
+			n = int(sys.argv[i+1])
+		elif sys.argv[i] == "-alg":
 			ALG = sys.argv[i+1]
-		if sys.argv[i] == "-cv":
+		elif sys.argv[i] == "-cv":
 			cv_num = int(sys.argv[i+1])
-		if sys.argv[i] == "-n_jobs":
+		elif sys.argv[i] == "-n_jobs":
 			n_jobs = int(sys.argv[i+1])
-		if sys.argv[i] == "-cm":
+		elif sys.argv[i] == "-cm":
 			CM = sys.argv[i+1]
-		if sys.argv[i] == "-plots":
+		elif sys.argv[i] == "-plots":
 			plots = sys.argv[i+1]
-		if sys.argv[i] == "-pos":
+		elif sys.argv[i] == "-pos":
 			POS = sys.argv[i+1]
-		if sys.argv[i] == "-tag":
+		elif sys.argv[i] == "-tag":
 			TAG = sys.argv[i+1]
+		elif sys.argv[i] == "-p":
+			n_jobs = int(sys.argv[i+1])
 
 	if len(sys.argv) <= 1:
 		print(__doc__)
