@@ -22,11 +22,11 @@ INPUTS:
 	-save     Save name. Default = [df]_[alg] (caution - will overwrite!)
 	-class    String for what column has the class. Default = Class
 	-feat     Import file with list of features to keep if desired. Default: keep all.
+	-tag      String for the TAG column in the RESULTS.txt output.
 	
 	PLOT OPTIONS:
 	-cm       T/F - Do you want to output the confusion matrix & confusion matrix figure? (Default = False)
 	-plots    T/F - Do you want to output ROC and PR curve plots for each model? (Default = False)
-	-tag      String for the TAG column in the RESULTS.txt output.
 
 OUTPUT:
 	-SAVE_imp           Importance scores for each feature
