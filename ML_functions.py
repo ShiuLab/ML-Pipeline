@@ -8,7 +8,7 @@ RandomForest
 LinearSVC
 Performance
 Performance_MC
-PR_Curve - NOT FUNCTIONAL
+Plots (PR & ROC)
 Plot_ConMatrix
 
 """
@@ -53,16 +53,17 @@ class fun(object):
 		### NOTE: The returned top_params will be in alphabetical order - to be consistent add any additional 
 		###       parameters to test in alphabetical order
 		if ALG == 'RF':
-			parameters = {'max_depth':[3, 5, 10, 50],
-				'max_features': [0.1, 0.25, 0.5, 0.75, 0.9999, 'sqrt', 'log2'],
-				'n_estimators':[50, 100, 500]}
-			#parameters = {'max_depth':[2, 5], 'max_features': [0.1, 0.5], 'n_estimators':[10, 50]}
-		
+			parameters = {'max_depth':[3, 5, 10, 50], 'max_features': [0.1, 0.25, 0.5, 0.75, 0.9999, 'sqrt', 'log2']}
+			
 		elif ALG == "SVM":
-			#parameters = {'kernel': ('linear'),'C':[0.1, 1], 'loss':('hinge', 'squared_hinge'), 'max_iter':(10,100)}
-			parameters = [{'kernel': ['linear'], 'C':[0.01, 0.1, 0.5, 1, 10, 50, 100]},
-				{'kernel': ['poly'], 'C':[0.01, 0.1, 0.5, 1, 10, 50, 100],'degree': [2,3], 'gamma': np.logspace(-9,3,13)},
-				{'kernel': ['rbf'], 'C': [0.01, 0.1, 0.5, 1, 10, 50, 100], 'gamma': np.logspace(-9,3,13)}]
+			parameters = {'kernel': ['linear'], 'C':[0.01, 0.1, 0.5, 1, 10, 50, 100]}
+
+		elif ALG == 'SVMpoly':
+			parameters = {'kernel': ['poly'], 'C':[0.01, 0.1, 0.5, 1, 10, 50, 100],'degree': [2,3,4], 'gamma': np.logspace(-5,1,7)}
+
+		elif ALG == 'SVMrbf':
+			parameters = {'kernel': ['rbf'], 'C': [0.01, 0.1, 0.5, 1, 10, 50, 100], 'gamma': np.logspace(-5,1,7)}
+				
 		
 		else:
 			print('Grid search is not available for the algorithm selected')
@@ -72,11 +73,9 @@ class fun(object):
 		
 		bal_ids_list = []
 		for j in range(n):
-			
 			print("  Round %s of %s"%(j+1,n))
 			
 			# Build balanced dataframe and define x & y
-			
 			df1 = pd.DataFrame(columns=list(df))
 			for cl in classes:
 				temp = df[df['Class'] == cl].sample(min_size, random_state=j)
@@ -90,7 +89,7 @@ class fun(object):
 			# Build model, run grid search with 10-fold cross validation and fit
 			if ALG == 'RF':
 				model = RandomForestClassifier()
-			elif ALG == "SVC":
+			elif ALG == "SVM" or ALG == 'SVMrbf' or ALG == 'SVMpoly':
 				x = StandardScaler().fit_transform(x)
 				model = SVC(probability=True)
 			
@@ -108,7 +107,7 @@ class fun(object):
 		# Break params into seperate columns
 		gs_results2 = pd.concat([gs_results.drop(['params'], axis=1), gs_results['params'].apply(pd.Series)], axis=1)
 		param_names = list(gs_results2)[1:]
-		print('Parameters tested: %s' % param_names)
+		#print('Parameters tested: %s' % param_names)
 		
 		# Find the mean score for each set of parameters & select the top set
 		gs_results_mean = gs_results2.groupby(param_names).mean()
@@ -116,10 +115,9 @@ class fun(object):
 		top_params = gs_results_mean.index[0]
 		
 		print("Parameter sweep time: %f seconds" % (time.time() - start_time))
-		outName = SAVE + "_GridSearch"
+		outName = SAVE + "_GridSearch.txt"
 		gs_results_mean.to_csv(outName)
-		print(top_params)
-		return top_params,bal_ids_list
+		return top_params,bal_ids_list, param_names
 	
 	def DefineClf_RandomForest(n_estimators,max_depth,max_features,j,n_jobs):
 		from sklearn.ensemble import RandomForestClassifier
@@ -131,7 +129,7 @@ class fun(object):
 			n_jobs=n_jobs)
 		return clf
 	
-	def DefineClf_LinearSVC(kernel,C,degree,gamma,j):
+	def DefineClf_SVM(kernel,C,degree,gamma,j):
 		from sklearn.svm import SVC
 		clf = SVC(kernel = kernel,
 			C=float(C), 
@@ -155,7 +153,7 @@ class fun(object):
 		
 		y = df['Class']
 		X = df.drop(['Class'], axis=1) 
-		
+
 		# Obtain the predictions using 10 fold cross validation (uses KFold cv by default):
 		cv_proba = cross_val_predict(estimator=clf, X=X, y=y, cv=cv_num, method='predict_proba')
 		cv_pred = cross_val_predict(estimator=clf, X=X, y=y, cv=cv_num)
@@ -185,7 +183,6 @@ class fun(object):
 			if apply_unk == True:
 				df_unk_scores = pd.DataFrame(data=unk_proba[:,POS_IND],index=df_unknowns.index,columns=score_columns)
 				current_scores =  pd.concat([current_scores,df_unk_scores], axis = 0)
-			
 			result = fun.Performance(y, cv_pred, scores, clf, classes, POS, POS_IND, NEG)
 		else:
 			
@@ -203,52 +200,47 @@ class fun(object):
 			
 			
 			result = fun.Performance_MC(y, cv_pred, classes)
-		
 		return result,current_scores
 
 	def Performance(y, cv_pred, scores, clf, classes, POS, POS_IND, NEG):
-		from sklearn.metrics import accuracy_score, f1_score, roc_auc_score, confusion_matrix
-		from sklearn.metrics import roc_curve
+		from sklearn.metrics import f1_score, roc_auc_score, average_precision_score, confusion_matrix
+
 		
-		# Gather scoring metrics
+		# Gather balanced model scoring metrics
 		cm = confusion_matrix(y, cv_pred, labels=classes)
-		accuracy = accuracy_score(y, cv_pred)
-		macro_f1 = f1_score(y, cv_pred, average='macro')	# 
-		# f1 = f1_score(y, cv_pred, average=None)	# Returns F1 for each class
+		
+		# Determine the best threshold cutoff for the balanced run
 		y1 = y.replace(to_replace = [POS, NEG], value = [1,0])
 		max_f1 = [-1,-1]
 		max_f1_thresh = ''
-		for thr in [0.25, 0.5, 0.75]:
-			thr_pred = scores[:]
+		for thr in np.arange(0, 1, 0.01):
+			thr_pred = scores.copy()
 			thr_pred[thr_pred>=thr] = 1
 			thr_pred[thr_pred<thr] = 0
-			f1 = f1_score(y1, thr_pred, average=None)	# Returns F1 for each class
-			# print(f1,type(f1),list(f1)[0],POS_IND)
+			try:
+				f1 = f1_score(y1, thr_pred, average=None)	# Returns F1 for each class
+			except UndefinedMetricWarning:
+				f1 = 0
 			if list(f1)[POS_IND] > list(max_f1)[POS_IND]:
 				max_f1 = f1
 				max_f1_thresh = thr
-		f1 = max_f1
 		
-		# For AUC - must convert y to 1s and 0s:
-		temp = np.array([POS])
-		cv_pred1 = cv_pred
-		cv_pred1[cv_pred1 == POS] = 1
-		cv_pred1[cv_pred1 == NEG] = 0
-		y1 = y.replace(to_replace = [POS, NEG], value = [1,0])
-		# AucRoc = roc_auc_score(y1, cv_pred1) #,	pos_label = POS)
-		AucRoc = roc_auc_score(y1, scores) #,	pos_label = POS)
-		
+		# Calculate AUC_ROC and AUC_PRC (based on scores, so threshold doesn't matter)
+		AucRoc = roc_auc_score(y1, scores) 
+		AucPRc = average_precision_score(y1, scores)
+
+		# Try to extract importance scores 
 		try:
-			importances = clf.feature_importances_
+			importances = clf.feature_importances_  # Works for RF
 		except:
 			try:
-				importances = clf.coef_
+				importances = clf.coef_	# Works for SVM
 			except:
 				print("Cannot get importance scores")
-				return {'cm':cm, 'accuracy':accuracy,'macro_f1':macro_f1,'f1':f1, 'AucRoc':AucRoc}
+				return {'cm':cm, 'threshold':max_f1_thresh,'AucPRc':AucPRc, 'AucRoc':AucRoc, 'MaxF1': max_f1}
 		
 		
-		return {'cm':cm, 'accuracy':accuracy,'macro_f1':macro_f1,'f1':f1, 'AucRoc':AucRoc, 'importances':importances}
+		return {'cm':cm, 'threshold':max_f1_thresh,'AucPRc':AucPRc, 'AucRoc':AucRoc, 'MaxF1': max_f1, 'importances':importances}
 	
 
 
@@ -263,23 +255,134 @@ class fun(object):
 		return {'cm':cm, 'accuracy':accuracy,'macro_f1':macro_f1,'f1':f1}
 
 
-
-	def PR_Curve(y_pred, SAVE):
-		import matplotlib.pyplot as plt
-		plt.switch_backend('agg')
-
+	def Model_Performance_Thresh(df_proba, final_threshold, balanced_ids, POS, NEG):
+		from sklearn.metrics import f1_score, confusion_matrix
 		
-		f1_summary = f1_score(y_true, y_pred_round)
-		plt.plot(recall, precision, color='navy', label='Precision-Recall curve')
-		plt.xlabel('Recall')
-		plt.ylabel('Precision')
-		plt.ylim([0.0, 1.05])
-		plt.xlim([0.0, 1.0])
-		plt.title('PR Curve: %s\nSummary F1 = %0.2f' % (SAVE, f1_summary))
+		TP,TN,FP,FN,TPR,FPR,FNR,Precision,Accuracy,F1  = [],[],[],[],[],[],[],[],[],[]
+		
+		df_proba_thresh = df_proba.copy()
+		proba_columns = [c for c in df_proba_thresh.columns if c.startswith('score_')]
+		df_proba_thresh[df_proba_thresh[proba_columns] >= final_threshold] = POS
+		df_proba_thresh[df_proba_thresh[proba_columns] < final_threshold] = NEG
+		balanced_count = 0
+		
+		# Get predictions scores from the balanced runs using the final threshold
+		for i in proba_columns:
+
+			# Get y and yhat for instances that were in the balanced dataset
+			y = df_proba_thresh.ix[balanced_ids[balanced_count], 'Class'] #,'Class']
+			yhat = df_proba_thresh.ix[balanced_ids[balanced_count], i]
+			balanced_count += 1
+
+			matrix = confusion_matrix(y, yhat, labels = [POS,NEG])
+			TP1, FP1, TN1, FN1 = matrix[0,0], matrix[1,0], matrix[1,1], matrix[0,1]
+
+			TP.append(TP1)
+			FP.append(FP1)
+			TN.append(TN1)
+			FN.append(FN1)
+			TPR.append(TP1/(TP1 + FN1))  # synonyms: recall, sensitivity, hit rate
+			FPR.append(FP1/(FP1 + TN1))  # synonyms: fall-out
+			FNR.append(FN1/(FN1 + TP1))  # synonyms: miss rate
+			Precision.append(TP1/(TP1+FP1)) # synonyms: positive predictive value
+			Accuracy.append((TP1 + TN1)/ (TP1 + TN1 + FP1 + FN1))
+			F1.append((2*TP1)/((2*TP1) + FP1 + FN1))
+
+		denominator = np.sqrt(len(TP))
+		TP = [np.mean(TP), np.std(TP), np.std(TP)/denominator]
+		FP = [np.mean(FP), np.std(FP), np.std(FP)/denominator]
+		TN = [np.mean(TN), np.std(TN), np.std(TN)/denominator]
+		FN = [np.mean(FN), np.std(FN), np.std(FN)/denominator]
+		TPR = [np.mean(TPR), np.std(TPR), np.std(TPR)/denominator]
+		FPR = [np.mean(FPR), np.std(FPR), np.std(FPR)/denominator]
+		FNR = [np.mean(FNR), np.std(FNR), np.std(FNR)/denominator]
+		Precision = [np.mean(Precision), np.std(Precision), np.std(Precision)/denominator]
+		Accuracy = [np.mean(Accuracy), np.std(Accuracy), np.std(Accuracy)/denominator]
+		F1 = [np.mean(F1), np.std(F1), np.std(F1)/denominator]
+		return TP,TN,FP,FN,TPR,FPR,FNR,Precision,Accuracy,F1
+
+
+	def Plots(df_proba, balanced_ids, ROC, PRc, POS, NEG, n, SAVE):
+		import matplotlib.pyplot as plt
+		from sklearn.metrics import roc_curve, auc, confusion_matrix
+		plt.switch_backend('agg')
+		
+		
+		FPRs = {}
+		TPRs = {}
+		precisions = {}
+		
+		# For each balanced dataset
+		for i in range(0, n): 
+			FPR = []
+			TPR = []
+			precis = []
+			name = 'score_' + str(i)
+			y = df_proba.ix[balanced_ids[i], 'Class'] #,'Class']
+			
+			# Get decision matrix & scores at each threshold between 0 & 1
+			for j in np.arange(0, 1, 0.01):
+				yhat = df_proba.ix[balanced_ids[i], name].copy()
+				yhat[df_proba[name] >= j] = POS
+				yhat[df_proba[name] < j] = NEG
+				matrix = confusion_matrix(y, yhat, labels = [POS,NEG])
+				TP, FP, TN, FN = matrix[0,0], matrix[1,0], matrix[1,1], matrix[0,1]
+				FPR.append(FP/(FP + TN))
+				TPR.append(TP/(TP + FN))
+				precis.append(TP/(TP+FP))
+			
+			FPRs[name] = FPR
+			TPRs[name] = TPR
+			precisions[name] = precis
+
+		# Convert metric dictionaries into dataframes
+		FPRs_df = pd.DataFrame.from_dict(FPRs, orient='columns')
+		TPRs_df = pd.DataFrame.from_dict(TPRs, orient='columns')
+		precisions_df = pd.DataFrame.from_dict(precisions, orient='columns')
+
+		# Get summary stats 
+		FPR_mean = FPRs_df.mean(axis=1)
+		FPR_sd = FPRs_df.std(axis=1)
+		TPR_mean = TPRs_df.mean(axis=1)
+		TPR_sd = TPRs_df.std(axis=1)
+		precis_mean = precisions_df.mean(axis=1)
+		precis_sd = precisions_df.std(axis=1)
+
+		# Plot the ROC Curve
+		plt.title('ROC Curve: ' + SAVE)
+		plt.plot(FPR_mean, TPR_mean, lw=3, color= 'black', label='AUC-ROC: ' + str(round(ROC[0], 3)))
+		plt.fill_between(FPR_mean, TPR_mean-TPR_sd, TPR_mean+TPR_sd, facecolor='black', alpha=0.4, linewidth = 0, label='SD_TPR')
+		#plt.plot(FPRs_df.median(axis=1), TPRs_df.mean(axis=1), lw=2, color= 'blue', label='AUC-ROC: ' + str(round(ROC[0], 3)))
+		#plt.fill_between(FPRs_df.median(axis=1), TPRs_df.min(axis=1), TPRs_df.max(axis=1), facecolor='blue', alpha=0.5, label='SD_TPR')
+		plt.plot([0,1],[0,1],'r--', lw = 2, label = 'Random Expectation')
+		plt.legend(loc='lower right')
+		plt.xlim([0,1])
+		plt.ylim([0,1])
+		plt.ylabel('True Positive Rate')
+		plt.xlabel('False Positive Rate')
 		plt.show()
-		# save a PDF file named for the CSV file (but in the current directory)
+		filename = SAVE + "_ROCcurve.png"
+		plt.savefig(filename)
+		plt.clf()
+		
+		# Plot the Precision-Recall Curve
+		plt.title('PR Curve: ' + SAVE)
+		plt.plot(TPR_mean, precis_mean, lw=3, color= 'black', label='AUC-PRc: ' + str(round(PRc[0], 3)))
+		plt.fill_between(TPR_mean, precis_mean-precis_sd, precis_mean+precis_sd, facecolor='black', alpha=0.4, linewidth = 0, label='SD_Precision')
+		#plt.plot(TPRs_df.median(axis=1), precisions_df.median(axis=1), lw=2, color= 'blue', label='AUC-PRc: ' + str(round(PRc[0], 3)))
+		#plt.fill_between(TPRs_df.median(axis=1), precisions_df.min(axis=1), precisions_df.max(axis=1), facecolor='blue', alpha=0.5, label='SD_Precision')
+		plt.plot([0,1],[0.5,0.5],'r--', lw=2, label = 'Random Expectation')
+		plt.legend(loc='upper right')
+		plt.xlim([0,1])
+		plt.ylim([0.45,1])
+		plt.ylabel('Precision')
+		plt.xlabel('Recall')
+		plt.show()
 		filename = SAVE + "_PRcurve.png"
 		plt.savefig(filename)
+		plt.close()
+
+
 
 	def Plot_ConMatrix(cm, SAVE):
 		import matplotlib.pyplot as plt

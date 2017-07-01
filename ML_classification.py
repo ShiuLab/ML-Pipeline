@@ -9,7 +9,7 @@ INPUTS:
 	
 	REQUIRED ALL:
 	-df       Feature & class dataframe for ML. See "" for an example dataframe
-	-alg      Available: RF, SVM (LinearSVC)
+	-alg      Available: RF, SVM (linear), SVMpoly, SVMrbf
 	
 	OPTIONAL:
 	
@@ -22,16 +22,21 @@ INPUTS:
 	-n        # of random balanced datasets to run. Default = 50
 	-class    String for what column has the class. Default = Class
 	-apply    To which non-training class labels should the models be applied? Enter 'all' or a list (comma-delimit if >1)
-	-cm       T/F - Do you want to output the confusion matrix & confusion matrix figure?
+	-cm       T/F - Do you want to output the confusion matrix & confusion matrix figure? (Default = False)
+	-plots    T/F - Do you want to output ROC and PR curve plots for each model? (Default = False)
+	-tag      String for the TAG column in the RESULTS.txt output.
 
 OUTPUT:
 	-SAVE_imp           Importance scores for each feature
 	-SAVE_GridSearch    Results from parameter sweep sorted by F1
-	-RESULTS_XX.txt     Accumulates results from all ML runs done in a specific folder - use unique save names! XX = RF or SVC
+	-RESULTS.txt     Accumulates results from all ML runs done in a specific folder - use unique save names! XX = RF or SVC
+
 """
-import sys
+
+import sys, os
 import pandas as pd
 import numpy as np
+from datetime import datetime
 import time
 
 import ML_functions as ML
@@ -39,18 +44,17 @@ import ML_functions as ML
 def main():
 	
 	# Default code parameters
-	n, FEAT, CL_TRAIN, apply, n_jobs, class_col, CM, POS = 50, 'all', 'all','none', 28, 'Class', 'False', 1
+	n, FEAT, CL_TRAIN, apply, n_jobs, class_col, CM, POS, plots, cv_num, TAG = 50, 'all', 'all','none', 14, 'Class', 'False', 1, 'False', 10, ''
 	
 	# Default parameters for Grid search
-	GS, gs_score, gs_n, cv_num = 'F', 'roc_auc', 25, 10
+	GS, gs_score = 'F', 'roc_auc'
 	
 	# Default Random Forest parameters
-	n_estimators, max_depth, max_features = 100, 10, "sqrt"
+	n_estimators, max_depth, max_features = 500, 10, "sqrt"
 	
 	# Default Linear SVC parameters
 	kernel, C, degree, gamma, loss, max_iter = 'linear', 1, 2, 1, 'hinge', "500"
-	# 'gamma': np.logspace(-9,3,13)
-	
+
 	for i in range (1,len(sys.argv),2):
 		if sys.argv[i] == "-df":
 			DF = sys.argv[i+1]
@@ -82,9 +86,13 @@ def main():
 			n_jobs = int(sys.argv[i+1])
 		if sys.argv[i] == "-cm":
 			CM = sys.argv[i+1]
+		if sys.argv[i] == "-plots":
+			plots = sys.argv[i+1]
 		if sys.argv[i] == "-pos":
 			POS = sys.argv[i+1]
-	
+		if sys.argv[i] == "-tag":
+			TAG = sys.argv[i+1]
+
 	if len(sys.argv) <= 1:
 		print(__doc__)
 		exit()
@@ -104,12 +112,12 @@ def main():
 			features = ['Class'] + features
 		df = df.loc[:,features]
 	
-	print("Snapshot of data being used:")
-	print(df.head())
 	
 	# Remove instances with NaN or NA values
 	df = df.replace("?",np.nan)
 	df = df.dropna(axis=0)
+
+
 	
 	# Set up dataframe of unknown instances that the final models will be applied to
 	if CL_TRAIN != 'all' and apply != 'none':
@@ -125,7 +133,7 @@ def main():
 	# Remove classes that won't be included in the training (e.g. unknowns)
 	if CL_TRAIN != 'all':
 		df = df[(df['Class'].isin(CL_TRAIN))]
-	
+
 	# Generate training classes list. If binary, establish POS and NEG classes. Set grid search scoring: roc_auc for binary, f1_macro for multiclass
 	if CL_TRAIN == 'all':
 		classes = df['Class'].unique()
@@ -134,6 +142,10 @@ def main():
 			for clss in classes:
 				if clss != POS:
 					NEG = clss
+					try:
+						NEG = int(NEG)
+					except:
+						pass
 					break
 		else:
 			NEG = 'multiclass_no_NEG'
@@ -146,12 +158,15 @@ def main():
 			NEG = 'multiclass_no_NEG'
 			gs_score = 'f1_macro'
 		classes = np.array(CL_TRAIN)
+
+	classes.sort()
 	
+	print("Snapshot of data being used:")
+	print(df.head())
 	print("CLASSES:",classes)
 	print("POS:",POS,type(POS))
 	print("NEG:",NEG,type(NEG))
-	
-	n_features = len(df['Class'].unique()) - 1
+	n_features = len(list(df)) - 1
 	
 	# Determine minimum class size (for making balanced datasets)
 	min_size = (df.groupby('Class').size()).min() - 1
@@ -162,30 +177,42 @@ def main():
 	####### Run parameter sweep using a grid search #######
 	
 	if GS.lower() == 'true' or GS.lower() == 't':
-		
 		start_time = time.time()
 		print("\n\n===>  Grid search started  <===") 
 		
-		params2use,balanced_ids = ML.fun.GridSearch(df, SAVE, ALG, classes, min_size, gs_score, n, cv_num, n_jobs, POS, NEG)
+		params2use,balanced_ids, param_names = ML.fun.GridSearch(df, SAVE, ALG, classes, min_size, gs_score, n, cv_num, n_jobs, POS, NEG)
 		
+		# Print results from grid search
 		if ALG == 'RF':
-			max_depth, max_features, n_estimators = params2use
-			print("Parameters selected: max_depth=%s, max_features=%s, n_estimators(trees)=%s" % (
-				str(max_depth), str(max_features), str(n_estimators)))
+			max_depth, max_features = params2use
+			print("Parameters selected: max_depth=%s, max_features=%s" % (
+				str(max_depth), str(max_features)))
 	
-		elif ALG == "SVM":
+		elif ALG == 'SVM':
+			C, kernel = params2use
+			print("Parameters selected: Kernel=%s, C=%s" % (str(kernel), str(C)))
+		
+		elif ALG == "SVMpoly":
 			C, degree, gamma, kernel = params2use
 			print("Parameters selected: Kernel=%s, C=%s, degree=%s, gamma=%s" % (str(kernel), str(C), str(degree), str(gamma)))
 		
+		elif ALG == "SVMrbf":
+			C, gamma, kernel = params2use
+			print("Parameters selected: Kernel=%s, C=%s, gamma=%s" % (str(kernel), str(C), str(gamma)))
+		
 		print("Grid search complete. Time: %f seconds" % (time.time() - start_time))
+	
 	else:
 		balanced_ids = ML.fun.EstablishBalanced(df,classes,min_size,n)
 	
+	bal_id = pd.DataFrame(balanced_ids)
+	bal_id.to_csv(SAVE + '_BalancedIDs.csv', index=False, header=False)
+
+	 
 	####### Run ML models #######
-	
 	start_time = time.time()
 	print("\n\n===>  ML Pipeline started  <===")
-	
+
 	results = []
 	df_proba = pd.DataFrame(data=df['Class'], index=df.index, columns=['Class'])
 	if apply_unk == True:
@@ -208,69 +235,110 @@ def main():
 		if ALG == "RF":
 			parameters_used = [n_estimators, max_depth, max_features]
 			clf = ML.fun.DefineClf_RandomForest(n_estimators,max_depth,max_features,j,n_jobs)
-			# result = ML.fun.RandomForest_ManCV(df1, classes, POS, cv_num, n_estimators, max_depth, max_features, n_jobs, j, df_notSel, apply_unk, df_unknowns)
-		elif ALG == "SVM":
+		elif ALG == "SVM" or ALG == 'SVMrbf' or ALG == 'SVMpoly':
 			parameters_used = [C, degree, gamma, kernel]
-			clf = ML.fun.DefineClf_LinearSVC(kernel,C,degree,gamma,j)
-			# result = ML.fun.LinearSVC(df1, classes, POS, C, degree, gamma, kernel, n_jobs, j)
+			clf = ML.fun.DefineClf_SVM(kernel,C,degree,gamma,j)
 		
 		# Run ML algorithm on balanced datasets.
 		result,current_scores = ML.fun.BuildModel_Apply_Performance(df1, clf, cv_num, df_notSel, apply_unk, df_unknowns, classes, POS, NEG, j)
 		results.append(result)
-		df_proba = pd.concat([df_proba,current_scores],axis = 1)
-	
+		df_proba = pd.concat([df_proba,current_scores], axis = 1)
+
 	print("ML Pipeline time: %f seconds" % (time.time() - start_time))
-	
-	print(df_proba.head())
-	# sys.exit()
+
+
 	
 	####### Unpack ML results #######
 	
 	## Make empty dataframes
 	conf_matrices = pd.DataFrame(columns = np.insert(arr = classes.astype(np.str), obj = 0, values = 'Class'))
 	imp = pd.DataFrame(index = list(df.drop(['Class'], axis=1)))
+	threshold_array = []
+	AucRoc_array = []
+	AucPRc_array = []
 	accuracies = []
-	auc_array = []
 	f1_array = np.array([np.insert(arr = classes.astype(np.str), obj = 0, values = 'M')])
 	
 	count = 0
 	for r in results:
 		count += 1
 		if 'cm' in r:
-			cmatrix = pd.DataFrame(r['cm'], columns = classes) #, index = classes)
+			cmatrix = pd.DataFrame(r['cm'], columns = classes)
 			cmatrix['Class'] = classes
 			conf_matrices = pd.concat([conf_matrices, cmatrix])
 		
+		# For binary predictions
+		if 'importances' in r:
+			imp[count] = r['importances'][0]
+		if 'AucRoc' in r:
+			AucRoc_array.append(r['AucRoc'])
+		if 'AucPRc' in r:
+			AucPRc_array.append(r['AucPRc'])
+		if 'threshold' in r:
+			threshold_array.append(r['threshold'])
+
+		# For Multi-class predictions
 		if 'accuracy' in r:
 			accuracies.append(r['accuracy'])
-		
 		if 'macro_f1' in r:
 			f1_temp_array = np.insert(arr = r['f1'], obj = 0, values = r['macro_f1'])
 			f1_array = np.append(f1_array, [f1_temp_array], axis=0)
-		
-		if 'AucRoc' in r:
-			auc_array.append(r['AucRoc'])
-		
-		if 'importances' in r:
-			imp[count] = r['importances'][0]
-	
+
 	cm_mean = conf_matrices.groupby('Class').mean()
-	cm_mean.to_csv(SAVE + "_cm.csv")
+
+	# Multiclass Output
+	if len(classes) > 2:
+		f1 = pd.DataFrame(f1_array)
+		f1.columns = f1.iloc[0]
+		f1 = f1[1:]
+		f1.columns = [str(col) + '_F1' for col in f1.columns]
+		f1 = f1.astype(float)		
+		
+		# Calculate accuracy and f1 stats
+		AC = np.mean(accuracies)
+		AC_std = np.std(accuracies)
+		MacF1 = f1['M_F1'].mean()
+		MacF1_std = f1['M_F1'].std()
+
+		print("\nML Results: \nAccuracy: %03f (+/- stdev %03f)\nF1 (macro): %03f (+/- stdev %03f)\nAUC-ROC (macro): %03f (+/- stdev %03f)" % (
+		AC, AC_std, MacF1, MacF1_std, MacAUC, MacAUC_std))
+
+
+	# Binary Prediction Output
+	else: 
+		# Get AUC for ROC and PR curve
+		ROC = [np.mean(AucRoc_array), np.std(AucRoc_array), np.std(AucRoc_array)/np.sqrt(len(AucRoc_array))]
+		PRc = [np.mean(AucPRc_array), np.std(AucPRc_array), np.std(AucPRc_array)/np.sqrt(len(AucPRc_array))]
+		
+		# Find mean threshold
+		final_threshold = np.mean(threshold_array)
+
+		# Determine final prediction call - using the final_threshold on the mean predicted probability.
+		proba_columns = [c for c in df_proba.columns if c.startswith('score_')]
+		df_proba.insert(loc=1, column = 'Mean', value = df_proba[proba_columns].mean(axis=1)) 
+		df_proba.insert(loc=2, column = 'stdev', value = df_proba[proba_columns].std(axis=1))
+		Pred_name =  'Predicted_' + str(final_threshold)
+		df_proba.insert(loc=3, column = Pred_name, value = df_proba['Class'])
+		df_proba[Pred_name][df_proba.Mean >= final_threshold] = POS
+		df_proba[Pred_name][df_proba.Mean < final_threshold] = NEG
+		df_proba.to_csv(SAVE + "_scores.txt", sep="\t")
 	
-	f1 = pd.DataFrame(f1_array)
-	f1.columns = f1.iloc[0]
-	f1 = f1[1:]
-	f1.columns = [str(col) + '_F1' for col in f1.columns]
-	f1 = f1.astype(float)
-	
-	
-	# Plot confusion matrix (% class predicted as each class)
-	cm_mean = conf_matrices.groupby('Class').mean()
-	if CM == 'T' or CM == 'True' or CM == 'true' or CM == 't':
-		cm_mean.to_csv(SAVE + "_cm.csv")
-		done = ML.fun.Plot_ConMatrix(cm_mean, SAVE)
-	
-	if len(classes) == 2:
+
+		# Get model preformance scores using final_threshold
+		TP,TN,FP,FN,TPR,FPR,FNR,Pr,Ac,F1 = ML.fun.Model_Performance_Thresh(df_proba, final_threshold, balanced_ids, POS, NEG)
+		
+
+		# Plot confusion matrix (% class predicted as each class) based on balanced dataframes
+		if CM.lower() == 'true' or CM.lower() == 't':
+			cm_mean.to_csv(SAVE + "_cm.csv")
+			done = ML.fun.Plot_ConMatrix(cm_mean, SAVE)
+
+		# Plot ROC & PR curves
+		if plots.lower() == 'true' or plots.lower() == 't':
+			print("\nGenerating ROC & PR curves")
+			pr = ML.fun.Plots(df_proba, balanced_ids, ROC, PRc, POS, NEG, n, SAVE)
+		
+		# Export importance scores
 		try:
 			imp['mean_imp'] = imp.mean(axis=1)
 			imp = imp.sort_values('mean_imp', 0, ascending = False)
@@ -278,43 +346,48 @@ def main():
 			imp['mean_imp'].to_csv(imp_out, sep = ",", index=True)
 		except:
 			pass
+
+		timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+		
+		# Save to summary RESULTS file with all models run from the same directory
+		
+		if not os.path.isfile('RESULTS.txt'):
+			out2 = open('RESULTS.txt', 'a')
+			out2.write('DateTime\tID\tTag\tAlg\tClasses\tFeatureNum\tBalancedSize\tCVfold\tBalancedRuns\tAUCROC\tAUCROC_sd\ttAUCROC_se\t')
+			out2.write('AUCPRc\tAUCPRc_sd\tAUCPRc_se\tAc\tAc_sd\tAc_se\tF1\tF1_sd\tF1_se\tPr\tPr_sd\tPr_se\tTPR\tTPR_sd\tTPR_se\t')
+			out2.write('FPR\tFPR_sd\tFPR_se\tFNR\tFNR_sd\tFNR_se\tTP\tTP_sd\tTP_se\tTN\tTN_sd\tTN_se\tFP\tFP_sd\tFP_se\t')
+			out2.write('FN\tFN_sd\tFN_se\n')
+			out2.close()
+		out2 = open('RESULTS.txt', 'a')
+		out2.write('%s\t%s\t%s\t%s\t%s\t%i\t%i\t%i\t%i\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' % (
+			timestamp, SAVE, TAG, ALG, [POS,NEG], n_features, min_size, cv_num , n, 
+			'\t'.join(str(x) for x in ROC), '\t'.join(str(x) for x in PRc), '\t'.join(str(x) for x in Ac), '\t'.join(str(x) for x in F1),
+			'\t'.join(str(x) for x in Pr), '\t'.join(str(x) for x in TPR), '\t'.join(str(x) for x in FPR),
+			'\t'.join(str(x) for x in FNR), '\t'.join(str(x) for x in TP), '\t'.join(str(x) for x in TN),
+			'\t'.join(str(x) for x in FP), '\t'.join(str(x) for x in FN)))
+
+		# Save detailed results file 
+		out = open(SAVE + "_results.txt", 'w')
+		out.write('%s\nID: %s\nTag: %s\nAlgorithm: %s\nTrained on classes: %s\nApplied to: %s\nNumber of features: %i\n' % (
+			timestamp, SAVE, TAG, ALG, classes, apply, n_features))
+		out.write('Min class size: %i\nCV folds: %i\nNumber of models: %i\nGrid Search Used: %s\nParameters used:%s\n' % (
+			min_size, cv_num, n, GS, parameters_used))
+		out.write('\nMetric\tMean\tSD\tSE\n')
+		out.write('AucROC\t%s\nAucPRc\t%s\nAccuracy\t%s\nF1\t%s\nPrecision\t%s\nTPR\t%s\nFPR\t%s\nFNR\t%s\n' % (
+			'\t'.join(str(x) for x in ROC),'\t'.join(str(x) for x in PRc), '\t'.join(str(x) for x in Ac), '\t'.join(str(x) for x in F1),
+			'\t'.join(str(x) for x in Pr), '\t'.join(str(x) for x in TPR), '\t'.join(str(x) for x in FPR), '\t'.join(str(x) for x in FNR)))
+		out.write('TP\t%s\nTN\t%s\nFP\t%s\nFN\t%s\n' % (
+			'\t'.join(str(x) for x in TP), '\t'.join(str(x) for x in TN), '\t'.join(str(x) for x in FP), '\t'.join(str(x) for x in FN)))
+		out.write('\nMean Balanced Confusion Matrix:\n')
+		out.close()
+		cm_mean.to_csv(SAVE + "_results.txt", mode='a', sep='\t')
+
+		print("\n\n===>  ML Results  <===")
+		print("Accuracy: %03f (+/- stdev %03f)\nF1: %03f (+/- stdev %03f)\nAUC-ROC: %03f (+/- stdev %03f)\nAUC-PRC: %03f (+/- stdev %03f)" % (
+			Ac[0], Ac[1], F1[0], F1[1], ROC[0], ROC[1], PRc[0], PRc[1]))
 	
-	# Calculate accuracy and f1 stats
-	AC = np.mean(accuracies)
-	AC_std = np.std(accuracies)
-	MacF1 = f1['M_F1'].mean()
-	MacF1_std = f1['M_F1'].std()
-	try:
-		MacAUC = np.mean(auc_array)
-		MacAUC_std = np.std(auc_array)
-	except:
-		MacAUC = MacAUC_std = 'Na'
 	
-	print("\nML Results: \nAccuracy: %03f (+/- stdev %03f)\nF1 (macro): %03f (+/- stdev %03f)\nAUC-ROC (macro): %03f (+/- stdev %03f)" % (
-		AC, AC_std, MacF1, MacF1_std, MacAUC, MacAUC_std))
 	
-	# Write summary results to main RESULTS.txt file
-	open("RESULTS.txt",'a').write('%s\t%i\t%i\t%i\t%.5f\t%.5f\t%.5f\t%.5f\t%.5f\t%.5f\n' % (
-		SAVE, n_features, min_size, n, AC, AC_std, MacAUC, MacAUC_std, MacF1, MacF1_std))
-	
-	# Write detailed results file
-	out = open(SAVE + "_results.txt", 'w')
-	out.write('ID: %s\nAlgorithm: %s\nClasses trained on: %s\nNumber of features: %i\nMin class size: %i\nNumber of models: %i\n' % (
-		SAVE, ALG, classes, n_features, min_size, n)) #, AC, AC_std, MacF1, MacF1_std))
-	out.write('Grid Search Used: %s\nParameters used:%s\n' % (GS, parameters_used))
-	out.write('\nModel Performance Measures\n\nAccuracy (std): %.5f\t%.5f\nAUC-ROC (std): %.5f\t%.5f\nMacro_F1 (std): %.5f\t%.5f\n' % (
-		AC, AC_std, MacAUC, MacAUC_std, MacF1, MacF1_std))
-	
-	for cl in classes:
-		out.write('F1_%s (std): %.5f\t%.5f\n' % (cl, f1[str(cl)+'_F1'].mean(), f1[str(cl)+'_F1'].std()))
-	out.write('\nConfusion Matrix:\n')
-	out.close()
-	out = open(SAVE + "_results.txt", 'a')
-	cm_mean.to_csv(out, sep='\t')
-	
-	out_scores = open(SAVE + "_scores.txt","w")
-	out_scores.write("ID\t"+pd.DataFrame.to_csv(df_proba,sep="\t"))
-	out_scores.close()
 
 if __name__ == '__main__':
 	main()
