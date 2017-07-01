@@ -172,9 +172,7 @@ class fun(object):
 					POS_IND = i
 					break
 				i += 1
-			
 			scores = cv_proba[:,POS_IND]
-			
 			#Generate data frame with all scores
 			score_columns=["score_%s"%(j)]
 			df_sel_scores = pd.DataFrame(data=cv_proba[:,POS_IND],index=df.index,columns=score_columns)
@@ -213,13 +211,13 @@ class fun(object):
 		y1 = y.replace(to_replace = [POS, NEG], value = [1,0])
 		max_f1 = [-1,-1]
 		max_f1_thresh = ''
-		for thr in np.arange(0, 1, 0.01):
+		for thr in np.arange(0.01, 1, 0.01):
 			thr_pred = scores.copy()
 			thr_pred[thr_pred>=thr] = 1
 			thr_pred[thr_pred<thr] = 0
 			try:
 				f1 = f1_score(y1, thr_pred, average=None)	# Returns F1 for each class
-			except UndefinedMetricWarning:
+			except UndefinedMetricWarning: # THIS DOESN"T GET FLAGGED
 				f1 = 0
 			if list(f1)[POS_IND] > list(max_f1)[POS_IND]:
 				max_f1 = f1
@@ -256,14 +254,18 @@ class fun(object):
 
 
 	def Model_Performance_Thresh(df_proba, final_threshold, balanced_ids, POS, NEG):
+		
 		from sklearn.metrics import f1_score, confusion_matrix
 		
 		TP,TN,FP,FN,TPR,FPR,FNR,Precision,Accuracy,F1  = [],[],[],[],[],[],[],[],[],[]
 		
 		df_proba_thresh = df_proba.copy()
+		for c in df_proba_thresh.columns:
+			print(c)
 		proba_columns = [c for c in df_proba_thresh.columns if c.startswith('score_')]
-		df_proba_thresh[df_proba_thresh[proba_columns] >= final_threshold] = POS
-		df_proba_thresh[df_proba_thresh[proba_columns] < final_threshold] = NEG
+		for proba_column in proba_columns:
+			df_proba_thresh[df_proba[proba_column] >= final_threshold] = POS
+			df_proba_thresh[df_proba[proba_column] < final_threshold] = NEG
 		balanced_count = 0
 		
 		# Get predictions scores from the balanced runs using the final threshold
