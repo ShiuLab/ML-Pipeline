@@ -12,15 +12,15 @@ INPUTS:
 	-alg      Available: RF, SVM (linear), SVMpoly, SVMrbf
 	
 	OPTIONAL:
-	-p        # of processors, default = 1
+	-p        # of processors. Default = 1
 	-cl_train List of classes to include in the training set. Default = all classes. If binary, first label = positive class.
 	-pos      name of positive class (default = 1 or first class provided with -cl_train)
 	-gs       Set to True if parameter sweep is desired. Default = False
 	-cv       # of cross-validation folds. Default = 10
-	-bal      # of random balanced datasets to run. Default = 50
+	-b        # of random balanced datasets to run. Default = 100
 	-apply    To which non-training class labels should the models be applied? Enter 'all' or a list (comma-delimit if >1)
 	-save     Save name. Default = [df]_[alg] (caution - will overwrite!)
-	-class    String for what column has the class. Default = Class
+	-class    String for column with class. Default = Class
 	-feat     Import file with list of features to keep if desired. Default: keep all.
 	-tag      String for the TAG column in the RESULTS.txt output.
 	
@@ -46,7 +46,7 @@ import ML_functions as ML
 def main():
 	
 	# Default code parameters
-	n, FEAT, CL_TRAIN, apply, n_jobs, class_col, CM, POS, plots, cv_num, TAG = 50, 'all', 'all','none', 1, 'Class', 'False', 1, 'False', 10, ''
+	n, FEAT, CL_TRAIN, apply, n_jobs, class_col, CM, POS, plots, cv_num, TAG, SAVE = 100, 'all', 'all','none', 1, 'Class', 'False', 1, 'False', 10, '', ''
 	
 	# Default parameters for Grid search
 	GS, gs_score = 'F', 'roc_auc'
@@ -60,7 +60,7 @@ def main():
 	for i in range (1,len(sys.argv),2):
 		if sys.argv[i] == "-df":
 			DF = sys.argv[i+1]
-			SAVE = DF
+			# SAVE = DF
 		elif sys.argv[i] == '-save':
 			SAVE = sys.argv[i+1]
 		elif sys.argv[i] == '-feat':
@@ -80,7 +80,7 @@ def main():
 			class_col = sys.argv[i+1]
 		elif sys.argv[i] == "-n":
 			n = int(sys.argv[i+1])
-		elif sys.argv[i] == "-bal":
+		elif sys.argv[i] == "-b":
 			n = int(sys.argv[i+1])
 		elif sys.argv[i] == "-alg":
 			ALG = sys.argv[i+1]
@@ -178,7 +178,8 @@ def main():
 	min_size = (df.groupby('Class').size()).min() - 1
 	print('Balanced dataset will include %i instances of each class' % min_size)
 	
-	SAVE = SAVE + "_" + ALG
+	if SAVE == "":
+		SAVE = DF + "_" + ALG
 	
 	####### Run parameter sweep using a grid search #######
 	
@@ -212,7 +213,7 @@ def main():
 		balanced_ids = ML.fun.EstablishBalanced(df,classes,min_size,n)
 	
 	bal_id = pd.DataFrame(balanced_ids)
-	bal_id.to_csv(SAVE + '_BalancedIDs.csv', index=False, header=False)
+	bal_id.to_csv(SAVE + '_BalancedIDs.csv', index=False, header=False,spet="\t")
 
 	 
 	####### Run ML models #######
@@ -317,18 +318,23 @@ def main():
 		PRc = [np.mean(AucPRc_array), np.std(AucPRc_array), np.std(AucPRc_array)/np.sqrt(len(AucPRc_array))]
 		
 		# Find mean threshold
-		final_threshold = np.mean(threshold_array)
+		final_threshold = round(np.mean(threshold_array),2)
 
 		# Determine final prediction call - using the final_threshold on the mean predicted probability.
 		proba_columns = [c for c in df_proba.columns if c.startswith('score_')]
-		df_proba.insert(loc=1, column = 'Mean', value = df_proba[proba_columns].mean(axis=1)) 
-		df_proba.insert(loc=2, column = 'stdev', value = df_proba[proba_columns].std(axis=1))
+		
+		df_proba.insert(loc=1, column = 'Median', value = df_proba[proba_columns].median(axis=1))
+		df_proba.insert(loc=2, column = 'Mean', value = df_proba[proba_columns].mean(axis=1))
+		df_proba.insert(loc=3, column = 'stdev', value = df_proba[proba_columns].std(axis=1))
 		Pred_name =  'Predicted_' + str(final_threshold)
-		df_proba.insert(loc=3, column = Pred_name, value = df_proba['Class'])
-		df_proba[Pred_name][df_proba.Mean >= final_threshold] = POS
-		df_proba[Pred_name][df_proba.Mean < final_threshold] = NEG
-		df_proba.to_csv(SAVE + "_scores.txt", sep="\t")
-	
+		df_proba.insert(loc=4, column = Pred_name, value = df_proba['Class'])
+		df_proba[Pred_name][df_proba.Median >= final_threshold] = POS
+		df_proba[Pred_name][df_proba.Median < final_threshold] = NEG
+		
+		out_scores = open(SAVE + "_scores.txt","w")
+		out_scores.write("#ID\t"+pd.DataFrame.to_csv(df_proba,sep="\t").strip())
+		out_scores.close()
+		# df_proba.to_csv(SAVE + "_scores.txt", sep="\t")
 
 		# Get model preformance scores using final_threshold
 		TP,TN,FP,FN,TPR,FPR,FNR,Pr,Ac,F1 = ML.fun.Model_Performance_Thresh(df_proba, final_threshold, balanced_ids, POS, NEG)
@@ -336,7 +342,7 @@ def main():
 
 		# Plot confusion matrix (% class predicted as each class) based on balanced dataframes
 		if CM.lower() == 'true' or CM.lower() == 't':
-			cm_mean.to_csv(SAVE + "_cm.csv")
+			cm_mean.to_csv(SAVE + "_cm.csv",sep="\t")
 			done = ML.fun.Plot_ConMatrix(cm_mean, SAVE)
 
 		# Plot ROC & PR curves
@@ -349,7 +355,8 @@ def main():
 			imp['mean_imp'] = imp.mean(axis=1)
 			imp = imp.sort_values('mean_imp', 0, ascending = False)
 			imp_out = SAVE + "_imp.csv"
-			imp['mean_imp'].to_csv(imp_out, sep = ",", index=True)
+			imp['mean_imp'].to_csv(imp_out, sep = "\t", index=True)
+			# imp['mean_imp'].to_csv(imp_out, sep = ",", index=True)
 		except:
 			pass
 
