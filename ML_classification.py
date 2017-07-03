@@ -25,7 +25,6 @@ INPUTS:
 	-cm       T/F - Do you want to output the confusion matrix & confusion matrix figure? (Default = False)
 	-plots    T/F - Do you want to output ROC and PR curve plots for each model? (Default = False)
 	-tag      String for the TAG column in the RESULTS.txt output.
-	-mv       missing value type, default= 0 (rows with NAs are removed), 1= NAs drawn from sample distribution, 2= NAs drawn from median (numeric) or mode (categorical)
 
 OUTPUT:
 	-SAVE_imp           Importance scores for each feature
@@ -41,7 +40,6 @@ from datetime import datetime
 import time
 
 import ML_functions as ML
-from scipy import stats
 
 def main():
 	
@@ -56,9 +54,6 @@ def main():
 	
 	# Default Linear SVC parameters
 	kernel, C, degree, gamma, loss, max_iter = 'linear', 1, 2, 1, 'hinge', "500"
-	
-	#default for missing values (-mv)
-	mv = 0
 
 	for i in range (1,len(sys.argv),2):
 		if sys.argv[i] == "-df":
@@ -97,8 +92,6 @@ def main():
 			POS = sys.argv[i+1]
 		if sys.argv[i] == "-tag":
 			TAG = sys.argv[i+1]
-		if sys.argv[i] == "-mv":
-		        mv = sys.argv[i+1]
 
 	if len(sys.argv) <= 1:
 		print(__doc__)
@@ -120,101 +113,10 @@ def main():
 		df = df.loc[:,features]
 	
 	
-	#missing values
-	# turn all NAs or ? to NaN (NA recognized by numpy)
+	# Remove instances with NaN or NA values
 	df = df.replace("?",np.nan)
-	df = df.replace("NA",np.nan)
-	
-	# find the percent of missing feature, if greater than 50%, then drop!
-	#col_list1= list(df.columns.values)
-	for i in range(2,len(df.columns)):
-	    missing=  df.iloc[:,[i]].isnull().sum()
-	    miss_pct = missing/len(df)
-	    if  miss_pct.iloc[0] > float(0.5):
-	        df = df.drop(df.columns[i], 1) ##### need to test
-	
-	df0 = df.iloc[:,[0,1]]
-	print(df0)
-	def get_percent(counts):#function to get proportion
-	    L=[]
-	    for j in range(0,len(counts)):
-	        p =counts[j] / float(counts.sum())
-	        L.append(p)
-	    return (L)
-	#choice 1, impute missing values with random choice from a distribution
-	if mv == 1:
-	    df1= df.select_dtypes(include=['object'])#get categorical
-	    print(df1)
-	    col_list= list(df1.columns.values)
-	    for i in range(2,len(df1.columns)):
-	        x= col_list[i] #column name
-	        x1 = df1.iloc[:,[i]].dropna(axis=0) #get values of column name, drop NAs
-	        cats= x1.unique() #get unique categories 
-	        counts= x1.value_counts() #get counts of each category
-	        pcts = get_percent(counts) #get proportion of each category
-	        df1.iloc[:,[i]] = df.iloc[:,[i]].replace(np.nan,np.random.choice(cats, p=pcts)) #randomly choose from unique categories\
-	        #based on their proportion in the dataset, replace NAs with this category
-	    
-	    #get integers, may be categorical or numeric
-	    df2= df.select_dtypes(include=['int'])
-	    col_list= list(df2.columns.values)
-	    print(df2)
-	    for i in range(2,len(df2.columns)):
-	        x= col_list[i]
-	        x1 = df2.iloc[:,[i]].dropna(axis=0)
-	        cats= x1.unique()
-	        if cats.sum() == 1: #this is the case for binary- sum of unique categories should be 1
-	            counts= x1.value_counts() #get counts of each catgory
-	            pcts = get_percent(counts) #get proportion
-	            df2.iloc[:,[i]] = df2.iloc[:,[i]].replace(np.nan,np.random.choice(cats, p=pcts))#replace NAs with random choice from proportion of categories
-	        else:
-	            df2.iloc[:,[i]] = df2.iloc[:,[i]].replace(np.nan,np.random.choice(x1))#replace NAs with random choice from actual distibution
-	            
-	    df3= df.select_dtypes(include=['float'])#get numeric
-	    print(df3)
-	    col_list= list(df3.columns.values)
-	    for i in range(2,len(df3.columns)):
-	        x= col_list[i]
-	        x1 = df3.iloc[:,[i]].dropna(axis=0)
-	        df3.iloc[:,[i]] = df3.iloc[:,[i]].replace(np.nan,np.random.choice(x1))#replace NAs with random choice from actual distibution
-	    frames  = [df0, df1, df2, df3] #put all frames back together ##need to add back class
-	    df= pd.concat(frames, axis=1)
-	    
-	elif mv == 2: #this option imputes median or mode for either numeric or categorical data respectively
-	    df1= df.select_dtypes(include=['object'])#categorical
-	    col_list= list(df1.columns.values)
-	    for i in range(2,len(df1.columns)):
-	        x= col_list[i] #column name
-	        x1 = df1.iloc[:,[i]].dropna(axis=0)
-	        m= stats.mode(x1) #get mode without NAs
-	        p = pd.Series(m[0]) #put in series
-	        df1.iloc[:,[i]] = df1.iloc[:,[i]].replace(np.nan,  p.loc[0]) #replace NAs with mode
-	        
-	    df2= df.select_dtypes(include=['int'])#get integers, may be categorical or numeric
-	    col_list= list(df2.columns.values)
-	    for i in range(2,len(df2.columns)):
-	        x= col_list[i]
-	        x1 = df2.iloc[:,[i]].dropna(axis=0)
-	        cats= x1.unique()
-	        if cats.sum() == 1: ##for binary data
-	            m= stats.mode(x1)
-	            p = pd.Series(m[0])
-	            df2.iloc[:,[i]] = df2.iloc[:,[i]].replace(np.nan,  p.loc[0])
-	        else:
-	            med= np.median(x1) #get median for numeric data
-	            df2.iloc[:,[i]] = df2.iloc[:,[i]].replace(np.nan, med) #replace NAs with median
-	            
-	    df3= df.select_dtypes(include=['float']) #get numeric
-	    col_list= list(df3.columns.values)
-	    for i in range(2,len(df3.columns)):
-	        x= col_list[i]
-	        x1 = df3.iloc[:,[i]].dropna(axis=0)
-	        med= np.median(x1)
-	        df3.iloc[:,[i]] = df3.iloc[:,[i]].replace(np.nan, med) #replace NAs with median
-	    frames  = [df0, df1, df2, df3] #put all frames back together
-	    df= pd.concat(frames, axis=1)
-	else:
-	    df = df.dropna(axis=0)   #third option, also default, remove all rows with NA, thereby leaving out missing values
+	df = df.dropna(axis=0)
+
 
 	
 	# Set up dataframe of unknown instances that the final models will be applied to
