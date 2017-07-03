@@ -215,10 +215,11 @@ class fun(object):
 			thr_pred = scores.copy()
 			thr_pred[thr_pred>=thr] = 1
 			thr_pred[thr_pred<thr] = 0
-			try:
-				f1 = f1_score(y1, thr_pred, average=None)	# Returns F1 for each class
-			except UndefinedMetricWarning: # THIS DOESN"T GET FLAGGED
-				f1 = 0
+			f1 = f1_score(y1, thr_pred, average=None)	# Returns F1 for each class
+			# try:
+				# f1 = f1_score(y1, thr_pred, average=None)	# Returns F1 for each class
+			# except UndefinedMetricWarning: # THIS DOESN"T GET FLAGGED
+				# f1 = 0
 			if list(f1)[POS_IND] > list(max_f1)[POS_IND]:
 				max_f1 = f1
 				max_f1_thresh = thr
