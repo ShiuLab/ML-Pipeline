@@ -123,10 +123,6 @@ def main():
 	df = df.replace("?",np.nan)
 	df = df.dropna(axis=0)
 	
-	print("HERE")
-	print(df.head())
-
-
 	
 	# Set up dataframe of unknown instances that the final models will be applied to
 	if CL_TRAIN != 'all' and apply != 'none':
