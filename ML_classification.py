@@ -12,13 +12,13 @@ INPUTS:
 	-alg      Available: RF, SVM (linear), SVMpoly, SVMrbf
 	
 	OPTIONAL:
-	-p        # of processors. Default = 1
 	-cl_train List of classes to include in the training set. Default = all classes. If binary, first label = positive class.
 	-pos      name of positive class (default = 1 or first class provided with -cl_train)
 	-gs       Set to True if parameter sweep is desired. Default = False
 	-cv       # of cross-validation folds. Default = 10
 	-b        # of random balanced datasets to run. Default = 100
 	-apply    To which non-training class labels should the models be applied? Enter 'all' or a list (comma-delimit if >1)
+	-p        # of processors. Default = 1
 	-save     Save name. Default = [df]_[alg] (caution - will overwrite!)
 	-class    String for column with class. Default = Class
 	-feat     Import file with list of features to keep if desired. Default: keep all.
@@ -167,12 +167,6 @@ def main():
 
 	classes.sort()
 	
-	print("Snapshot of data being used:")
-	print(df.head())
-	print("CLASSES:",classes)
-	print("POS:",POS,type(POS))
-	print("NEG:",NEG,type(NEG))
-	n_features = len(list(df)) - 1
 	
 	# Determine minimum class size (for making balanced datasets)
 	min_size = (df.groupby('Class').size()).min() - 1
@@ -180,6 +174,27 @@ def main():
 	
 	if SAVE == "":
 		SAVE = DF + "_" + ALG
+	
+	# Normalize data frame for SVM algorithms
+	if ALG == "SVM" or ALG == "SVMpoly" or ALG == "SVMrbf":
+		from sklearn import preprocessing
+		y = df['Class']
+		X = df.drop(['Class'], axis=1)
+		min_max_scaler = preprocessing.MinMaxScaler()
+		X_scaled = min_max_scaler.fit_transform(X)
+		# X_scaled.insert(loc=1, column = 'Class', value = y)
+		# df = X_scaled.copy()
+		df = pd.DataFrame(X_scaled, columns = X.columns, index = X.index)
+		# df_proba.insert(loc=1, column = 'Median', value = df_proba[proba_columns].median(axis=1))
+		df.insert(loc=0, column = 'Class', value = y)
+	
+	
+	print("Snapshot of data being used:")
+	print(df.head())
+	print("CLASSES:",classes)
+	print("POS:",POS,type(POS))
+	print("NEG:",NEG,type(NEG))
+	n_features = len(list(df)) - 1
 	
 	####### Run parameter sweep using a grid search #######
 	
@@ -213,7 +228,7 @@ def main():
 		balanced_ids = ML.fun.EstablishBalanced(df,classes,min_size,n)
 	
 	bal_id = pd.DataFrame(balanced_ids)
-	bal_id.to_csv(SAVE + '_BalancedIDs.csv', index=False, header=False,spet="\t")
+	bal_id.to_csv(SAVE + '_BalancedIDs', index=False, header=False,sep="\t")
 
 	 
 	####### Run ML models #######
@@ -332,7 +347,7 @@ def main():
 		df_proba[Pred_name][df_proba.Median < final_threshold] = NEG
 		
 		out_scores = open(SAVE + "_scores.txt","w")
-		out_scores.write("#ID\t"+pd.DataFrame.to_csv(df_proba,sep="\t").strip())
+		out_scores.write("#ID\t"+pd.DataFrame.to_csv(df_proba,sep="\t").strip()+"\n")
 		out_scores.close()
 		# df_proba.to_csv(SAVE + "_scores.txt", sep="\t")
 
@@ -354,7 +369,7 @@ def main():
 		try:
 			imp['mean_imp'] = imp.mean(axis=1)
 			imp = imp.sort_values('mean_imp', 0, ascending = False)
-			imp_out = SAVE + "_imp.csv"
+			imp_out = SAVE + "_imp"
 			imp['mean_imp'].to_csv(imp_out, sep = "\t", index=True)
 			# imp['mean_imp'].to_csv(imp_out, sep = ",", index=True)
 		except:
@@ -383,8 +398,10 @@ def main():
 		out = open(SAVE + "_results.txt", 'w')
 		out.write('%s\nID: %s\nTag: %s\nAlgorithm: %s\nTrained on classes: %s\nApplied to: %s\nNumber of features: %i\n' % (
 			timestamp, SAVE, TAG, ALG, classes, apply, n_features))
-		out.write('Min class size: %i\nCV folds: %i\nNumber of models: %i\nGrid Search Used: %s\nParameters used:%s\n' % (
+		out.write('Min class size: %i\nCV folds: %i\nNumber of balanced datasets: %i\nGrid Search Used: %s\nParameters used:%s\n' % (
 			min_size, cv_num, n, GS, parameters_used))
+		
+		out.write('\nPrediction threshold:%s\n'%final_threshold)
 		out.write('\nMetric\tMean\tSD\tSE\n')
 		out.write('AucROC\t%s\nAucPRc\t%s\nAccuracy\t%s\nF1\t%s\nPrecision\t%s\nTPR\t%s\nFPR\t%s\nFNR\t%s\n' % (
 			'\t'.join(str(x) for x in ROC),'\t'.join(str(x) for x in PRc), '\t'.join(str(x) for x in Ac), '\t'.join(str(x) for x in F1),
