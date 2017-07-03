@@ -7,10 +7,10 @@ def print_help():
 	print'''
 inp1  = input data frame
 inp2  = algorithm: RF, SVM, SVMpoly, or SVMrbf
-inp3  = working directory,  use $PWD for current directory
-inp4  = processors,  recommended: 14
+inp3  = working directory: use $PWD for current directory
+inp4  = processors: recommended, 14
 inp5  = shell script name
-inp6+ = any additional arguments for running ML_classification.py,  will be appended
+inp6+ = any additional arguments for running ML_classification.py
 
 
 ADDITIONAL arguments for ML_classification:

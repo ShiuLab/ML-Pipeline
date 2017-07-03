@@ -19,10 +19,10 @@ INPUTS:
 	-b        # of random balanced datasets to run. Default = 100
 	-apply    To which non-training class labels should the models be applied? Enter 'all' or a list (comma-delimit if >1)
 	-p        # of processors. Default = 1
-	-save     Save name. Default = [df]_[alg] (caution - will overwrite!)
+	-tag      String for SAVE name and TAG column in RESULTS.txt output.
+	-feat     Import file with subset of features to use. If invoked,-tag arg is recommended. Default: keep all features.
 	-class    String for column with class. Default = Class
-	-feat     Import file with list of features to keep if desired. Default: keep all.
-	-tag      String for the TAG column in the RESULTS.txt output.
+	-save     Adjust save name prefix. Default = [df]_[alg]_[tag (if used)], CAUTION: will overwrite!
 	
 	PLOT OPTIONS:
 	-cm       T/F - Do you want to output the confusion matrix & confusion matrix figure? (Default = False)
@@ -114,7 +114,7 @@ def main():
 	# Filter out features not in feat file given - default: keep all
 	if FEAT != 'all':
 		with open(FEAT) as f:
-			features = f.read().splitlines()
+			features = f.read().strip().splitlines()
 			features = ['Class'] + features
 		df = df.loc[:,features]
 	
@@ -122,8 +122,7 @@ def main():
 	# Remove instances with NaN or NA values
 	df = df.replace("?",np.nan)
 	df = df.dropna(axis=0)
-
-
+	
 	
 	# Set up dataframe of unknown instances that the final models will be applied to
 	if CL_TRAIN != 'all' and apply != 'none':
@@ -170,10 +169,14 @@ def main():
 	
 	# Determine minimum class size (for making balanced datasets)
 	min_size = (df.groupby('Class').size()).min() - 1
+	print(df.head())
 	print('Balanced dataset will include %i instances of each class' % min_size)
 	
 	if SAVE == "":
-		SAVE = DF + "_" + ALG
+		if TAG == "":
+			SAVE = DF + "_" + ALG
+		else:
+			SAVE = DF + "_" + ALG + "_" + TAG
 	
 	# Normalize data frame for SVM algorithms
 	if ALG == "SVM" or ALG == "SVMpoly" or ALG == "SVMrbf":
