@@ -12,19 +12,21 @@ INPUTS:
 	-alg      Available: RF, SVM (linear), SVMpoly, SVMrbf
 	
 	OPTIONAL:
-	
-	-pos      name of positive class (default = 1 or first class provided with -cl_train)
 	-cl_train List of classes to include in the training set. Default = all classes. If binary, first label = positive class.
-	-save     Save name. Default = [df]_[alg] (caution - will overwrite!)
-	-feat     Import file with list of features to keep if desired. Default: keep all.
-	-cv       # of cross-validation folds. Default = 10
+	-pos      name of positive class (default = 1 or first class provided with -cl_train)
 	-gs       Set to True if parameter sweep is desired. Default = False
-	-n        # of random balanced datasets to run. Default = 50
-	-class    String for what column has the class. Default = Class
+	-cv       # of cross-validation folds. Default = 10
+	-b        # of random balanced datasets to run. Default = 100
 	-apply    To which non-training class labels should the models be applied? Enter 'all' or a list (comma-delimit if >1)
+	-p        # of processors. Default = 1
+	-save     Save name. Default = [df]_[alg] (caution - will overwrite!)
+	-class    String for column with class. Default = Class
+	-feat     Import file with list of features to keep if desired. Default: keep all.
+	-tag      String for the TAG column in the RESULTS.txt output.
+	
+	PLOT OPTIONS:
 	-cm       T/F - Do you want to output the confusion matrix & confusion matrix figure? (Default = False)
 	-plots    T/F - Do you want to output ROC and PR curve plots for each model? (Default = False)
-	-tag      String for the TAG column in the RESULTS.txt output.
 
 OUTPUT:
 	-SAVE_imp           Importance scores for each feature
@@ -44,7 +46,7 @@ import ML_functions as ML
 def main():
 	
 	# Default code parameters
-	n, FEAT, CL_TRAIN, apply, n_jobs, class_col, CM, POS, plots, cv_num, TAG = 50, 'all', 'all','none', 14, 'Class', 'False', 1, 'False', 10, ''
+	n, FEAT, CL_TRAIN, apply, n_jobs, class_col, CM, POS, plots, cv_num, TAG, SAVE = 100, 'all', 'all','none', 1, 'Class', 'False', 1, 'False', 10, '', ''
 	
 	# Default parameters for Grid search
 	GS, gs_score = 'F', 'roc_auc'
@@ -58,40 +60,44 @@ def main():
 	for i in range (1,len(sys.argv),2):
 		if sys.argv[i] == "-df":
 			DF = sys.argv[i+1]
-			SAVE = DF
-		if sys.argv[i] == '-save':
+			# SAVE = DF
+		elif sys.argv[i] == '-save':
 			SAVE = sys.argv[i+1]
-		if sys.argv[i] == '-feat':
+		elif sys.argv[i] == '-feat':
 			FEAT = sys.argv[i+1]
-		if sys.argv[i] == "-gs":
+		elif sys.argv[i] == "-gs":
 			GS = sys.argv[i+1]
-		if sys.argv[i] == "-gs_score":
+		elif sys.argv[i] == "-gs_score":
 			gs_score = sys.argv[i+1]
-		if sys.argv[i] == '-cl_train':
+		elif sys.argv[i] == '-cl_train':
 			CL_TRAIN = sys.argv[i+1].split(',')
 			POS = CL_TRAIN[0]
-		if sys.argv[i] == '-apply':
+		elif sys.argv[i] == '-apply':
 			apply = sys.argv[i+1].lower()
 			if apply != "all":
 				apply = sys.argv[i+1].split(',')
-		if sys.argv[i] == "-class":
+		elif sys.argv[i] == "-class":
 			class_col = sys.argv[i+1]
-		if sys.argv[i] == "-n":
+		elif sys.argv[i] == "-n":
 			n = int(sys.argv[i+1])
-		if sys.argv[i] == "-alg":
+		elif sys.argv[i] == "-b":
+			n = int(sys.argv[i+1])
+		elif sys.argv[i] == "-alg":
 			ALG = sys.argv[i+1]
-		if sys.argv[i] == "-cv":
+		elif sys.argv[i] == "-cv":
 			cv_num = int(sys.argv[i+1])
-		if sys.argv[i] == "-n_jobs":
+		elif sys.argv[i] == "-n_jobs":
 			n_jobs = int(sys.argv[i+1])
-		if sys.argv[i] == "-cm":
+		elif sys.argv[i] == "-cm":
 			CM = sys.argv[i+1]
-		if sys.argv[i] == "-plots":
+		elif sys.argv[i] == "-plots":
 			plots = sys.argv[i+1]
-		if sys.argv[i] == "-pos":
+		elif sys.argv[i] == "-pos":
 			POS = sys.argv[i+1]
-		if sys.argv[i] == "-tag":
+		elif sys.argv[i] == "-tag":
 			TAG = sys.argv[i+1]
+		elif sys.argv[i] == "-p":
+			n_jobs = int(sys.argv[i+1])
 
 	if len(sys.argv) <= 1:
 		print(__doc__)
@@ -161,18 +167,34 @@ def main():
 
 	classes.sort()
 	
+	
+	# Determine minimum class size (for making balanced datasets)
+	min_size = (df.groupby('Class').size()).min() - 1
+	print('Balanced dataset will include %i instances of each class' % min_size)
+	
+	if SAVE == "":
+		SAVE = DF + "_" + ALG
+	
+	# Normalize data frame for SVM algorithms
+	if ALG == "SVM" or ALG == "SVMpoly" or ALG == "SVMrbf":
+		from sklearn import preprocessing
+		y = df['Class']
+		X = df.drop(['Class'], axis=1)
+		min_max_scaler = preprocessing.MinMaxScaler()
+		X_scaled = min_max_scaler.fit_transform(X)
+		# X_scaled.insert(loc=1, column = 'Class', value = y)
+		# df = X_scaled.copy()
+		df = pd.DataFrame(X_scaled, columns = X.columns, index = X.index)
+		# df_proba.insert(loc=1, column = 'Median', value = df_proba[proba_columns].median(axis=1))
+		df.insert(loc=0, column = 'Class', value = y)
+	
+	
 	print("Snapshot of data being used:")
 	print(df.head())
 	print("CLASSES:",classes)
 	print("POS:",POS,type(POS))
 	print("NEG:",NEG,type(NEG))
 	n_features = len(list(df)) - 1
-	
-	# Determine minimum class size (for making balanced datasets)
-	min_size = (df.groupby('Class').size()).min() - 1
-	print('Balanced dataset will include %i instances of each class' % min_size)
-	
-	SAVE = SAVE + "_" + ALG
 	
 	####### Run parameter sweep using a grid search #######
 	
@@ -206,7 +228,7 @@ def main():
 		balanced_ids = ML.fun.EstablishBalanced(df,classes,min_size,n)
 	
 	bal_id = pd.DataFrame(balanced_ids)
-	bal_id.to_csv(SAVE + '_BalancedIDs.csv', index=False, header=False)
+	bal_id.to_csv(SAVE + '_BalancedIDs', index=False, header=False,sep="\t")
 
 	 
 	####### Run ML models #######
@@ -311,18 +333,23 @@ def main():
 		PRc = [np.mean(AucPRc_array), np.std(AucPRc_array), np.std(AucPRc_array)/np.sqrt(len(AucPRc_array))]
 		
 		# Find mean threshold
-		final_threshold = np.mean(threshold_array)
+		final_threshold = round(np.mean(threshold_array),2)
 
 		# Determine final prediction call - using the final_threshold on the mean predicted probability.
 		proba_columns = [c for c in df_proba.columns if c.startswith('score_')]
-		df_proba.insert(loc=1, column = 'Mean', value = df_proba[proba_columns].mean(axis=1)) 
-		df_proba.insert(loc=2, column = 'stdev', value = df_proba[proba_columns].std(axis=1))
+		
+		df_proba.insert(loc=1, column = 'Median', value = df_proba[proba_columns].median(axis=1))
+		df_proba.insert(loc=2, column = 'Mean', value = df_proba[proba_columns].mean(axis=1))
+		df_proba.insert(loc=3, column = 'stdev', value = df_proba[proba_columns].std(axis=1))
 		Pred_name =  'Predicted_' + str(final_threshold)
-		df_proba.insert(loc=3, column = Pred_name, value = df_proba['Class'])
-		df_proba[Pred_name][df_proba.Mean >= final_threshold] = POS
-		df_proba[Pred_name][df_proba.Mean < final_threshold] = NEG
-		df_proba.to_csv(SAVE + "_scores.txt", sep="\t")
-	
+		df_proba.insert(loc=4, column = Pred_name, value = df_proba['Class'])
+		df_proba[Pred_name][df_proba.Median >= final_threshold] = POS
+		df_proba[Pred_name][df_proba.Median < final_threshold] = NEG
+		
+		out_scores = open(SAVE + "_scores.txt","w")
+		out_scores.write("#ID\t"+pd.DataFrame.to_csv(df_proba,sep="\t").strip()+"\n")
+		out_scores.close()
+		# df_proba.to_csv(SAVE + "_scores.txt", sep="\t")
 
 		# Get model preformance scores using final_threshold
 		TP,TN,FP,FN,TPR,FPR,FNR,Pr,Ac,F1 = ML.fun.Model_Performance_Thresh(df_proba, final_threshold, balanced_ids, POS, NEG)
@@ -330,7 +357,7 @@ def main():
 
 		# Plot confusion matrix (% class predicted as each class) based on balanced dataframes
 		if CM.lower() == 'true' or CM.lower() == 't':
-			cm_mean.to_csv(SAVE + "_cm.csv")
+			cm_mean.to_csv(SAVE + "_cm.csv",sep="\t")
 			done = ML.fun.Plot_ConMatrix(cm_mean, SAVE)
 
 		# Plot ROC & PR curves
@@ -342,8 +369,9 @@ def main():
 		try:
 			imp['mean_imp'] = imp.mean(axis=1)
 			imp = imp.sort_values('mean_imp', 0, ascending = False)
-			imp_out = SAVE + "_imp.csv"
-			imp['mean_imp'].to_csv(imp_out, sep = ",", index=True)
+			imp_out = SAVE + "_imp"
+			imp['mean_imp'].to_csv(imp_out, sep = "\t", index=True)
+			# imp['mean_imp'].to_csv(imp_out, sep = ",", index=True)
 		except:
 			pass
 
@@ -370,8 +398,10 @@ def main():
 		out = open(SAVE + "_results.txt", 'w')
 		out.write('%s\nID: %s\nTag: %s\nAlgorithm: %s\nTrained on classes: %s\nApplied to: %s\nNumber of features: %i\n' % (
 			timestamp, SAVE, TAG, ALG, classes, apply, n_features))
-		out.write('Min class size: %i\nCV folds: %i\nNumber of models: %i\nGrid Search Used: %s\nParameters used:%s\n' % (
+		out.write('Min class size: %i\nCV folds: %i\nNumber of balanced datasets: %i\nGrid Search Used: %s\nParameters used:%s\n' % (
 			min_size, cv_num, n, GS, parameters_used))
+		
+		out.write('\nPrediction threshold:%s\n'%final_threshold)
 		out.write('\nMetric\tMean\tSD\tSE\n')
 		out.write('AucROC\t%s\nAucPRc\t%s\nAccuracy\t%s\nF1\t%s\nPrecision\t%s\nTPR\t%s\nFPR\t%s\nFNR\t%s\n' % (
 			'\t'.join(str(x) for x in ROC),'\t'.join(str(x) for x in PRc), '\t'.join(str(x) for x in Ac), '\t'.join(str(x) for x in F1),
