@@ -9,12 +9,12 @@ INPUTS:
 	
 	REQUIRED ALL:
 	-df       Feature & class dataframe for ML. See "" for an example dataframe
-	-alg      Available: RF, SVM (linear), SVMpoly, SVMrbf
+	-alg      Available: RF, SVM (linear), SVMpoly, SVMrbf, LogReg
 	
 	OPTIONAL:
 	-cl_train List of classes to include in the training set. Default = all classes. If binary, first label = positive class.
 	-pos      name of positive class (default = 1 or first class provided with -cl_train)
-	-gs       Set to True if parameter sweep is desired. Default = False
+	-sweep    Set to True if parameter sweep is desired. Default = False
 	-cv       # of cross-validation folds. Default = 10
 	-b        # of random balanced datasets to run. Default = 100
 	-apply    To which non-training class labels should the models be applied? Enter 'all' or a list (comma-delimit if >1)
@@ -56,7 +56,10 @@ def main():
 	
 	# Default Linear SVC parameters
 	kernel, C, degree, gamma, loss, max_iter = 'linear', 1, 2, 1, 'hinge', "500"
-
+	
+	# Default Logistic Regression paramemter
+	penalty, C, intercept_scaling = 'l2', 1.0, 1.0
+	
 	for i in range (1,len(sys.argv),2):
 		if sys.argv[i] == "-df":
 			DF = sys.argv[i+1]
@@ -169,7 +172,6 @@ def main():
 	
 	# Determine minimum class size (for making balanced datasets)
 	min_size = (df.groupby('Class').size()).min() - 1
-	print(df.head())
 	print('Balanced dataset will include %i instances of each class' % min_size)
 	
 	if SAVE == "":
@@ -185,10 +187,7 @@ def main():
 		X = df.drop(['Class'], axis=1)
 		min_max_scaler = preprocessing.MinMaxScaler()
 		X_scaled = min_max_scaler.fit_transform(X)
-		# X_scaled.insert(loc=1, column = 'Class', value = y)
-		# df = X_scaled.copy()
 		df = pd.DataFrame(X_scaled, columns = X.columns, index = X.index)
-		# df_proba.insert(loc=1, column = 'Median', value = df_proba[proba_columns].median(axis=1))
 		df.insert(loc=0, column = 'Class', value = y)
 	
 	
@@ -224,6 +223,10 @@ def main():
 		elif ALG == "SVMrbf":
 			C, gamma, kernel = params2use
 			print("Parameters selected: Kernel=%s, C=%s, gamma=%s" % (str(kernel), str(C), str(gamma)))
+		
+		elif ALG == "LogReg":
+			C, intercept_scaling, penalty = params2use
+			print("Parameters selected: penalty=%s, C=%s, intercept_scaling=%s" % (str(penalty), str(C), str(intercept_scaling)))
 		
 		print("Grid search complete. Time: %f seconds" % (time.time() - start_time))
 	
@@ -263,6 +266,9 @@ def main():
 		elif ALG == "SVM" or ALG == 'SVMrbf' or ALG == 'SVMpoly':
 			parameters_used = [C, degree, gamma, kernel]
 			clf = ML.fun.DefineClf_SVM(kernel,C,degree,gamma,j)
+		elif ALG == "LogReg":
+			parameters_used = ["NA","NA","NA"]
+			clf = ML.fun.DefineClf_LogReg(penalty, C, intercept_scaling)
 		
 		# Run ML algorithm on balanced datasets.
 		result,current_scores = ML.fun.BuildModel_Apply_Performance(df1, clf, cv_num, df_notSel, apply_unk, df_unknowns, classes, POS, NEG, j)
@@ -404,7 +410,7 @@ def main():
 		out.write('Min class size: %i\nCV folds: %i\nNumber of balanced datasets: %i\nGrid Search Used: %s\nParameters used:%s\n' % (
 			min_size, cv_num, n, GS, parameters_used))
 		
-		out.write('\nPrediction threshold:%s\n'%final_threshold)
+		out.write('\nPrediction threshold: %s\n'%final_threshold)
 		out.write('\nMetric\tMean\tSD\tSE\n')
 		out.write('AucROC\t%s\nAucPRc\t%s\nAccuracy\t%s\nF1\t%s\nPrecision\t%s\nTPR\t%s\nFPR\t%s\nFNR\t%s\n' % (
 			'\t'.join(str(x) for x in ROC),'\t'.join(str(x) for x in PRc), '\t'.join(str(x) for x in Ac), '\t'.join(str(x) for x in F1),
