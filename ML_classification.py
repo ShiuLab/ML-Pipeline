@@ -17,6 +17,7 @@ INPUTS:
 	-gs       Set to True if grid search over parameter space is desired. Default = False
 	-cv       # of cross-validation folds. Default = 10
 	-b        # of random balanced datasets to run. Default = 100
+	-min_size Number of instances to draw from each class. Default = size of smallest class
 	-apply    To which non-training class labels should the models be applied? Enter 'all' or a list (comma-delimit if >1)
 	-p        # of processors. Default = 1
 	-tag      String for SAVE name and TAG column in RESULTS.txt output.
@@ -85,6 +86,8 @@ def main():
 			n = int(sys.argv[i+1])
 		elif sys.argv[i] == "-b":
 			n = int(sys.argv[i+1])
+		elif sys.argv[i] == "-min_size":
+			MIN_SIZE = int(sys.argv[i+1])
 		elif sys.argv[i] == "-alg":
 			ALG = sys.argv[i+1]
 		elif sys.argv[i] == "-cv":
@@ -171,7 +174,11 @@ def main():
 	
 	
 	# Determine minimum class size (for making balanced datasets)
-	min_size = (df.groupby('Class').size()).min() - 1
+	try:
+		min_size = int(MIN_SIZE)
+	except:
+		min_size = (df.groupby('Class').size()).min() - 1
+
 	print('Balanced dataset will include %i instances of each class' % min_size)
 	
 	if SAVE == "":
@@ -231,7 +238,7 @@ def main():
 		print("Grid search complete. Time: %f seconds" % (time.time() - start_time))
 	
 	else:
-		balanced_ids = ML.fun.EstablishBalanced(df,classes,min_size,n)
+		balanced_ids = ML.fun.EstablishBalanced(df,classes,int(min_size),n)
 	
 	bal_id = pd.DataFrame(balanced_ids)
 	bal_id.to_csv(SAVE + '_BalancedIDs', index=False, header=False,sep="\t")
