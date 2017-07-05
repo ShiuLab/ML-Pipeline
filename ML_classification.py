@@ -353,7 +353,7 @@ def main():
 
 		out.write('\nMetric\tMean\tSD\nAccuracy\t%05f\t%05f\nF1_macro\t%05f\t%05f\n' % (AC, AC_std, MacF1, MacF1_std))
 		for cla in f1.columns:
-			if cla != 'M_F1':
+			if 'M_F1' not in cla:
 				out.write('%s\t%05f\t%05f\n' % (cla, np.mean(f1[cla]), np.std(f1[cla])))
 
 
