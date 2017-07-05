@@ -312,18 +312,27 @@ def main():
 		if 'accuracy' in r:
 			accuracies.append(r['accuracy'])
 		if 'macro_f1' in r:
-			f1_temp_array = np.insert(arr = r['f1'], obj = 0, values = r['macro_f1'])
+			f1_temp_array = np.insert(arr = r['f1_MC'], obj = 0, values = r['macro_f1'])
 			f1_array = np.append(f1_array, [f1_temp_array], axis=0)
 
+	# Output for both binary and multiclass predictions
+	timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+	
+	# Plot confusion matrix (% class predicted as each class) based on balanced dataframes
 	cm_mean = conf_matrices.groupby('Class').mean()
+	if CM.lower() == 'true' or CM.lower() == 't':
+		cm_mean.to_csv(SAVE + "_cm.csv",sep="\t")
+		done = ML.fun.Plot_ConMatrix(cm_mean, SAVE)
+	
 
-	# Multiclass Output
+###### Multiclass Specific Output ######
 	if len(classes) > 2:
 		f1 = pd.DataFrame(f1_array)
 		f1.columns = f1.iloc[0]
 		f1 = f1[1:]
 		f1.columns = [str(col) + '_F1' for col in f1.columns]
 		f1 = f1.astype(float)		
+		print(f1)
 		
 		# Calculate accuracy and f1 stats
 		AC = np.mean(accuracies)
@@ -331,11 +340,30 @@ def main():
 		MacF1 = f1['M_F1'].mean()
 		MacF1_std = f1['M_F1'].std()
 
-		print("\nML Results: \nAccuracy: %03f (+/- stdev %03f)\nF1 (macro): %03f (+/- stdev %03f)\nAUC-ROC (macro): %03f (+/- stdev %03f)" % (
-		AC, AC_std, MacF1, MacF1_std, MacAUC, MacAUC_std))
+		print("\nML Results: \nAccuracy: %03f (+/- stdev %03f)\nF1 (macro): %03f (+/- stdev %03f)\n" % (
+		AC, AC_std, MacF1, MacF1_std))
 
 
-	# Binary Prediction Output
+		# Save detailed results file 
+		out = open(SAVE + "_results.txt", 'w')
+		out.write('%s\nID: %s\nTag: %s\nAlgorithm: %s\nTrained on classes: %s\nApplied to: %s\nNumber of features: %i\n' % (
+			timestamp, SAVE, TAG, ALG, classes, apply, n_features))
+		out.write('Min class size: %i\nCV folds: %i\nNumber of balanced datasets: %i\nGrid Search Used: %s\nParameters used:%s\n' % (
+			min_size, cv_num, n, GS, parameters_used))
+
+		out.write('\nMetric\tMean\tSD\nAccuracy\t%05f\t%05f\nF1_macro\t%05f\t%05f\n' % (AC, AC_std, MacF1, MacF1_std))
+		for cla in f1.columns:
+			if cla != 'M_F1':
+				out.write('%s\t%05f\t%05f\n' % (cla, np.mean(f1[cla]), np.std(f1[cla])))
+
+
+		out.write('\nMean Balanced Confusion Matrix:\n')
+		out.close()
+		cm_mean.to_csv(SAVE + "_results.txt", mode='a', sep='\t')
+
+
+
+###### Binary Prediction Output ######
 	else: 
 		# Get AUC for ROC and PR curve
 		ROC = [np.mean(AucRoc_array), np.std(AucRoc_array), np.std(AucRoc_array)/np.sqrt(len(AucRoc_array))]
@@ -362,12 +390,7 @@ def main():
 
 		# Get model preformance scores using final_threshold
 		TP,TN,FP,FN,TPR,FPR,FNR,Pr,Ac,F1 = ML.fun.Model_Performance_Thresh(df_proba, final_threshold, balanced_ids, POS, NEG)
-		
 
-		# Plot confusion matrix (% class predicted as each class) based on balanced dataframes
-		if CM.lower() == 'true' or CM.lower() == 't':
-			cm_mean.to_csv(SAVE + "_cm.csv",sep="\t")
-			done = ML.fun.Plot_ConMatrix(cm_mean, SAVE)
 
 		# Plot ROC & PR curves
 		if plots.lower() == 'true' or plots.lower() == 't':
@@ -384,7 +407,7 @@ def main():
 		except:
 			pass
 
-		timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+		
 		
 		# Save to summary RESULTS file with all models run from the same directory
 		
