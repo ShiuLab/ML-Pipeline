@@ -188,6 +188,7 @@ class fun(object):
 					break
 				i += 1
 			scores = cv_proba[:,POS_IND]
+
 			#Generate data frame with all scores
 			score_columns=["score_%s"%(j)]
 			df_sel_scores = pd.DataFrame(data=cv_proba[:,POS_IND],index=df.index,columns=score_columns)
@@ -197,8 +198,8 @@ class fun(object):
 				df_unk_scores = pd.DataFrame(data=unk_proba[:,POS_IND],index=df_unknowns.index,columns=score_columns)
 				current_scores =  pd.concat([current_scores,df_unk_scores], axis = 0)
 			result = fun.Performance(y, cv_pred, scores, clf, classes, POS, POS_IND, NEG, ALG)
+		
 		else:
-			
 			#Generate data frame with all scores
 			score_columns = []
 			for clss in classes:
@@ -217,7 +218,6 @@ class fun(object):
 
 	def Performance(y, cv_pred, scores, clf, classes, POS, POS_IND, NEG, ALG):
 		from sklearn.metrics import f1_score, roc_auc_score, average_precision_score, confusion_matrix
-
 		
 		# Gather balanced model scoring metrics
 		cm = confusion_matrix(y, cv_pred, labels=classes)
@@ -272,8 +272,9 @@ class fun(object):
 		accuracy = accuracy_score(y, cv_pred)
 		macro_f1 = f1_score(y, cv_pred, average='macro')	# 
 		f1 = f1_score(y, cv_pred, average=None)	# Returns F1 for each class
+
 		
-		return {'cm':cm, 'accuracy':accuracy,'macro_f1':macro_f1,'f1':f1}
+		return {'cm':cm, 'accuracy':accuracy,'macro_f1':macro_f1,'f1_MC':f1}
 
 
 	def Model_Performance_Thresh(df_proba, final_threshold, balanced_ids, POS, NEG):
