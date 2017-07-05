@@ -14,7 +14,7 @@ INPUTS:
 	OPTIONAL:
 	-cl_train List of classes to include in the training set. Default = all classes. If binary, first label = positive class.
 	-pos      name of positive class (default = 1 or first class provided with -cl_train)
-	-sweep    Set to True if parameter sweep is desired. Default = False
+	-gs       Set to True if grid search over parameter space is desired. Default = False
 	-cv       # of cross-validation folds. Default = 10
 	-b        # of random balanced datasets to run. Default = 100
 	-apply    To which non-training class labels should the models be applied? Enter 'all' or a list (comma-delimit if >1)
@@ -267,11 +267,11 @@ def main():
 			parameters_used = [C, degree, gamma, kernel]
 			clf = ML.fun.DefineClf_SVM(kernel,C,degree,gamma,j)
 		elif ALG == "LogReg":
-			parameters_used = ["NA","NA","NA"]
+			parameters_used = [C, intercept_scaling, penalty]
 			clf = ML.fun.DefineClf_LogReg(penalty, C, intercept_scaling)
 		
 		# Run ML algorithm on balanced datasets.
-		result,current_scores = ML.fun.BuildModel_Apply_Performance(df1, clf, cv_num, df_notSel, apply_unk, df_unknowns, classes, POS, NEG, j)
+		result,current_scores = ML.fun.BuildModel_Apply_Performance(df1, clf, cv_num, df_notSel, apply_unk, df_unknowns, classes, POS, NEG, j, ALG)
 		results.append(result)
 		df_proba = pd.concat([df_proba,current_scores], axis = 1)
 
