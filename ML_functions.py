@@ -47,6 +47,7 @@ class fun(object):
 		from sklearn.preprocessing import StandardScaler
 		from sklearn.ensemble import RandomForestClassifier
 		from sklearn.svm import SVC
+		from sklearn.linear_model import LogisticRegression
 		
 		start_time = time.time()
 		
@@ -63,7 +64,10 @@ class fun(object):
 
 		elif ALG == 'SVMrbf':
 			parameters = {'kernel': ['rbf'], 'C': [0.01, 0.1, 0.5, 1, 10, 50, 100], 'gamma': np.logspace(-5,1,7)}
-				
+		
+		elif ALG == 'LogReg':
+			#parameters = {'penalty': ['l1','l2'], 'C': [0.01, 0.1, 0.5, 1, 10, 50, 100], 'intercept_scaling': [0.1, 0.5, 1, 2, 5, 10]}	
+			parameters = {'C': [0.01, 0.1, 0.5, 1, 10, 50, 100], 'intercept_scaling': [0.1, 0.5, 1, 2, 5, 10],'penalty': ['l1','l2']}	
 		
 		else:
 			print('Grid search is not available for the algorithm selected')
@@ -90,8 +94,10 @@ class fun(object):
 			if ALG == 'RF':
 				model = RandomForestClassifier()
 			elif ALG == "SVM" or ALG == 'SVMrbf' or ALG == 'SVMpoly':
-				x = StandardScaler().fit_transform(x)
+				# x = StandardScaler().fit_transform(x)
 				model = SVC(probability=True)
+			elif ALG == "LogReg":
+				model = LogisticRegression()
 			
 			grid_search = GridSearchCV(model, parameters, scoring = gs_score, cv = cv_num, n_jobs = n_jobs, pre_dispatch=2*n_jobs)
 			
@@ -129,6 +135,7 @@ class fun(object):
 			n_jobs=n_jobs)
 		return clf
 	
+	
 	def DefineClf_SVM(kernel,C,degree,gamma,j):
 		from sklearn.svm import SVC
 		clf = SVC(kernel = kernel,
@@ -138,7 +145,15 @@ class fun(object):
 			random_state=j,
 			probability=True)
 		return clf
-		
+	
+	def DefineClf_LogReg(penalty,C,intercept_scaling):
+		from sklearn.linear_model import LogisticRegression
+		clf = LogisticRegression(penalty=penalty,
+			C=float(C),
+			intercept_scaling=intercept_scaling)
+		return clf
+
+
 	# def MakeScoreFrame(cv_proba,POS_IND,sel_labels,score_columns,notSel_proba,notSel_labels,apply_unk,unk_proba,unk_labels):
 		# df_sel_scores = pd.DataFrame(data=cv_proba[POS_IND],index=sel_labels,columns=score_columns)
 		# df_notSel_scores = pd.DataFrame(data=notSel_proba[POS_IND],index=df_notSel.index,columns=score_columns)
@@ -230,7 +245,7 @@ class fun(object):
 
 		# Try to extract importance scores 
 		try:
-			importances = clf.feature_importances_  # Works for RF
+			importances = clf.feature_importances_  # Works for RF and LogReg
 		except:
 			try:
 				importances = clf.coef_	# Works for SVM
