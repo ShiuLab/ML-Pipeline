@@ -163,7 +163,7 @@ class fun(object):
 			# current_scores = pd.concat([current_scores,df_unk_scores], axis = 0)
 		# return current_scores
 	
-	def BuildModel_Apply_Performance(df, clf, cv_num, df_notSel, apply_unk, df_unknowns, classes, POS, NEG, j):
+	def BuildModel_Apply_Performance(df, clf, cv_num, df_notSel, apply_unk, df_unknowns, classes, POS, NEG, j, ALG):
 		from sklearn.model_selection import cross_val_predict
 		
 		y = df['Class']
@@ -196,7 +196,7 @@ class fun(object):
 			if apply_unk == True:
 				df_unk_scores = pd.DataFrame(data=unk_proba[:,POS_IND],index=df_unknowns.index,columns=score_columns)
 				current_scores =  pd.concat([current_scores,df_unk_scores], axis = 0)
-			result = fun.Performance(y, cv_pred, scores, clf, classes, POS, POS_IND, NEG)
+			result = fun.Performance(y, cv_pred, scores, clf, classes, POS, POS_IND, NEG, ALG)
 		else:
 			
 			#Generate data frame with all scores
@@ -215,7 +215,7 @@ class fun(object):
 			result = fun.Performance_MC(y, cv_pred, classes)
 		return result,current_scores
 
-	def Performance(y, cv_pred, scores, clf, classes, POS, POS_IND, NEG):
+	def Performance(y, cv_pred, scores, clf, classes, POS, POS_IND, NEG, ALG):
 		from sklearn.metrics import f1_score, roc_auc_score, average_precision_score, confusion_matrix
 
 		
@@ -244,14 +244,21 @@ class fun(object):
 		AucPRc = average_precision_score(y1, scores)
 
 		# Try to extract importance scores 
-		try:
-			importances = clf.feature_importances_  # Works for RF and LogReg
-		except:
+		if ALG == "RF":
+			importances = clf.feature_importances_
+		elif "SVM" in ALG:
+			importances = clf.coef_
+		elif ALG == "LogReg":
+			importances = clf.coef_
+		else:
 			try:
-				importances = clf.coef_	# Works for SVM
+				importances = clf.feature_importances_
 			except:
-				print("Cannot get importance scores")
-				return {'cm':cm, 'threshold':max_f1_thresh,'AucPRc':AucPRc, 'AucRoc':AucRoc, 'MaxF1': max_f1}
+				try:
+					importances = clf.coef_
+				except:
+					print("Cannot get importance scores")
+					return {'cm':cm, 'threshold':max_f1_thresh,'AucPRc':AucPRc, 'AucRoc':AucRoc, 'MaxF1': max_f1}
 		
 		
 		return {'cm':cm, 'threshold':max_f1_thresh,'AucPRc':AucPRc, 'AucRoc':AucRoc, 'MaxF1': max_f1, 'importances':importances}
