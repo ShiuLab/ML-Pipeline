@@ -42,4 +42,4 @@ python ML_plots.py [SAVE_NAME] name1 [Path_to_1st_scores_file] name3 [Path_to_2n
 - Look into perfect TPR/FPR/FNR/FP/FN scores in RESULTS output file
 - Categorical data is throwing errors, as scikit is trying treat it as numeric data
 - Random forest imporance scores are all identical
-- 
+- Add validation set hold out option
