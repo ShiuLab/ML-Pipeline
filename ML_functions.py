@@ -47,6 +47,7 @@ class fun(object):
 		from sklearn.preprocessing import StandardScaler
 		from sklearn.ensemble import RandomForestClassifier
 		from sklearn.svm import SVC
+		from sklearn.linear_model import LogisticRegression
 		
 		start_time = time.time()
 		
@@ -63,7 +64,10 @@ class fun(object):
 
 		elif ALG == 'SVMrbf':
 			parameters = {'kernel': ['rbf'], 'C': [0.01, 0.1, 0.5, 1, 10, 50, 100], 'gamma': np.logspace(-5,1,7)}
-				
+		
+		elif ALG == 'LogReg':
+			#parameters = {'penalty': ['l1','l2'], 'C': [0.01, 0.1, 0.5, 1, 10, 50, 100], 'intercept_scaling': [0.1, 0.5, 1, 2, 5, 10]}	
+			parameters = {'C': [0.01, 0.1, 0.5, 1, 10, 50, 100], 'intercept_scaling': [0.1, 0.5, 1, 2, 5, 10],'penalty': ['l1','l2']}	
 		
 		else:
 			print('Grid search is not available for the algorithm selected')
@@ -90,8 +94,10 @@ class fun(object):
 			if ALG == 'RF':
 				model = RandomForestClassifier()
 			elif ALG == "SVM" or ALG == 'SVMrbf' or ALG == 'SVMpoly':
-				x = StandardScaler().fit_transform(x)
+				# x = StandardScaler().fit_transform(x)
 				model = SVC(probability=True)
+			elif ALG == "LogReg":
+				model = LogisticRegression()
 			
 			grid_search = GridSearchCV(model, parameters, scoring = gs_score, cv = cv_num, n_jobs = n_jobs, pre_dispatch=2*n_jobs)
 			
@@ -129,6 +135,7 @@ class fun(object):
 			n_jobs=n_jobs)
 		return clf
 	
+	
 	def DefineClf_SVM(kernel,C,degree,gamma,j):
 		from sklearn.svm import SVC
 		clf = SVC(kernel = kernel,
@@ -138,7 +145,15 @@ class fun(object):
 			random_state=j,
 			probability=True)
 		return clf
-		
+	
+	def DefineClf_LogReg(penalty,C,intercept_scaling):
+		from sklearn.linear_model import LogisticRegression
+		clf = LogisticRegression(penalty=penalty,
+			C=float(C),
+			intercept_scaling=intercept_scaling)
+		return clf
+
+
 	# def MakeScoreFrame(cv_proba,POS_IND,sel_labels,score_columns,notSel_proba,notSel_labels,apply_unk,unk_proba,unk_labels):
 		# df_sel_scores = pd.DataFrame(data=cv_proba[POS_IND],index=sel_labels,columns=score_columns)
 		# df_notSel_scores = pd.DataFrame(data=notSel_proba[POS_IND],index=df_notSel.index,columns=score_columns)
@@ -148,7 +163,7 @@ class fun(object):
 			# current_scores = pd.concat([current_scores,df_unk_scores], axis = 0)
 		# return current_scores
 	
-	def BuildModel_Apply_Performance(df, clf, cv_num, df_notSel, apply_unk, df_unknowns, classes, POS, NEG, j):
+	def BuildModel_Apply_Performance(df, clf, cv_num, df_notSel, apply_unk, df_unknowns, classes, POS, NEG, j, ALG):
 		from sklearn.model_selection import cross_val_predict
 		
 		y = df['Class']
@@ -172,9 +187,8 @@ class fun(object):
 					POS_IND = i
 					break
 				i += 1
-			
 			scores = cv_proba[:,POS_IND]
-			
+
 			#Generate data frame with all scores
 			score_columns=["score_%s"%(j)]
 			df_sel_scores = pd.DataFrame(data=cv_proba[:,POS_IND],index=df.index,columns=score_columns)
@@ -183,9 +197,9 @@ class fun(object):
 			if apply_unk == True:
 				df_unk_scores = pd.DataFrame(data=unk_proba[:,POS_IND],index=df_unknowns.index,columns=score_columns)
 				current_scores =  pd.concat([current_scores,df_unk_scores], axis = 0)
-			result = fun.Performance(y, cv_pred, scores, clf, classes, POS, POS_IND, NEG)
+			result = fun.Performance(y, cv_pred, scores, clf, classes, POS, POS_IND, NEG, ALG)
+		
 		else:
-			
 			#Generate data frame with all scores
 			score_columns = []
 			for clss in classes:
@@ -202,9 +216,8 @@ class fun(object):
 			result = fun.Performance_MC(y, cv_pred, classes)
 		return result,current_scores
 
-	def Performance(y, cv_pred, scores, clf, classes, POS, POS_IND, NEG):
+	def Performance(y, cv_pred, scores, clf, classes, POS, POS_IND, NEG, ALG):
 		from sklearn.metrics import f1_score, roc_auc_score, average_precision_score, confusion_matrix
-
 		
 		# Gather balanced model scoring metrics
 		cm = confusion_matrix(y, cv_pred, labels=classes)
@@ -213,14 +226,15 @@ class fun(object):
 		y1 = y.replace(to_replace = [POS, NEG], value = [1,0])
 		max_f1 = [-1,-1]
 		max_f1_thresh = ''
-		for thr in np.arange(0, 1, 0.01):
+		for thr in np.arange(0.01, 1, 0.01):
 			thr_pred = scores.copy()
 			thr_pred[thr_pred>=thr] = 1
 			thr_pred[thr_pred<thr] = 0
-			try:
-				f1 = f1_score(y1, thr_pred, average=None)	# Returns F1 for each class
-			except UndefinedMetricWarning:
-				f1 = 0
+			f1 = f1_score(y1, thr_pred, average=None)	# Returns F1 for each class
+			# try:
+				# f1 = f1_score(y1, thr_pred, average=None)	# Returns F1 for each class
+			# except UndefinedMetricWarning: # THIS DOESN"T GET FLAGGED
+				# f1 = 0
 			if list(f1)[POS_IND] > list(max_f1)[POS_IND]:
 				max_f1 = f1
 				max_f1_thresh = thr
@@ -230,14 +244,21 @@ class fun(object):
 		AucPRc = average_precision_score(y1, scores)
 
 		# Try to extract importance scores 
-		try:
-			importances = clf.feature_importances_  # Works for RF
-		except:
+		if ALG == "RF":
+			importances = clf.feature_importances_
+		elif "SVM" in ALG:
+			importances = clf.coef_
+		elif ALG == "LogReg":
+			importances = clf.coef_
+		else:
 			try:
-				importances = clf.coef_	# Works for SVM
+				importances = clf.feature_importances_
 			except:
-				print("Cannot get importance scores")
-				return {'cm':cm, 'threshold':max_f1_thresh,'AucPRc':AucPRc, 'AucRoc':AucRoc, 'MaxF1': max_f1}
+				try:
+					importances = clf.coef_
+				except:
+					print("Cannot get importance scores")
+					return {'cm':cm, 'threshold':max_f1_thresh,'AucPRc':AucPRc, 'AucRoc':AucRoc, 'MaxF1': max_f1}
 		
 		
 		return {'cm':cm, 'threshold':max_f1_thresh,'AucPRc':AucPRc, 'AucRoc':AucRoc, 'MaxF1': max_f1, 'importances':importances}
@@ -251,19 +272,23 @@ class fun(object):
 		accuracy = accuracy_score(y, cv_pred)
 		macro_f1 = f1_score(y, cv_pred, average='macro')	# 
 		f1 = f1_score(y, cv_pred, average=None)	# Returns F1 for each class
+
 		
-		return {'cm':cm, 'accuracy':accuracy,'macro_f1':macro_f1,'f1':f1}
+		return {'cm':cm, 'accuracy':accuracy,'macro_f1':macro_f1,'f1_MC':f1}
 
 
 	def Model_Performance_Thresh(df_proba, final_threshold, balanced_ids, POS, NEG):
+		
 		from sklearn.metrics import f1_score, confusion_matrix
 		
 		TP,TN,FP,FN,TPR,FPR,FNR,Precision,Accuracy,F1  = [],[],[],[],[],[],[],[],[],[]
 		
+		
 		df_proba_thresh = df_proba.copy()
 		proba_columns = [c for c in df_proba_thresh.columns if c.startswith('score_')]
-		df_proba_thresh[df_proba_thresh[proba_columns] >= final_threshold] = POS
-		df_proba_thresh[df_proba_thresh[proba_columns] < final_threshold] = NEG
+		for proba_column in proba_columns:
+			df_proba_thresh[df_proba[proba_column] >= final_threshold] = POS
+			df_proba_thresh[df_proba[proba_column] < final_threshold] = NEG
 		balanced_count = 0
 		
 		# Get predictions scores from the balanced runs using the final threshold
