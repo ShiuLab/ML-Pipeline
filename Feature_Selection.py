@@ -19,6 +19,7 @@ OPTIONAL INPUT:
             If type = r: need alpha value, try 0.01, 0.001. (larger = fewer features selected)
             If type = c: need C which controls the sparcity, try 0.01, 0.1 (smaller = fewer features selected)
   -n        Number of features you would like to keep
+  -list     T/F Save a list of the selected features (useful for ML_classification.py -feat) (Default: F)
 
 OUTPUT:
   -df_f.txt    New dataframe with columns only from feature selection
@@ -139,6 +140,7 @@ if __name__ == "__main__":
   FEAT = 'all'    #Features to include from dataframe. Default = all (i.e. don't remove any from the given dataframe)
   neg = int(0)    #Default value for negative class = 0
   pos = int(1)    #Default value for positive class = 1
+  save_list = 'false'
 
   for i in range (1,len(sys.argv),2):
 
@@ -146,6 +148,8 @@ if __name__ == "__main__":
           DF = sys.argv[i+1]
         if sys.argv[i] == '-save':
           SAVE = sys.argv[i+1]
+        if sys.argv[i] == '-list':
+          save_list = sys.argv[i+1]
         if sys.argv[i] == '-f':
           F = sys.argv[i+1]
         if sys.argv[i] == '-n':
@@ -195,6 +199,13 @@ if __name__ == "__main__":
     print("Feature selection method not available in this script")
 
 
-  
+  if save_list.lower() == 't' or save_list.lower() == 'true':
+    top_feat = list(df_feat)
+    top_feat.remove('Class')
+    save_name2 = save_name + '_list'
+    out = open(save_name2, 'w')
+    for f in top_feat:
+      out.write(f + '\n')
+
   df_feat.to_csv(save_name, sep='\t', quoting=None)
 
