@@ -47,7 +47,7 @@ import ML_functions as ML
 def main():
 	
 	# Default code parameters
-	n, FEAT, CL_TRAIN, apply, n_jobs, class_col, CM, POS, plots, cv_num, TAG, SAVE = 100, 'all', 'all','none', 1, 'Class', 'False', 1, 'False', 10, '', ''
+	n, FEAT, CL_TRAIN, apply, n_jobs, class_col, CM, POS, plots, cv_num, TAG, SAVE, MIN_SIZE = 100, 'all', 'all','none', 1, 'Class', 'False', 1, 'False', 10, '', '', ''
 	
 	# Default parameters for Grid search
 	GS, gs_score = 'F', 'roc_auc'
@@ -174,10 +174,10 @@ def main():
 	
 	
 	# Determine minimum class size (for making balanced datasets)
-	try:
-		min_size = int(MIN_SIZE)
-	except:
+	if MIN_SIZE == '':
 		min_size = (df.groupby('Class').size()).min() - 1
+	else:
+		min_size = int(MIN_SIZE)
 
 	print('Balanced dataset will include %i instances of each class' % min_size)
 	
@@ -216,8 +216,7 @@ def main():
 		# Print results from grid search
 		if ALG == 'RF':
 			max_depth, max_features = params2use
-			print("Parameters selected: max_depth=%s, max_features=%s" % (
-				str(max_depth), str(max_features)))
+			print("Parameters selected: max_depth=%s, max_features=%s" % (str(max_depth), str(max_features)))
 	
 		elif ALG == 'SVM':
 			C, kernel = params2use
@@ -334,6 +333,21 @@ def main():
 
 ###### Multiclass Specific Output ######
 	if len(classes) > 2:
+		
+		# Write median multiclass scores
+		for class_nm in reversed(classes):
+			class_proba_cols = [c for c in df_proba.columns if c.startswith(class_nm+'_score_')]
+			df_proba.insert(loc=1, column = class_nm+'_score_stdev', value = df_proba[class_proba_cols].std(axis=1))
+			# df_proba.insert(loc=1, column = 'stdev', value = df_proba[proba_columns].std(axis=1))
+		
+		for class_nm in reversed(classes):
+			class_proba_cols = [c for c in df_proba.columns if c.startswith(class_nm+'_score_')]
+			df_proba.insert(loc=1, column = class_nm+'_score_Median', value = df_proba[class_proba_cols].median(axis=1))
+		
+		out_scores = open(SAVE + "_scores.txt","w")
+		out_scores.write("#ID\t"+pd.DataFrame.to_csv(df_proba,sep="\t").strip()+"\n")
+		out_scores.close()
+		
 		f1 = pd.DataFrame(f1_array)
 		f1.columns = f1.iloc[0]
 		f1 = f1[1:]
