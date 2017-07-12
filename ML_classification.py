@@ -24,6 +24,7 @@ INPUTS:
 	-feat     Import file with subset of features to use. If invoked,-tag arg is recommended. Default: keep all features.
 	-class    String for column with class. Default = Class
 	-save     Adjust save name prefix. Default = [df]_[alg]_[tag (if used)], CAUTION: will overwrite!
+	-short    Set to True to output only the median and std dev of prediction scores, default = full prediction scores
 	
 	PLOT OPTIONS:
 	-cm       T/F - Do you want to output the confusion matrix & confusion matrix figure? (Default = False)
@@ -47,7 +48,7 @@ import ML_functions as ML
 def main():
 	
 	# Default code parameters
-	n, FEAT, CL_TRAIN, apply, n_jobs, class_col, CM, POS, plots, cv_num, TAG, SAVE, MIN_SIZE = 100, 'all', 'all','none', 1, 'Class', 'False', 1, 'False', 10, '', '', ''
+	n, FEAT, CL_TRAIN, apply, n_jobs, class_col, CM, POS, plots, cv_num, TAG, SAVE, MIN_SIZE, short_scores = 100, 'all', 'all','none', 1, 'Class', 'False', 1, 'False', 10, '', '', '', False
 	
 	# Default parameters for Grid search
 	GS, gs_score = 'F', 'roc_auc'
@@ -104,6 +105,10 @@ def main():
 			TAG = sys.argv[i+1]
 		elif sys.argv[i] == "-p":
 			n_jobs = int(sys.argv[i+1])
+		elif sys.argv[i] == "-short":
+			scores_len = sys.argv[i+1]
+			if scores_len.lower() == "true" or scores_len.lower() == "t":
+				short_scores = True
 
 	if len(sys.argv) <= 1:
 		print(__doc__)
@@ -335,17 +340,26 @@ def main():
 	if len(classes) > 2:
 		
 		# Write median multiclass scores
+		summary_cols = []
 		for class_nm in reversed(classes):
 			class_proba_cols = [c for c in df_proba.columns if c.startswith(class_nm+'_score_')]
 			df_proba.insert(loc=1, column = class_nm+'_score_stdev', value = df_proba[class_proba_cols].std(axis=1))
-			# df_proba.insert(loc=1, column = 'stdev', value = df_proba[proba_columns].std(axis=1))
+			summary_cols.insert(0,class_nm+'_score_stdev')
 		
 		for class_nm in reversed(classes):
 			class_proba_cols = [c for c in df_proba.columns if c.startswith(class_nm+'_score_')]
 			df_proba.insert(loc=1, column = class_nm+'_score_Median', value = df_proba[class_proba_cols].median(axis=1))
+			summary_cols.insert(0,class_nm+'_score_Median')
 		
-		out_scores = open(SAVE + "_scores.txt","w")
-		out_scores.write("#ID\t"+pd.DataFrame.to_csv(df_proba,sep="\t").strip()+"\n")
+		print(summary_cols)
+		# df_proba.insert(loc=1, column = "Predicted_max", value = df_proba['Class'])
+		
+		scores_file = SAVE + "_scores.txt"
+		out_scores = open(scores_file,"w")
+		if short_scores == True:
+			out_scores.write("#ID\t"+pd.DataFrame.to_csv(df_proba[["Class"]+summary_cols],sep="\t").strip()+"\n")
+		else:
+			out_scores.write("#ID\t"+pd.DataFrame.to_csv(df_proba,sep="\t").strip()+"\n")
 		out_scores.close()
 		
 		f1 = pd.DataFrame(f1_array)
@@ -376,7 +390,20 @@ def main():
 		for cla in f1.columns:
 			if 'M_F1' not in cla:
 				out.write('%s\t%05f\t%05f\n' % (cla, np.mean(f1[cla]), np.std(f1[cla])))
-
+		
+		
+		# Write prediction percentages
+		pred_percent_dict = ML.fun.TallyPredictions_MultiClass(scores_file,classes)
+		out.write("\nClass predictions:\nClass\tn")
+		for class_nm in classes:
+			out.write("\t%s count"%(class_nm))
+		for class_nm in classes:
+			out.write("\tpercent %s"%(class_nm))
+		out.write("\n")
+		
+		for class_nm in pred_percent_dict:
+			n,count_l,percent_l = pred_percent_dict[class_nm]
+			out.write("%s\t%s\t%s\t%s\n"%(class_nm,n,"\t".join(count_l),"\t".join(percent_l)))
 
 		out.write('\nMean Balanced Confusion Matrix:\n')
 		out.close()
@@ -394,24 +421,30 @@ def main():
 		final_threshold = round(np.mean(threshold_array),2)
 
 		# Determine final prediction call - using the final_threshold on the mean predicted probability.
+		
 		proba_columns = [c for c in df_proba.columns if c.startswith('score_')]
 		
 		df_proba.insert(loc=1, column = 'Median', value = df_proba[proba_columns].median(axis=1))
-		df_proba.insert(loc=2, column = 'Mean', value = df_proba[proba_columns].mean(axis=1))
-		df_proba.insert(loc=3, column = 'stdev', value = df_proba[proba_columns].std(axis=1))
+		# df_proba_out.insert(loc=2, column = 'Mean', value = df_proba[proba_columns].mean(axis=1))
+		df_proba.insert(loc=2, column = 'stdev', value = df_proba[proba_columns].std(axis=1))
 		Pred_name =  'Predicted_' + str(final_threshold)
-		df_proba.insert(loc=4, column = Pred_name, value = df_proba['Class'])
+		df_proba.insert(loc=3, column = Pred_name, value = df_proba['Class'])
 		df_proba[Pred_name][df_proba.Median >= final_threshold] = POS
 		df_proba[Pred_name][df_proba.Median < final_threshold] = NEG
 		
-		out_scores = open(SAVE + "_scores.txt","w")
-		out_scores.write("#ID\t"+pd.DataFrame.to_csv(df_proba,sep="\t").strip()+"\n")
+		scores_file = SAVE + "_scores.txt"
+		out_scores = open(scores_file,"w")
+		if short_scores == True:
+			out_scores.write("#ID\t"+pd.DataFrame.to_csv(df_proba[["Class","Median","stdev",Pred_name]],sep="\t").strip()+"\n")
+		else:
+			out_scores.write("#ID\t"+pd.DataFrame.to_csv(df_proba,sep="\t").strip()+"\n")
 		out_scores.close()
 		# df_proba.to_csv(SAVE + "_scores.txt", sep="\t")
-
+		
+		
 		# Get model preformance scores using final_threshold
 		TP,TN,FP,FN,TPR,FPR,FNR,Pr,Ac,F1 = ML.fun.Model_Performance_Thresh(df_proba, final_threshold, balanced_ids, POS, NEG)
-
+		
 
 		# Plot ROC & PR curves
 		if plots.lower() == 'true' or plots.lower() == 't':
@@ -461,7 +494,18 @@ def main():
 			'\t'.join(str(x) for x in Pr), '\t'.join(str(x) for x in TPR), '\t'.join(str(x) for x in FPR), '\t'.join(str(x) for x in FNR)))
 		out.write('TP\t%s\nTN\t%s\nFP\t%s\nFN\t%s\n' % (
 			'\t'.join(str(x) for x in TP), '\t'.join(str(x) for x in TN), '\t'.join(str(x) for x in FP), '\t'.join(str(x) for x in FN)))
-		out.write('\nMean Balanced Confusion Matrix:\n')
+		
+		
+		# Write prediction percentages
+		
+		pred_percent_dict = ML.fun.TallyPredictions_Binary(scores_file,POS,NEG)
+		out.write("\nClass predictions:\nClass\tn\tPos count\tNeg count\t% Pos\t% Neg\n")
+		for class_nm in pred_percent_dict:
+			n,count_l,percent_l = pred_percent_dict[class_nm]
+			# out.write(class_nm+"\t"+"\t".join(pred_stats)+"\n")
+			out.write("%s\t%s\t%s\t%s\n"%(class_nm,n,"\t".join(count_l),"\t".join(percent_l)))
+		
+		out.write('\n\nMean Balanced Confusion Matrix:\n')
 		out.close()
 		cm_mean.to_csv(SAVE + "_results.txt", mode='a', sep='\t')
 
