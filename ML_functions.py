@@ -437,4 +437,73 @@ class fun(object):
 		plt.savefig(filename) 
 		
 		return 'Confusion matrix plotted.'
+	
+	def TallyPredictions_AddPercentages(pred_dict):
+		for class_nm in pred_dict:
+			counts = pred_dict[class_nm]
+			tot_cnt = sum(counts)
+			
+			count_l = []
+			percent_l = []
+			for count in counts:
+				count_l.append(str(count))
+				per = float(count)/float(tot_cnt)*100
+				percent_l.append(str(round(per,2)))
+			
+			pred_dict[class_nm] = [str(tot_cnt),count_l,percent_l]
+		return pred_dict
+	
+	def TallyPredictions_Binary(scores_file,POS,NEG):
+		pred_percent_dict = {}
+		inp = open(scores_file)
+		hdr = inp.readline()
+		for line in inp:
+			lineLst = line.strip().split("\t")
+			class_nm = lineLst[1]
+			if class_nm not in pred_percent_dict:
+				pred_percent_dict[class_nm] = [0,0] # counts for predicted POS (index 0) and NEG (index 1)
+			
+			pred_class = lineLst[4]
+			if pred_class == POS:
+				pred_percent_dict[class_nm][0] += 1
+			elif pred_class == NEG:
+				pred_percent_dict[class_nm][1] += 1
+			else:
+				id = lineLst[0]
+				print("Predicted class label is neither POS nor NEG!:",id,class_nm,pred_class,POS,NEG)
+		inp.close()
+		
+		pred_percent_dict = fun.TallyPredictions_AddPercentages(pred_percent_dict)
+		
+		return pred_percent_dict
+	
+	def TallyPredictions_MultiClass(scores_file,classes):
+		pred_percent_dict = {}
+		inp = open(scores_file)
+		hdr = inp.readline()
+		for line in inp:
+			lineLst = line.split("\t")
+			class_nm = lineLst[1]
+			if class_nm not in pred_percent_dict:
+				pred_percent_dict[class_nm] = []
+				for clss in classes:
+					pred_percent_dict[class_nm].append(0)
+			median_scores_raw = lineLst[2:2+len(classes)]
+			median_scores = []
+			for median_score in median_scores_raw:
+				median_scores.append(float(median_score))
+			pred_class = ""
+			high_score = 0
+			for i in range(len(classes)):
+				curr_score = median_scores[i]
+				if curr_score > high_score:
+					pred_class = classes[i]
+					high_score = curr_score
+			add_ind = list(classes).index(pred_class)
+			pred_percent_dict[class_nm][add_ind] += 1
+		inp.close()
+		
+		pred_percent_dict = fun.TallyPredictions_AddPercentages(pred_percent_dict)
+		
+		return pred_percent_dict
 

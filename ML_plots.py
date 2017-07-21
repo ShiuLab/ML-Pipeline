@@ -13,6 +13,7 @@ $ python ML_plots.py [SAVE_NAME] name1 [Path_to_1st_scores_file] name3 [Path_to_
 import sys, os
 import pandas as pd
 import numpy as np
+import matplotlib
 import matplotlib.pyplot as plt
 from cycler import cycler
 plt.switch_backend('agg')
@@ -20,13 +21,16 @@ from sklearn.metrics import roc_curve, auc, confusion_matrix
 
 # 
 SAVE = sys.argv[1]
-POS = 1
-NEG = 0
+POS = sys.argv[2]
+NEG = sys.argv[3]
+#POS = 1
+#NEG = 0
 items = {}
 
 # Organize all _scores and _BalancedIDs files into dictionary
-for i in range (2,len(sys.argv),2):
-  items[sys.argv[i]] = [sys.argv[i+1], sys.argv[i+1].replace('_scores.txt', '_BalancedIDs.csv')]
+for i in range (4,len(sys.argv),2):
+  print(sys.argv[i])
+  items[sys.argv[i]] = [sys.argv[i+1], sys.argv[i+1].replace('_scores.txt', '_BalancedIDs')]
 
 n_lines = len(items)
 
@@ -43,7 +47,7 @@ for i in items:
   balanced_ids = []
   with open(items[i][1], 'r') as ids:
     balanced_ids = ids.readlines()
-  balanced_ids = [x.strip().split(',') for x in balanced_ids]
+  balanced_ids = [x.strip().split('\t') for x in balanced_ids]
   
 
   FPRs = {}
@@ -52,12 +56,13 @@ for i in items:
   
   # For each balanced run
   for k in range(0, n): 
+    print("Working on",i,k)
     FPR = []
     TPR = []
     precis = []
     name = 'score_' + str(k)
     y = df_proba.ix[balanced_ids[k], 'Class'] #,'Class']
-    
+
     # Get decision matrix & scores at each threshold between 0 & 1
     for j in np.arange(0, 1, 0.01):
       yhat = df_proba.ix[balanced_ids[k], name].copy()
@@ -84,9 +89,10 @@ for i in items:
   Prec_all[i] = [precisions_df.mean(axis=1), precisions_df.std(axis=1)]
 
 
-
+matplotlib.rc('pdf', fonttype=42)
 colors = plt.cm.get_cmap('Set1')
 # Plot the ROC Curve
+f = plt.figure()
 plt.title('ROC Curve: ' + SAVE, fontsize=18)
 count = 0
 for i in items:
@@ -94,19 +100,27 @@ for i in items:
   plt.plot(FPR_all[i][0], TPR_all[i][0], lw=3, color= c, alpha=0.9, label = i)
   plt.fill_between(FPR_all[i][0], TPR_all[i][0]-TPR_all[i][1], TPR_all[i][0]+TPR_all[i][1], facecolor=c, alpha=0.2, linewidth = 0)
   count += 1
-plt.plot([0,1],[0,1],'r--', lw = 2)
+plt.plot([-0.03,1.03],[-0.03,1.03],'r--', lw = 2)
 plt.legend(loc='lower right')
-plt.xlim([0,1])
-plt.ylim([0,1])
+plt.xlim([-0.03,1.03])
+plt.ylim([-0.03,1.03])
+plt.axes().set_aspect('equal')
 plt.ylabel('True Positive Rate', fontsize=16)
 plt.xlabel('False Positive Rate', fontsize=16)
 plt.show()
 filename = SAVE + "_ROCcurve.png"
+# filename = SAVE + "_ROCcurve.pdf"
 plt.savefig(filename)
+filename_pdf = SAVE + "_ROCcurve.pdf"
+f.savefig(filename_pdf, bbox_inches='tight')
+#f.savefig(filename_pdf)
+#pp = PdfPages(filename_pdf)
+#plt.savefig(pp)
+
 plt.clf()
 
-
 # Plot the Precision-Recall Curve
+f = plt.figure()
 plt.title('PR Curve: ' + SAVE, fontsize=18)
 count2 = 0
 for i in items:
@@ -114,15 +128,20 @@ for i in items:
   plt.plot(TPR_all[i][0], Prec_all[i][0], lw=3, color= c, alpha=0.9, label = i)
   plt.fill_between(TPR_all[i][0], Prec_all[i][0]-Prec_all[i][1], Prec_all[i][0]+Prec_all[i][1], facecolor=c, alpha=0.2, linewidth = 0)
   count2 += 1
-plt.plot([0,1],[0.5,0.5],'r--', lw=2)
+plt.plot([-0.03,1.03],[0.5,0.5],'r--', lw=2)
 plt.legend(loc='upper right')
-plt.xlim([0,1])
-plt.ylim([0.45,1])
+plt.xlim([-0.03,1.03])
+plt.ylim([0.485,1.015])
+plt.axes().set_aspect(2)
 plt.ylabel('Precision', fontsize=16)
 plt.xlabel('Recall', fontsize=16)
 plt.show()
 filename = SAVE + "_PRcurve.png"
+# filename = SAVE + "_PRcurve.pdf"
 plt.savefig(filename)
+
+filename_pdf = SAVE + "_PRcurve.pdf"
+f.savefig(filename_pdf, bbox_inches='tight')
 plt.close()
 
 
