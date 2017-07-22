@@ -7,17 +7,22 @@ Must set path to Miniconda in HPC:  export PATH=/mnt/home/azodichr/miniconda3/bi
 
 INPUT:
   -df       Feature dataframe for ML. Format -> Col 1 = example.name, Col 2 = Class, Col 3-... = Features.
-  -f        Feature selection method to use (Available = Chi2, DecisionTree, L1 (need -p, -type))
-
+  -f        Feature selection method to use 
+                - Chi2
+                - RandomForest
+                - Enrichment with Fisher's Exact Test (binary feat only) (default pval = 0.05)
+                - LASSO (need -p, -type))
 
 OPTIONAL INPUT:
   -feat     Default: all (i.e. everything in the dataframe given). Can import txt file with list of features to keep.
+  -class    Name of class column (Default = 'Class')
   -pos      String for what codes for the positive example (i.e. UUN) Default = 1
   -neg      String for what codes for the negative example (i.e. NNN) Default = 0
   -type     r = regression, c = classification
-  -p        Parameter value for L1.
-            If type = r: need alpha value, try 0.01, 0.001. (larger = fewer features selected)
-            If type = c: need C which controls the sparcity, try 0.01, 0.1 (smaller = fewer features selected)
+  -p        Parameter value for LASSO (L1) or Fisher's Exact Test.
+            Fishers: pvalue cut off (Default = 0.05)
+            LASSO: If type = r: need alpha value, try 0.01, 0.001. (larger = fewer features selected)
+            LASSO: If type = c: need C which controls the sparcity, try 0.01, 0.1 (smaller = fewer features selected)
   -n        Number of features you would like to keep
   -list     T/F Save a list of the selected features (useful for ML_classification.py -feat) (Default: F)
 
@@ -133,14 +138,50 @@ def L1(df, PARAMETER, TYPE):
   df2.insert(0, 'Class', Y_all, )
   return(df2)
 
+def FET(df, PARAMETER, pos, neg):
+  """Use Fisher's Exact Test to look for enriched features"""
+  from scipy.stats import fisher_exact
+
+  kmers = list(df)
+  kmers.remove(CL)
+
+  enriched = [CL]
+
+  for k in kmers:
+    temp = df.groupby([CL, k]).size().reset_index(name="Count")
+    try:
+      TP = temp.loc[(temp[CL] == pos) & (temp[k] == 1), 'Count'].iloc[0]
+    except:
+      TP = 0
+    try:
+      TN = temp.loc[(temp[CL] == neg) & (temp[k] == 0), 'Count'].iloc[0]
+    except:
+      TN = 0
+    try:
+      FP = temp.loc[(temp[CL] == neg) & (temp[k] == 1), 'Count'].iloc[0]
+    except:
+      FP = 0
+    try:
+      FN = temp.loc[(temp[CL] == pos) & (temp[k] == 0), 'Count'].iloc[0]
+    except:
+      FN = 0
+
+    oddsratio,pvalue = fisher_exact([[TP,FN],[FP,TN]],alternative='greater')
+      
+    if pvalue <= PARAMETER:
+      enriched.append(k)
+  df2 = df[enriched]
+  return(df2)
 
 if __name__ == "__main__":
   
   #Default parameters
   FEAT = 'all'    #Features to include from dataframe. Default = all (i.e. don't remove any from the given dataframe)
-  neg = int(0)    #Default value for negative class = 0
-  pos = int(1)    #Default value for positive class = 1
+  neg = 0    #Default value for negative class = 0
+  pos = 1    #Default value for positive class = 1
   save_list = 'false'
+  p = 0.05
+  CL = 'Class'
 
   for i in range (1,len(sys.argv),2):
 
@@ -160,6 +201,13 @@ if __name__ == "__main__":
           PARAMETER = float(sys.argv[i+1])        
         if sys.argv[i] == '-type':
           TYPE = sys.argv[i+1]
+        if sys.argv[i] == '-class':
+          CL = sys.argv[i+1]
+        if sys.argv[i] == '-pos':
+          pos = sys.argv[i+1]
+        if sys.argv[i] == '-neg':
+          neg = sys.argv[i+1]
+
 
   if len(sys.argv) <= 1:
     print(__doc__)
@@ -186,15 +234,18 @@ if __name__ == "__main__":
 
   # Run feature selection
 
-  if F == "decisiontree" or F == "DecisionTree":
+  if F.lower() == "randomforest" or F.lower() == "rf":
     df_feat = DecisionTree(df, N)
     save_name = DF.split("/")[-1] + "_" + F + "_" + str(N)
-  elif F == "chi2" or F == "Chi2":
+  elif F.lower() == "chi2" or F.lower() == "c2":
     df_feat = Chi2(df, N)
     save_name = DF.split("/")[-1] + "_" + F + "_" + str(N)
-  elif F == "L1" or F == "l1":
+  elif F.lower() == "l1" or F.lower() == "lasso":
     df_feat = L1(df, PARAMETER, TYPE)
     save_name = DF.split("/")[-1] + "_" + F + "_" + TYPE + '_' + str(PARAMETER)
+  elif F.lower() == "fisher" or F.lower() == "fet" or F.lower() == enrich:
+    df_feat = FET(df, PARAMETER, pos, neg)
+    save_name = DF.split("/")[-1] + "_" + F + '_' + str(PARAMETER)
   else:
     print("Feature selection method not available in this script")
 
@@ -206,6 +257,6 @@ if __name__ == "__main__":
     out = open(save_name2, 'w')
     for f in top_feat:
       out.write(f + '\n')
-
-  df_feat.to_csv(save_name, sep='\t', quoting=None)
+  else:
+    df_feat.to_csv(save_name, sep='\t', quoting=None)
 
