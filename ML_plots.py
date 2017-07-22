@@ -14,6 +14,7 @@ import sys, os
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+from collections import OrderedDict
 from cycler import cycler
 plt.switch_backend('agg')
 from sklearn.metrics import roc_curve, auc, confusion_matrix
@@ -22,11 +23,11 @@ from sklearn.metrics import roc_curve, auc, confusion_matrix
 SAVE = sys.argv[1]
 POS = 1
 NEG = 0
-items = {}
+items = OrderedDict()
 
 # Organize all _scores and _BalancedIDs files into dictionary
 for i in range (2,len(sys.argv),2):
-  items[sys.argv[i]] = [sys.argv[i+1], sys.argv[i+1].replace('_scores.txt', '_BalancedIDs.csv')]
+  items[sys.argv[i]] = [sys.argv[i+1], sys.argv[i+1].replace('_scores.txt', '_BalancedIDs')]
 
 n_lines = len(items)
 
@@ -39,12 +40,11 @@ for i in items:
   # Read in scores and which genes were part of the balanced run for each run number
   df_proba = pd.read_csv(items[i][0], sep='\t', index_col = 0)
   n = len([c for c in df_proba.columns if c.lower().startswith('score_')])
-  
+
   balanced_ids = []
   with open(items[i][1], 'r') as ids:
     balanced_ids = ids.readlines()
-  balanced_ids = [x.strip().split(',') for x in balanced_ids]
-  
+  balanced_ids = [x.strip().split('\t') for x in balanced_ids]
 
   FPRs = {}
   TPRs = {}
@@ -61,8 +61,9 @@ for i in items:
     # Get decision matrix & scores at each threshold between 0 & 1
     for j in np.arange(0, 1, 0.01):
       yhat = df_proba.ix[balanced_ids[k], name].copy()
-      yhat[df_proba[name] >= j] = POS
-      yhat[df_proba[name] < j] = NEG
+      
+      yhat[df_proba[name] >= float(j)] = POS
+      yhat[df_proba[name] < float(j)] = NEG
       matrix = confusion_matrix(y, yhat, labels = [POS,NEG])
       TP, FP, TN, FN = matrix[0,0], matrix[1,0], matrix[1,1], matrix[0,1]
       FPR.append(FP/(FP + TN))
@@ -84,15 +85,18 @@ for i in items:
   Prec_all[i] = [precisions_df.mean(axis=1), precisions_df.std(axis=1)]
 
 
+#colors = plt.cm.get_cmap('Paired')
+colors = ['#a1d581','#fea13c','#8abedc','#8761ad','#f27171','#9a9a9a']
 
-colors = plt.cm.get_cmap('Set1')
+print(colors)
 # Plot the ROC Curve
 plt.title('ROC Curve: ' + SAVE, fontsize=18)
 count = 0
 for i in items:
-  c = colors(count/float(n_lines))
-  plt.plot(FPR_all[i][0], TPR_all[i][0], lw=3, color= c, alpha=0.9, label = i)
-  plt.fill_between(FPR_all[i][0], TPR_all[i][0]-TPR_all[i][1], TPR_all[i][0]+TPR_all[i][1], facecolor=c, alpha=0.2, linewidth = 0)
+  #c = colors(count/float(n_lines))
+  #c = colors[0:n_lines]
+  plt.plot(FPR_all[i][0], TPR_all[i][0], lw=3, color= colors[count], alpha=1, label = i)
+  plt.fill_between(FPR_all[i][0], TPR_all[i][0]-TPR_all[i][1], TPR_all[i][0]+TPR_all[i][1], facecolor=colors[count], alpha=0.3, linewidth = 0)
   count += 1
 plt.plot([0,1],[0,1],'r--', lw = 2)
 plt.legend(loc='lower right')
@@ -110,9 +114,10 @@ plt.clf()
 plt.title('PR Curve: ' + SAVE, fontsize=18)
 count2 = 0
 for i in items:
-  c = colors(count2/float(n_lines))
-  plt.plot(TPR_all[i][0], Prec_all[i][0], lw=3, color= c, alpha=0.9, label = i)
-  plt.fill_between(TPR_all[i][0], Prec_all[i][0]-Prec_all[i][1], Prec_all[i][0]+Prec_all[i][1], facecolor=c, alpha=0.2, linewidth = 0)
+  #c = colors(count2/float(n_lines))
+  #c = colors[0:n_lines]
+  plt.plot(TPR_all[i][0], Prec_all[i][0], lw=3, color= colors[count2], alpha=1, label = i)
+  plt.fill_between(TPR_all[i][0], Prec_all[i][0]-Prec_all[i][1], Prec_all[i][0]+Prec_all[i][1], facecolor=colors[count2], alpha=0.3, linewidth = 0)
   count2 += 1
 plt.plot([0,1],[0.5,0.5],'r--', lw=2)
 plt.legend(loc='upper right')
@@ -125,4 +130,4 @@ filename = SAVE + "_PRcurve.png"
 plt.savefig(filename)
 plt.close()
 
-
+print("Done!")
