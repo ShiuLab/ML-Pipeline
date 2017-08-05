@@ -1,6 +1,14 @@
 # ML-Pipeline
 Scripts for Shiu Lab Machine Learning
 
+## Environment Requirements
+biopython                 1.68
+matplotlib                1.5.1
+numpy                     1.11.3
+pandas                    0.18.1
+python                    3.4.4
+scikit-learn              0.18.1
+scipy                     0.18.1
 
 ## Data Preprocessing
 
