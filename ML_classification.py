@@ -33,7 +33,7 @@ INPUTS:
 OUTPUT:
 	-SAVE_imp           Importance scores for each feature
 	-SAVE_GridSearch    Results from parameter sweep sorted by F1
-	-RESULTS.txt     Accumulates results from all ML runs done in a specific folder - use unique save names! XX = RF or SVC
+	-RESULTS.txt     		Accumulates results from all ML runs done in a specific folder - use unique save names! XX = RF or SVC
 
 """
 
@@ -311,7 +311,7 @@ def main():
 		
 		# For binary predictions
 		if 'importances' in r:
-			imp[count] = r['importances'][0]
+			imp[count] = r['importances']
 		if 'AucRoc' in r:
 			AucRoc_array.append(r['AucRoc'])
 		if 'AucPRc' in r:
@@ -346,14 +346,24 @@ def main():
 			df_proba.insert(loc=1, column = class_nm+'_score_stdev', value = df_proba[class_proba_cols].std(axis=1))
 			summary_cols.insert(0,class_nm+'_score_stdev')
 		
+		mc_score_columns = []
 		for class_nm in reversed(classes):
+			mc_score_columns.append(class_nm+'_score_Median')
 			class_proba_cols = [c for c in df_proba.columns if c.startswith(class_nm+'_score_')]
 			df_proba.insert(loc=1, column = class_nm+'_score_Median', value = df_proba[class_proba_cols].median(axis=1))
 			summary_cols.insert(0,class_nm+'_score_Median')
+		df_proba.insert(loc=1, column = 'Prediction', value = df_proba[mc_score_columns].idxmax(axis=1))
+		df_proba['Prediction'] = df_proba.Prediction.str.replace('_score_Median','')
 		
-		print(summary_cols)
-		# df_proba.insert(loc=1, column = "Predicted_max", value = df_proba['Class'])
 		
+		# Summarize % of each class predicted as POS and NEG		
+		summary_df_proba = df_proba[[class_col, 'Prediction', class_nm+'_score_Median']].groupby([class_col, 'Prediction']).agg('count').unstack(level=1)
+		summary_df_proba.columns = summary_df_proba.columns.droplevel()
+		summary_df_proba['n_total'] = summary_df_proba[classes].sum(axis=1)
+		for class_nm in classes:
+			summary_df_proba[str(class_nm) + '_perc'] = summary_df_proba[class_nm]/summary_df_proba['n_total']
+
+
 		scores_file = SAVE + "_scores.txt"
 		out_scores = open(scores_file,"w")
 		if short_scores == True:
@@ -362,6 +372,7 @@ def main():
 			out_scores.write("#ID\t"+pd.DataFrame.to_csv(df_proba,sep="\t").strip()+"\n")
 		out_scores.close()
 		
+		print(df_proba.head())
 		f1 = pd.DataFrame(f1_array)
 		f1.columns = f1.iloc[0]
 		f1 = f1[1:]
@@ -380,35 +391,21 @@ def main():
 
 
 		# Save detailed results file 
-		out = open(SAVE + "_results.txt", 'w')
-		out.write('%s\nID: %s\nTag: %s\nAlgorithm: %s\nTrained on classes: %s\nApplied to: %s\nNumber of features: %i\n' % (
-			timestamp, SAVE, TAG, ALG, classes, apply, n_features))
-		out.write('Min class size: %i\nCV folds: %i\nNumber of balanced datasets: %i\nGrid Search Used: %s\nParameters used:%s\n' % (
-			min_size, cv_num, n, GS, parameters_used))
+		with open(SAVE + "_results.txt", 'w') as out:
+			out.write('%s\nID: %s\nTag: %s\nAlgorithm: %s\nTrained on classes: %s\nApplied to: %s\nNumber of features: %i\n' % (
+				timestamp, SAVE, TAG, ALG, classes, apply, n_features))
+			out.write('Min class size: %i\nCV folds: %i\nNumber of balanced datasets: %i\nGrid Search Used: %s\nParameters used:%s\n' % (
+				min_size, cv_num, n, GS, parameters_used))
 
-		out.write('\nMetric\tMean\tSD\nAccuracy\t%05f\t%05f\nF1_macro\t%05f\t%05f\n' % (AC, AC_std, MacF1, MacF1_std))
-		for cla in f1.columns:
-			if 'M_F1' not in cla:
-				out.write('%s\t%05f\t%05f\n' % (cla, np.mean(f1[cla]), np.std(f1[cla])))
+			out.write('\nMetric\tMean\tSD\nAccuracy\t%05f\t%05f\nF1_macro\t%05f\t%05f\n' % (AC, AC_std, MacF1, MacF1_std))
+			for cla in f1.columns:
+				if 'M_F1' not in cla:
+					out.write('%s\t%05f\t%05f\n' % (cla, np.mean(f1[cla]), np.std(f1[cla])))
 		
-		
-		# Write prediction percentages
-		pred_percent_dict = ML.fun.TallyPredictions_MultiClass(scores_file,classes)
-		out.write("\nClass predictions:\nClass\tn")
-		for class_nm in classes:
-			out.write("\t%s count"%(class_nm))
-		for class_nm in classes:
-			out.write("\tpercent %s"%(class_nm))
-		out.write("\n")
-		
-		for class_nm in pred_percent_dict:
-			n,count_l,percent_l = pred_percent_dict[class_nm]
-			out.write("%s\t%s\t%s\t%s\n"%(class_nm,n,"\t".join(count_l),"\t".join(percent_l)))
-
-		out.write('\nMean Balanced Confusion Matrix:\n')
-		out.close()
-		cm_mean.to_csv(SAVE + "_results.txt", mode='a', sep='\t')
-
+			out.write('\nMean Balanced Confusion Matrix:\n')
+			cm_mean.to_csv(out, mode='a', sep='\t')
+			out.write('\n\nCount and percent of instances of each class (row) predicted as a class (col):\n')
+			summary_df_proba.to_csv(out, mode='a', header=True, sep='\t')
 
 
 ###### Binary Prediction Output ######
@@ -424,22 +421,31 @@ def main():
 		
 		proba_columns = [c for c in df_proba.columns if c.startswith('score_')]
 		
-		df_proba.insert(loc=1, column = 'Median', value = df_proba[proba_columns].median(axis=1))
-		# df_proba_out.insert(loc=2, column = 'Mean', value = df_proba[proba_columns].mean(axis=1))
+		#df_proba.insert(loc=1, column = 'Median', value = df_proba[proba_columns].median(axis=1))
+		df_proba.insert(loc=1, column = 'Mean', value = df_proba[proba_columns].mean(axis=1))
 		df_proba.insert(loc=2, column = 'stdev', value = df_proba[proba_columns].std(axis=1))
 		Pred_name =  'Predicted_' + str(final_threshold)
 		df_proba.insert(loc=3, column = Pred_name, value = df_proba['Class'])
-		df_proba[Pred_name][df_proba.Median >= final_threshold] = POS
-		df_proba[Pred_name][df_proba.Median < final_threshold] = NEG
+		df_proba[Pred_name][df_proba.Mean >= final_threshold] = POS
+		df_proba[Pred_name][df_proba.Mean < final_threshold] = NEG
 		
+		# Summarize % of each class predicted as POS and NEG		
+		summary_df_proba = df_proba[[class_col, Pred_name, 'Mean']].groupby([class_col, Pred_name]).agg('count').unstack(level=1)
+		summary_df_proba.columns = summary_df_proba.columns.droplevel()
+		summary_df_proba['n_total'] = summary_df_proba[POS] + summary_df_proba[NEG]
+		summary_df_proba[str(POS) + '_perc'] = summary_df_proba[POS]/summary_df_proba['n_total']
+		summary_df_proba[str(NEG) + '_perc'] = summary_df_proba[NEG]/summary_df_proba['n_total']
+		
+
 		scores_file = SAVE + "_scores.txt"
 		out_scores = open(scores_file,"w")
 		if short_scores == True:
-			out_scores.write("#ID\t"+pd.DataFrame.to_csv(df_proba[["Class","Median","stdev",Pred_name]],sep="\t").strip()+"\n")
+			out_scores.write("#ID\t"+pd.DataFrame.to_csv(df_proba[["Class","Mean","stdev",Pred_name]],sep="\t").strip()+"\n")
 		else:
 			out_scores.write("#ID\t"+pd.DataFrame.to_csv(df_proba,sep="\t").strip()+"\n")
 		out_scores.close()
 		# df_proba.to_csv(SAVE + "_scores.txt", sep="\t")
+		
 		
 		
 		# Get model preformance scores using final_threshold
@@ -481,33 +487,24 @@ def main():
 			'\t'.join(str(x) for x in FP), '\t'.join(str(x) for x in FN)))
 
 		# Save detailed results file 
-		out = open(SAVE + "_results.txt", 'w')
-		out.write('%s\nID: %s\nTag: %s\nAlgorithm: %s\nTrained on classes: %s\nApplied to: %s\nNumber of features: %i\n' % (
-			timestamp, SAVE, TAG, ALG, classes, apply, n_features))
-		out.write('Min class size: %i\nCV folds: %i\nNumber of balanced datasets: %i\nGrid Search Used: %s\nParameters used:%s\n' % (
-			min_size, cv_num, n, GS, parameters_used))
-		
-		out.write('\nPrediction threshold: %s\n'%final_threshold)
-		out.write('\nMetric\tMean\tSD\tSE\n')
-		out.write('AucROC\t%s\nAucPRc\t%s\nAccuracy\t%s\nF1\t%s\nPrecision\t%s\nTPR\t%s\nFPR\t%s\nFNR\t%s\n' % (
-			'\t'.join(str(x) for x in ROC),'\t'.join(str(x) for x in PRc), '\t'.join(str(x) for x in Ac), '\t'.join(str(x) for x in F1),
-			'\t'.join(str(x) for x in Pr), '\t'.join(str(x) for x in TPR), '\t'.join(str(x) for x in FPR), '\t'.join(str(x) for x in FNR)))
-		out.write('TP\t%s\nTN\t%s\nFP\t%s\nFN\t%s\n' % (
-			'\t'.join(str(x) for x in TP), '\t'.join(str(x) for x in TN), '\t'.join(str(x) for x in FP), '\t'.join(str(x) for x in FN)))
-		
-		
-		# Write prediction percentages
-		
-		pred_percent_dict = ML.fun.TallyPredictions_Binary(scores_file,POS,NEG)
-		out.write("\nClass predictions:\nClass\tn\tPos count\tNeg count\t% Pos\t% Neg\n")
-		for class_nm in pred_percent_dict:
-			n,count_l,percent_l = pred_percent_dict[class_nm]
-			# out.write(class_nm+"\t"+"\t".join(pred_stats)+"\n")
-			out.write("%s\t%s\t%s\t%s\n"%(class_nm,n,"\t".join(count_l),"\t".join(percent_l)))
-		
-		out.write('\n\nMean Balanced Confusion Matrix:\n')
-		out.close()
-		cm_mean.to_csv(SAVE + "_results.txt", mode='a', sep='\t')
+		with open(SAVE + "_results.txt", 'w') as out:
+			out.write('%s\nID: %s\nTag: %s\nAlgorithm: %s\nTrained on classes: %s\nApplied to: %s\nNumber of features: %i\n' % (
+				timestamp, SAVE, TAG, ALG, classes, apply, n_features))
+			out.write('Min class size: %i\nCV folds: %i\nNumber of balanced datasets: %i\nGrid Search Used: %s\nParameters used:%s\n' % (
+				min_size, cv_num, n, GS, parameters_used))
+			
+			out.write('\nPrediction threshold: %s\n'%final_threshold)
+			out.write('\nMetric\tMean\tSD\tSE\n')
+			out.write('AucROC\t%s\nAucPRc\t%s\nAccuracy\t%s\nF1\t%s\nPrecision\t%s\nTPR\t%s\nFPR\t%s\nFNR\t%s\n' % (
+				'\t'.join(str(x) for x in ROC),'\t'.join(str(x) for x in PRc), '\t'.join(str(x) for x in Ac), '\t'.join(str(x) for x in F1),
+				'\t'.join(str(x) for x in Pr), '\t'.join(str(x) for x in TPR), '\t'.join(str(x) for x in FPR), '\t'.join(str(x) for x in FNR)))
+			out.write('TP\t%s\nTN\t%s\nFP\t%s\nFN\t%s\n' % (
+				'\t'.join(str(x) for x in TP), '\t'.join(str(x) for x in TN), '\t'.join(str(x) for x in FP), '\t'.join(str(x) for x in FN)))
+			out.write('\n\nMean Balanced Confusion Matrix:\n')
+			cm_mean.to_csv(out, mode='a', sep='\t')
+			out.write('\n\nCount and percent of instances of each class (row) predicted as a class (col):\n')
+			summary_df_proba.to_csv(out, mode='a', header=True, sep='\t')
+
 
 		print("\n\n===>  ML Results  <===")
 		print("Accuracy: %03f (+/- stdev %03f)\nF1: %03f (+/- stdev %03f)\nAUC-ROC: %03f (+/- stdev %03f)\nAUC-PRC: %03f (+/- stdev %03f)" % (
