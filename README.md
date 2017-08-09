@@ -1,13 +1,31 @@
 # ML-Pipeline
 Scripts for Shiu Lab Machine Learning
 
+## Environment Requirements
+biopython                 1.68
+matplotlib                1.5.1
+numpy                     1.11.3
+pandas                    0.18.1
+python                    3.4.4
+scikit-learn              0.18.1
+scipy                     0.18.1
 
 ## Data Preprocessing
 
-### Feature Selection
-Available feature selection tools: DecisionTree (uses RandomForest), Chi2.
+### Feature Selection (Azodi)
+Available feature selection tools: RandomForest, Chi2, LASSO (L1 penalty), enrichement (Fisher's Exact test).
+
+Example:
 <pre><code>export PATH=/mnt/home/azodichr/miniconda3/bin:$PATH
-python Feature_Selection_sklearn.py -df [path/to/dataframe] -f [Chi2/DecisionTree] -n [Int or Fraction]</code></pre>
+python Feature_Selection_sklearn.py -df [path/to/dataframe] -f [rf/chi2/lasso/fet] -n [needed for chi2/rf] -p [needed for LASSO/FET] -type [needed for LASSO] -list T </code></pre>
+Use -list T/F to either just save a list of selected features (can use as -feat input during model building) or a filtered data frame
+
+### Impute Data (Moore)
+Available imputation methods:
+
+Example:
+<pre><code>export python impute_data.py -df [path/to/dataframe] -dtype [] -mv [] </code></pre>
+
 
 ## Building Models
 
@@ -34,6 +52,14 @@ Use this code to build plots with multiple results files.
 <pre><code>export PATH=/mnt/home/azodichr/miniconda3/bin:$PATH
 python ML_plots.py [SAVE_NAME] name1 [Path_to_1st_scores_file] name3 [Path_to_2nd_scores_file] etc.</code></pre>
 
+### Compare classifiers (Venn-Diagrams)
+Given a set of *_scores.txt results files, output a list of which instances were classified correctly and which incorrectly and summarize with a table of overlaps.
+Example:
+<pre><code>export PATH=/mnt/home/azodichr/miniconda3/bin:$PATH
+python compare_classifiers.py -scores [comma sep list of scores files] -ids [comma sep list of classifier names] -save [out_name]</code></pre>
+
+
+
 ## TO DO LIST
 
 - Make pipeline for regression
@@ -43,3 +69,4 @@ python ML_plots.py [SAVE_NAME] name1 [Path_to_1st_scores_file] name3 [Path_to_2n
 - Categorical data is throwing errors, as scikit is trying treat it as numeric data
 - Random forest imporance scores are all identical
 - Add validation set hold out option
+
