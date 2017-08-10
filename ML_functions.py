@@ -225,18 +225,14 @@ class fun(object):
 		
 		# Determine the best threshold cutoff for the balanced run
 		y1 = y.replace(to_replace = [POS, NEG], value = [1,0])
-		max_f1 = [-1,-1]
+		max_f1 = -1
 		max_f1_thresh = ''
 		for thr in np.arange(0.01, 1, 0.01):
 			thr_pred = scores.copy()
 			thr_pred[thr_pred>=thr] = 1
 			thr_pred[thr_pred<thr] = 0
-			f1 = f1_score(y1, thr_pred, average=None)	# Returns F1 for each class
-			# try:
-				# f1 = f1_score(y1, thr_pred, average=None)	# Returns F1 for each class
-			# except UndefinedMetricWarning: # THIS DOESN"T GET FLAGGED
-				# f1 = 0
-			if list(f1)[POS_IND] > list(max_f1)[POS_IND]:
+			f1 = f1_score(y1, thr_pred, pos_label=1)	# Returns F1 for positive class
+			if f1 > max_f1:
 				max_f1 = f1
 				max_f1_thresh = thr
 		
@@ -282,23 +278,28 @@ class fun(object):
 		
 		TP,TN,FP,FN,TPR,FPR,FNR,Precision,Accuracy,F1  = [],[],[],[],[],[],[],[],[],[]
 		
-		
 		df_proba_thresh = df_proba.copy()
+		print(df_proba_thresh.head())
 		proba_columns = [c for c in df_proba_thresh.columns if c.startswith('score_')]
+		print(proba_columns)
 		for proba_column in proba_columns:
-			df_proba_thresh[df_proba[proba_column] >= final_threshold] = POS
-			df_proba_thresh[df_proba[proba_column] < final_threshold] = NEG
+			df_proba_thresh[proba_column] = np.where(df_proba_thresh[proba_column] > final_threshold, POS,NEG)
+			#print(proba_column)
+			#df_proba_thresh[proba_column] = df_proba_thresh[proba_column] >= final_threshold] = POS
+			#df_proba_thresh[df_proba_thresh[proba_column] < final_threshold] = NEG
 		balanced_count = 0
-		
+		print(df_proba_thresh.head())
+
 		# Get predictions scores from the balanced runs using the final threshold
 		for i in proba_columns:
 
 			# Get y and yhat for instances that were in the balanced dataset
-			y = df_proba_thresh.ix[balanced_ids[balanced_count], 'Class'] #,'Class']
+			y = df_proba_thresh.ix[balanced_ids[balanced_count], 'Class'] 
 			yhat = df_proba_thresh.ix[balanced_ids[balanced_count], i]
 			balanced_count += 1
 
 			matrix = confusion_matrix(y, yhat, labels = [POS,NEG])
+			print(matrix)
 			TP1, FP1, TN1, FN1 = matrix[0,0], matrix[1,0], matrix[1,1], matrix[0,1]
 
 			TP.append(TP1)

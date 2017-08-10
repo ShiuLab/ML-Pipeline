@@ -372,7 +372,6 @@ def main():
 			out_scores.write("#ID\t"+pd.DataFrame.to_csv(df_proba,sep="\t").strip()+"\n")
 		out_scores.close()
 		
-		print(df_proba.head())
 		f1 = pd.DataFrame(f1_array)
 		f1.columns = f1.iloc[0]
 		f1 = f1[1:]
@@ -410,7 +409,7 @@ def main():
 
 ###### Binary Prediction Output ######
 	else: 
-		# Get AUC for ROC and PR curve
+		# Get AUC for ROC and PR curve (mean, sd, se)
 		ROC = [np.mean(AucRoc_array), np.std(AucRoc_array), np.std(AucRoc_array)/np.sqrt(len(AucRoc_array))]
 		PRc = [np.mean(AucPRc_array), np.std(AucPRc_array), np.std(AucPRc_array)/np.sqrt(len(AucPRc_array))]
 		
@@ -418,9 +417,8 @@ def main():
 		final_threshold = round(np.mean(threshold_array),2)
 
 		# Determine final prediction call - using the final_threshold on the mean predicted probability.
-		
 		proba_columns = [c for c in df_proba.columns if c.startswith('score_')]
-		
+		print(proba_columns)
 		#df_proba.insert(loc=1, column = 'Median', value = df_proba[proba_columns].median(axis=1))
 		df_proba.insert(loc=1, column = 'Mean', value = df_proba[proba_columns].mean(axis=1))
 		df_proba.insert(loc=2, column = 'stdev', value = df_proba[proba_columns].std(axis=1))
