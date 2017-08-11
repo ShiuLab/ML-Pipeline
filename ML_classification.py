@@ -49,7 +49,8 @@ def main():
 	
 	# Default code parameters
 	n, FEAT, CL_TRAIN, apply, n_jobs, class_col, CM, POS, plots, cv_num, TAG, SAVE, MIN_SIZE, short_scores = 100, 'all', 'all','none', 1, 'Class', 'False', 1, 'False', 10, '', '', '', False
-	
+	THRSHD_test = 'F1'
+
 	# Default parameters for Grid search
 	GS, gs_score = 'F', 'roc_auc'
 	
@@ -65,7 +66,6 @@ def main():
 	for i in range (1,len(sys.argv),2):
 		if sys.argv[i] == "-df":
 			DF = sys.argv[i+1]
-			# SAVE = DF
 		elif sys.argv[i] == '-save':
 			SAVE = sys.argv[i+1]
 		elif sys.argv[i] == '-feat':
@@ -93,8 +93,6 @@ def main():
 			ALG = sys.argv[i+1]
 		elif sys.argv[i] == "-cv":
 			cv_num = int(sys.argv[i+1])
-		elif sys.argv[i] == "-n_jobs":
-			n_jobs = int(sys.argv[i+1])
 		elif sys.argv[i] == "-cm":
 			CM = sys.argv[i+1]
 		elif sys.argv[i] == "-plots":
@@ -103,7 +101,9 @@ def main():
 			POS = sys.argv[i+1]
 		elif sys.argv[i] == "-tag":
 			TAG = sys.argv[i+1]
-		elif sys.argv[i] == "-p":
+		elif sys.argv[i] == "-threshold_test":
+			THRSHD_test = sys.argv[i+1]
+		elif sys.argv[i] == "-n_jobs" or sys.argv[i] == "-p":
 			n_jobs = int(sys.argv[i+1])
 		elif sys.argv[i] == "-short":
 			scores_len = sys.argv[i+1]
@@ -282,7 +282,7 @@ def main():
 			clf = ML.fun.DefineClf_LogReg(penalty, C, intercept_scaling)
 		
 		# Run ML algorithm on balanced datasets.
-		result,current_scores = ML.fun.BuildModel_Apply_Performance(df1, clf, cv_num, df_notSel, apply_unk, df_unknowns, classes, POS, NEG, j, ALG)
+		result,current_scores = ML.fun.BuildModel_Apply_Performance(df1, clf, cv_num, df_notSel, apply_unk, df_unknowns, classes, POS, NEG, j, ALG,THRSHD_test)
 		results.append(result)
 		df_proba = pd.concat([df_proba,current_scores], axis = 1)
 
@@ -418,21 +418,27 @@ def main():
 
 		# Determine final prediction call - using the final_threshold on the mean predicted probability.
 		proba_columns = [c for c in df_proba.columns if c.startswith('score_')]
-		print(proba_columns)
-		#df_proba.insert(loc=1, column = 'Median', value = df_proba[proba_columns].median(axis=1))
+		
+		df_proba.insert(loc=1, column = 'Median', value = df_proba[proba_columns].median(axis=1))
 		df_proba.insert(loc=1, column = 'Mean', value = df_proba[proba_columns].mean(axis=1))
 		df_proba.insert(loc=2, column = 'stdev', value = df_proba[proba_columns].std(axis=1))
 		Pred_name =  'Predicted_' + str(final_threshold)
 		df_proba.insert(loc=3, column = Pred_name, value = df_proba['Class'])
-		df_proba[Pred_name][df_proba.Mean >= final_threshold] = POS
-		df_proba[Pred_name][df_proba.Mean < final_threshold] = NEG
+		df_proba[Pred_name] = np.where(df_proba['Mean'] >= final_threshold, POS,NEG)
 		
+
 		# Summarize % of each class predicted as POS and NEG		
 		summary_df_proba = df_proba[[class_col, Pred_name, 'Mean']].groupby([class_col, Pred_name]).agg('count').unstack(level=1)
 		summary_df_proba.columns = summary_df_proba.columns.droplevel()
-		summary_df_proba['n_total'] = summary_df_proba[POS] + summary_df_proba[NEG]
+		try:
+			summary_df_proba['n_total'] = summary_df_proba[POS] + summary_df_proba[NEG]
+			summary_df_proba[str(NEG) + '_perc'] = summary_df_proba[NEG]/summary_df_proba['n_total']
+		except:
+			summary_df_proba['n_total'] = summary_df_proba[POS]
+			summary_df_proba[str(NEG) + '_perc'] = 0
+			print('Warning: No instances were classified as negative!')	
 		summary_df_proba[str(POS) + '_perc'] = summary_df_proba[POS]/summary_df_proba['n_total']
-		summary_df_proba[str(NEG) + '_perc'] = summary_df_proba[NEG]/summary_df_proba['n_total']
+		
 		
 
 		scores_file = SAVE + "_scores.txt"
