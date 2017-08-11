@@ -229,7 +229,7 @@ class fun(object):
 		POS/NEG from the prediction probabilities by maximizing the f1_score. Then calcuates 
 		the area under the ROC and PRc 
 		"""
-		from sklearn.metrics import f1_score, roc_auc_score, average_precision_score, confusion_matrix
+		from sklearn.metrics import f1_score, roc_auc_score, accuracy_score, average_precision_score, confusion_matrix
 		
 		# Gather balanced model scoring metrics
 		cm = confusion_matrix(y, cv_pred, labels=classes)
@@ -245,8 +245,8 @@ class fun(object):
 			if sum(thr_pred) > 1: # Eliminates cases where all predictions are negative and the f1 and auROC are undefined
 				if THRSHD_test.lower() == 'f1' or THRSHD_test.lower() == 'fmeasure':
 					f1 = f1_score(y1, thr_pred, pos_label=1)	# Returns F1 for positive class
-				elif THRSHD_test.lower() == 'aucroc' or THRSHD_test.lower() == 'auroc' or THRSHD_test.lower() == 'auc-roc':
-					f1 = roc_auc_score(y1, thr_pred)	# Returns F1 for positive class
+				elif THRSHD_test.lower() == 'acc' or THRSHD_test.lower() == 'a' or THRSHD_test.lower() == 'accuracy':
+					f1 = accuracy_score(y1, thr_pred)  # Returns accuracy score (favors threshold with fewer FP)
 				else:
 					print('%s is not a scoring option for model thresholding' % THRSHD_test)
 					exit()

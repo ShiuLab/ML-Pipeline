@@ -23,6 +23,7 @@ INPUTS:
 	-tag      String for SAVE name and TAG column in RESULTS.txt output.
 	-feat     Import file with subset of features to use. If invoked,-tag arg is recommended. Default: keep all features.
 	-class    String for column with class. Default = Class
+	-threshold_test   What model score to use for setting the optimal threshold (Default = F1. Also avilable: accuracy)
 	-save     Adjust save name prefix. Default = [df]_[alg]_[tag (if used)], CAUTION: will overwrite!
 	-short    Set to True to output only the median and std dev of prediction scores, default = full prediction scores
 	
