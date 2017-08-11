@@ -311,7 +311,10 @@ def main():
 		
 		# For binary predictions
 		if 'importances' in r:
-			imp[count] = r['importances']
+			if ALG.lower() == 'rf':
+				imp[count] = r['importances']
+			else:
+				imp[count] = r['importances'][0]
 		if 'AucRoc' in r:
 			AucRoc_array.append(r['AucRoc'])
 		if 'AucPRc' in r:
@@ -444,7 +447,7 @@ def main():
 		scores_file = SAVE + "_scores.txt"
 		out_scores = open(scores_file,"w")
 		if short_scores == True:
-			out_scores.write("#ID\t"+pd.DataFrame.to_csv(df_proba[["Class","Mean","stdev",Pred_name]],sep="\t").strip()+"\n")
+			out_scores.write("#ID\t"+pd.DataFrame.to_csv(df_proba[["Class","Mean","Median","stdev",Pred_name]],sep="\t").strip()+"\n")
 		else:
 			out_scores.write("#ID\t"+pd.DataFrame.to_csv(df_proba,sep="\t").strip()+"\n")
 		out_scores.close()
@@ -477,7 +480,7 @@ def main():
 		
 		if not os.path.isfile('RESULTS.txt'):
 			out2 = open('RESULTS.txt', 'a')
-			out2.write('DateTime\tID\tTag\tAlg\tClasses\tFeatureNum\tBalancedSize\tCVfold\tBalancedRuns\tAUCROC\tAUCROC_sd\ttAUCROC_se\t')
+			out2.write('DateTime\tID\tTag\tAlg\tClasses\tFeatureNum\tBalancedSize\tCVfold\tBalancedRuns\tAUCROC\tAUCROC_sd\tAUCROC_se\t')
 			out2.write('AUCPRc\tAUCPRc_sd\tAUCPRc_se\tAc\tAc_sd\tAc_se\tF1\tF1_sd\tF1_se\tPr\tPr_sd\tPr_se\tTPR\tTPR_sd\tTPR_se\t')
 			out2.write('FPR\tFPR_sd\tFPR_se\tFNR\tFNR_sd\tFNR_se\tTP\tTP_sd\tTP_se\tTN\tTN_sd\tTN_se\tFP\tFP_sd\tFP_se\t')
 			out2.write('FN\tFN_sd\tFN_se\n')
