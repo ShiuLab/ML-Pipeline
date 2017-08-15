@@ -40,6 +40,7 @@ class fun(object):
 		return bal_list
 	
 	# def GridSearch(df, balanced_list, SAVE, ALG, classes, min_size, gs_score, gs_n, n_jobs):
+	
 	def GridSearch(df, SAVE, ALG, classes, min_size, gs_score, n, cv_num, n_jobs, POS, NEG):
 		""" Perform a parameter sweep using grid search CV implemented in SK-learn
 		"""
@@ -163,9 +164,10 @@ class fun(object):
 			# current_scores = pd.concat([current_scores,df_unk_scores], axis = 0)
 		# return current_scores
 	
-	def BuildModel_Apply_Performance(df, clf, cv_num, df_notSel, apply_unk, df_unknowns, classes, POS, NEG, j, ALG):
+	def BuildModel_Apply_Performance(df, clf, cv_num, df_notSel, apply_unk, df_unknowns, classes, POS, NEG, j, ALG, THRSHD_test):
 		from sklearn.model_selection import cross_val_predict
 		
+		# Data from balanced dataframe
 		y = df['Class']
 		X = df.drop(['Class'], axis=1) 
 
@@ -189,6 +191,9 @@ class fun(object):
 				i += 1
 			scores = cv_proba[:,POS_IND]
 
+			# Generate run statistics from balanced dataset scores
+			result = fun.Performance(y, cv_pred, scores, clf, classes, POS, POS_IND, NEG, ALG, THRSHD_test)
+
 			#Generate data frame with all scores
 			score_columns=["score_%s"%(j)]
 			df_sel_scores = pd.DataFrame(data=cv_proba[:,POS_IND],index=df.index,columns=score_columns)
@@ -197,9 +202,12 @@ class fun(object):
 			if apply_unk == True:
 				df_unk_scores = pd.DataFrame(data=unk_proba[:,POS_IND],index=df_unknowns.index,columns=score_columns)
 				current_scores =  pd.concat([current_scores,df_unk_scores], axis = 0)
-			result = fun.Performance(y, cv_pred, scores, clf, classes, POS, POS_IND, NEG, ALG)
+			
 		
 		else:
+			# Generate run statistics from balanced dataset scores
+			result = fun.Performance_MC(y, cv_pred, classes)
+
 			#Generate data frame with all scores
 			score_columns = []
 			for clss in classes:
@@ -213,31 +221,39 @@ class fun(object):
 				current_scores =  pd.concat([current_scores,df_unk_scores], axis = 0)
 			
 			
-			result = fun.Performance_MC(y, cv_pred, classes)
+			
 		return result,current_scores
 
-	def Performance(y, cv_pred, scores, clf, classes, POS, POS_IND, NEG, ALG):
-		from sklearn.metrics import f1_score, roc_auc_score, average_precision_score, confusion_matrix
+	def Performance(y, cv_pred, scores, clf, classes, POS, POS_IND, NEG, ALG, THRSHD_test):
+		""" For binary predictions: This function calculates the best threshold for defining
+		POS/NEG from the prediction probabilities by maximizing the f1_score. Then calcuates 
+		the area under the ROC and PRc 
+		"""
+		from sklearn.metrics import f1_score, roc_auc_score, accuracy_score, average_precision_score, confusion_matrix
 		
 		# Gather balanced model scoring metrics
 		cm = confusion_matrix(y, cv_pred, labels=classes)
 		
 		# Determine the best threshold cutoff for the balanced run
 		y1 = y.replace(to_replace = [POS, NEG], value = [1,0])
-		max_f1 = [-1,-1]
+		max_f1 = -1
 		max_f1_thresh = ''
 		for thr in np.arange(0.01, 1, 0.01):
 			thr_pred = scores.copy()
 			thr_pred[thr_pred>=thr] = 1
 			thr_pred[thr_pred<thr] = 0
-			f1 = f1_score(y1, thr_pred, average=None)	# Returns F1 for each class
-			# try:
-				# f1 = f1_score(y1, thr_pred, average=None)	# Returns F1 for each class
-			# except UndefinedMetricWarning: # THIS DOESN"T GET FLAGGED
-				# f1 = 0
-			if list(f1)[POS_IND] > list(max_f1)[POS_IND]:
-				max_f1 = f1
-				max_f1_thresh = thr
+			if sum(thr_pred) > 1: # Eliminates cases where all predictions are negative and the f1 and auROC are undefined
+				if THRSHD_test.lower() == 'f1' or THRSHD_test.lower() == 'fmeasure':
+					f1 = f1_score(y1, thr_pred, pos_label=1)	# Returns F1 for positive class
+				elif THRSHD_test.lower() == 'acc' or THRSHD_test.lower() == 'a' or THRSHD_test.lower() == 'accuracy':
+					f1 = accuracy_score(y1, thr_pred)  # Returns accuracy score (favors threshold with fewer FP)
+				else:
+					print('%s is not a scoring option for model thresholding' % THRSHD_test)
+					exit()
+
+				if f1 > max_f1:
+					max_f1 = f1
+					max_f1_thresh = thr
 		
 		# Calculate AUC_ROC and AUC_PRC (based on scores, so threshold doesn't matter)
 		AucRoc = roc_auc_score(y1, scores) 
@@ -260,7 +276,6 @@ class fun(object):
 					print("Cannot get importance scores")
 					return {'cm':cm, 'threshold':max_f1_thresh,'AucPRc':AucPRc, 'AucRoc':AucRoc, 'MaxF1': max_f1}
 		
-		
 		return {'cm':cm, 'threshold':max_f1_thresh,'AucPRc':AucPRc, 'AucRoc':AucRoc, 'MaxF1': max_f1, 'importances':importances}
 	
 
@@ -273,7 +288,6 @@ class fun(object):
 		macro_f1 = f1_score(y, cv_pred, average='macro')	# 
 		f1 = f1_score(y, cv_pred, average=None)	# Returns F1 for each class
 
-		
 		return {'cm':cm, 'accuracy':accuracy,'macro_f1':macro_f1,'f1_MC':f1}
 
 
@@ -283,23 +297,23 @@ class fun(object):
 		
 		TP,TN,FP,FN,TPR,FPR,FNR,Precision,Accuracy,F1  = [],[],[],[],[],[],[],[],[],[]
 		
-		
 		df_proba_thresh = df_proba.copy()
 		proba_columns = [c for c in df_proba_thresh.columns if c.startswith('score_')]
+
 		for proba_column in proba_columns:
-			df_proba_thresh[df_proba[proba_column] >= final_threshold] = POS
-			df_proba_thresh[df_proba[proba_column] < final_threshold] = NEG
+			df_proba_thresh[proba_column] = np.where(df_proba_thresh[proba_column] > final_threshold, POS,NEG)
 		balanced_count = 0
-		
+
 		# Get predictions scores from the balanced runs using the final threshold
 		for i in proba_columns:
 
 			# Get y and yhat for instances that were in the balanced dataset
-			y = df_proba_thresh.ix[balanced_ids[balanced_count], 'Class'] #,'Class']
+			y = df_proba_thresh.ix[balanced_ids[balanced_count], 'Class'] 
 			yhat = df_proba_thresh.ix[balanced_ids[balanced_count], i]
 			balanced_count += 1
 
 			matrix = confusion_matrix(y, yhat, labels = [POS,NEG])
+			
 			TP1, FP1, TN1, FN1 = matrix[0,0], matrix[1,0], matrix[1,1], matrix[0,1]
 
 			TP.append(TP1)
@@ -437,73 +451,3 @@ class fun(object):
 		plt.savefig(filename) 
 		
 		return 'Confusion matrix plotted.'
-	
-	def TallyPredictions_AddPercentages(pred_dict):
-		for class_nm in pred_dict:
-			counts = pred_dict[class_nm]
-			tot_cnt = sum(counts)
-			
-			count_l = []
-			percent_l = []
-			for count in counts:
-				count_l.append(str(count))
-				per = float(count)/float(tot_cnt)*100
-				percent_l.append(str(round(per,2)))
-			
-			pred_dict[class_nm] = [str(tot_cnt),count_l,percent_l]
-		return pred_dict
-	
-	def TallyPredictions_Binary(scores_file,POS,NEG):
-		pred_percent_dict = {}
-		inp = open(scores_file)
-		hdr = inp.readline()
-		for line in inp:
-			lineLst = line.strip().split("\t")
-			class_nm = lineLst[1]
-			if class_nm not in pred_percent_dict:
-				pred_percent_dict[class_nm] = [0,0] # counts for predicted POS (index 0) and NEG (index 1)
-			
-			pred_class = lineLst[4]
-			if pred_class == POS:
-				pred_percent_dict[class_nm][0] += 1
-			elif pred_class == NEG:
-				pred_percent_dict[class_nm][1] += 1
-			else:
-				id = lineLst[0]
-				print("Predicted class label is neither POS nor NEG!:",id,class_nm,pred_class,POS,NEG)
-		inp.close()
-		
-		pred_percent_dict = fun.TallyPredictions_AddPercentages(pred_percent_dict)
-		
-		return pred_percent_dict
-	
-	def TallyPredictions_MultiClass(scores_file,classes):
-		pred_percent_dict = {}
-		inp = open(scores_file)
-		hdr = inp.readline()
-		for line in inp:
-			lineLst = line.split("\t")
-			class_nm = lineLst[1]
-			if class_nm not in pred_percent_dict:
-				pred_percent_dict[class_nm] = []
-				for clss in classes:
-					pred_percent_dict[class_nm].append(0)
-			median_scores_raw = lineLst[2:2+len(classes)]
-			median_scores = []
-			for median_score in median_scores_raw:
-				median_scores.append(float(median_score))
-			pred_class = ""
-			high_score = 0
-			for i in range(len(classes)):
-				curr_score = median_scores[i]
-				if curr_score > high_score:
-					pred_class = classes[i]
-					high_score = curr_score
-			add_ind = list(classes).index(pred_class)
-			pred_percent_dict[class_nm][add_ind] += 1
-		inp.close()
-		
-		pred_percent_dict = fun.TallyPredictions_AddPercentages(pred_percent_dict)
-		
-		return pred_percent_dict
-
