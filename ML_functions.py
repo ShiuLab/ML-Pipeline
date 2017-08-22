@@ -100,6 +100,8 @@ class fun(object):
 			elif ALG == "LogReg":
 				model = LogisticRegression()
 			
+			if gs_score.lower() == 'auprc':
+				gs_score = 'average_precision'
 			grid_search = GridSearchCV(model, parameters, scoring = gs_score, cv = cv_num, n_jobs = n_jobs, pre_dispatch=2*n_jobs)
 			
 			if len(classes) == 2:
@@ -229,7 +231,7 @@ class fun(object):
 		POS/NEG from the prediction probabilities by maximizing the f1_score. Then calcuates 
 		the area under the ROC and PRc 
 		"""
-		from sklearn.metrics import f1_score, roc_auc_score, accuracy_score, average_precision_score, confusion_matrix
+		from sklearn.metrics import f1_score, roc_auc_score, average_precision_score, accuracy_score, average_precision_score, confusion_matrix
 		
 		# Gather balanced model scoring metrics
 		cm = confusion_matrix(y, cv_pred, labels=classes)
@@ -247,10 +249,12 @@ class fun(object):
 					f1 = f1_score(y1, thr_pred, pos_label=1)	# Returns F1 for positive class
 				elif THRSHD_test.lower() == 'acc' or THRSHD_test.lower() == 'a' or THRSHD_test.lower() == 'accuracy':
 					f1 = accuracy_score(y1, thr_pred)  # Returns accuracy score (favors threshold with fewer FP)
+				elif THRSHD_test.lower() == 'auprc':
+					f1 = average_precision_score(y1, thr_pred)
 				else:
 					print('%s is not a scoring option for model thresholding' % THRSHD_test)
 					exit()
-
+				print(thr,f1)
 				if f1 > max_f1:
 					max_f1 = f1
 					max_f1_thresh = thr

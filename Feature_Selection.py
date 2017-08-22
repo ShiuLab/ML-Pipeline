@@ -23,7 +23,7 @@ OPTIONAL INPUT:
             Fishers: pvalue cut off (Default = 0.05)
             LASSO: If type = r: need alpha value, try 0.01, 0.001. (larger = fewer features selected)
             LASSO: If type = c: need C which controls the sparcity, try 0.01, 0.1 (smaller = fewer features selected)
-  -n        Number of features you would like to keep
+  -n        Number of features you would like to keep for RF or chi2
   -list     T/F Save a list of the selected features (useful for ML_classification.py -feat) (Default: F)
 
 OUTPUT:

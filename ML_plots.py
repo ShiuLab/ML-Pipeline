@@ -21,6 +21,10 @@ plt.switch_backend('agg')
 from sklearn.metrics import roc_curve, auc, confusion_matrix
 
 # 
+if len(sys.argv) <= 1:
+  print(__doc__)
+  exit()
+
 SAVE = sys.argv[1]
 POS = sys.argv[2]
 NEG = sys.argv[3]
@@ -60,7 +64,7 @@ for i in items:
     TPR = []
     precis = []
     name = 'score_' + str(k)
-    y = df_proba.ix[balanced_ids[k], 'Class'] #,'Class']
+    y = df_proba.ix[balanced_ids[k], 'Class'] 
 
     # Get decision matrix & scores at each threshold between 0 & 1
     for j in np.arange(0, 1, 0.01):

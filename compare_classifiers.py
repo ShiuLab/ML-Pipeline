@@ -63,11 +63,21 @@ fn = defaultdict(list)
 count = 0
 tp_total = 0
 for scores_file in scores_files:
+  c2 = 0
   with open(scores_file) as f:
       name = ids[count]
       for l in f:
+          if c2 == 0:
+            print(l)
+            line = l.strip().split('\t')
+            loc_pred = [i for i, s in enumerate(line) if 'Predicted_' in s]
+            print(loc_pred)
+          c2 += 1
           line = l.strip().split('\t')
-          gene, true, pred = line[0], line[1], line[5]
+
+          gene, true, pred = line[0], line[1], line[loc_pred[0]]
+          if c2 == 2:
+            print(gene, true, pred)
           if true == pos:
             if count == 0:
               tp_total += 1     # Add to the count of total number of true positives in the dataframe
@@ -107,9 +117,16 @@ def intersection(*listas):
   return set(listas[0]).intersection(*listas[1:])
 
 if n_comparing == 2:
-  n12 = len(intersection(tp[ids[0]], tp[ids[1]])) 
-  area2 = len(tp[ids[1]]) 
-  area1 = len(tp[ids[0]])  
+  
+  n12 = len(intersection(tp[ids[0]], tp[ids[1]]))
+  genes2 =  (tp[ids[1]])
+  area2 = len(genes2) 
+  genes1 =  (tp[ids[0]])
+  area1 = len(genes1)
+  unique_2 = list(set(genes2) - set(genes1))
+  unique_1 = list(set(genes1) - set(genes2))
+  out1.write('\n\nGenes only correctly predicted as positive by:\n')
+  out1.write('%s: %s\n%s: %s' % (str(ids[0]), ','.join(str(x) for x in unique_1), ids[1],','.join(str(x) for x in unique_2))) 
   venn_diag_list = [area1, area2, n12]
 
 if n_comparing == 3:
@@ -194,5 +211,5 @@ if plot.lower() == 't' or plot.lower() == 'true':
   elif n_comparing == 2:
     labels = venn.get_labels([tp[ids[0]], tp[ids[1]]], fill = ['number'])
     fig, ax = venn.venn2(labels, names = ids)
-  filename = save+'_pred_compared.png'
+  filename = save+'_pred_compared.pdf'
   fig.savefig(filename)
