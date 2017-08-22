@@ -62,11 +62,8 @@ python compare_classifiers.py -scores [comma sep list of scores files] -ids [com
 
 ## TO DO LIST
 
-- Make pipeline for regression
-- Add to preprocessing section to allow for imputing NAs, dropping NAs, normalizing/scaling features, etc
+- Add script for regression models
+- Merge pre-processing scripts so you can deal with NAs, imputations, and one-hot encoding categorical variables in one script.
 - Add additional classification models: Naive Bayes, basic neural network (1-2 layers)
-- Look into perfect TPR/FPR/FNR/FP/FN scores in RESULTS output file
-- Categorical data is throwing errors, as scikit is trying treat it as numeric data
-- Random forest imporance scores are all identical
 - Add validation set hold out option
 
