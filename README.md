@@ -44,9 +44,9 @@ Example:
 
 This script converts a categorical matrix to a binary matrix to run on machine-learning algorithms
 
-<pre><code> python get_cat_as_binmatrix.py <categorical_matrix> </code></pre> 
+<pre><code> python get_cat_as_binmatrix.py [categorical_matrix] </code></pre> 
 
-output: <categorical_matrix>_binary.matrix.txt
+output: [categorical_matrix]_binary.matrix.txt
 
 ## Building Models
 
