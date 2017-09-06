@@ -21,11 +21,32 @@ python Feature_Selection_sklearn.py -df [path/to/dataframe] -f [rf/chi2/lasso/fe
 Use -list T/F to either just save a list of selected features (can use as -feat input during model building) or a filtered data frame
 
 ### Impute Data (Moore)
-Available imputation methods:
+
+This script imputes msising data in a given matrix. Matrices must be separate if data types are different (ie. numeric separate from binary). This script takes at least one matrix, you only need one if you have only one type of data, but if you have multiple types you need to input them separate.
+
+Inputs:
+Data matrix- columns should be gene|Class|feature1|feature2| (-df*)
+
+Data types (-dtype*):
+1. numeric: n
+2. categorical: c
+3. binary: b
+
+Available imputation methods (-mv):
+1. impute data from a random selection from your data distribution (-mv 1)
+2. impute data by using the median for numeric data and the mode for categorical/binary data (-mv 2)
+3. drop all rows with NAs (-mv 0)
 
 Example:
-<pre><code>export python impute_data.py -df [path/to/dataframe] -dtype [] -mv [] </code></pre>
+<pre><code> python impute_data.py -df1 [path/to/dataframe] -dtype1 [n,c,b] -mv [0,1,2] -df2 [path/to/dataframe2] -dtype2 [n,c,b] -df3 [path/to/dataframe3] -dtype3 [n,c,b]</code></pre>
 
+## Convert categorical data to binary
+
+This script converts a categorical matrix to a binary matrix to run on machine-learning algorithms
+
+<pre><code> python get_cat_as_binmatrix.py <categorical_matrix> </code></pre> 
+
+output: <categorical_matrix>_binary.matrix.txt
 
 ## Building Models
 
