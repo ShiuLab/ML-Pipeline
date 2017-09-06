@@ -40,7 +40,7 @@ Available imputation methods (-mv):
 Example:
 <pre><code> python impute_data.py -df1 [path/to/dataframe] -dtype1 [n,c,b] -mv [0,1,2] -df2 [path/to/dataframe2] -dtype2 [n,c,b] -df3 [path/to/dataframe3] -dtype3 [n,c,b]</code></pre>
 
-## Convert categorical data to binary
+### Convert categorical data to binary (Moore)
 
 This script converts a categorical matrix to a binary matrix to run on machine-learning algorithms
 
