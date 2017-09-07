@@ -1,0 +1,305 @@
+"""
+PURPOSE:
+Machine learning classifications implemented in sci-kit learn. 
+
+To access pandas, numpy, and sklearn packages on MSU HPCC first run:
+$ export PATH=/mnt/home/azodichr/miniconda3/bin:$PATH
+
+INPUTS:
+	
+	REQUIRED ALL:
+	-df       Feature & class dataframe for ML. See "" for an example dataframe
+	-alg      Available: RF, SVM (linear), SVMpoly, SVMrbf, LogReg
+	
+	OPTIONAL:
+	-unknown  String in Y that indicates unknown values you want to predict. Leave as none if you don't have unknowns in your data Default = none
+	-gs       Set to True if grid search over parameter space is desired. Default = False
+	-normX		T/F to normalize the features (Default = F (except T for SVM))
+	-normY	  T/F to normalize the predicted value (Default = F)
+	-sep      Set sep for input data (Default = '\t')
+	-cv       # of cross-validation folds. Default = 10
+	-cv_reps  # of times CV predictions are run
+	-p        # of processors. Default = 1
+	-tag      String for SAVE name and TAG column in RESULTS.txt output.
+	-feat     Import file with subset of features to use. If invoked,-tag arg is recommended. Default: keep all features.
+	-Y        String for column with what you are trying to predict. Default = Y
+	-threshold_test   What model score to use for setting the optimal threshold (Default = F1. Also avilable: accuracy)
+	-save     Adjust save name prefix. Default = [df]_[alg]_[tag (if used)], CAUTION: will overwrite!
+	-short    Set to True to output only the median and std dev of prediction scores, default = full prediction scores
+	-df_Y     File with class information. Use only if df contains the features but not the Y values 
+								If more than one column in the class file, specify which column contains Y: -df_class class_file.csv,ColumnName
+	
+	PLOT OPTIONS:
+	-plots    T/F - Do you want to output plots?
+
+OUTPUT:
+	-SAVE_imp           Importance scores for each feature
+	-SAVE_GridSearch    Results from parameter sweep sorted by F1
+	-RESULTS.txt     		Accumulates results from all ML runs done in a specific folder - use unique save names! XX = RF or SVC
+
+"""
+
+import sys, os
+import pandas as pd
+import numpy as np
+from datetime import datetime
+import time
+
+import ML_functions as ML
+
+def main():
+	
+	# Default code parameters
+	n, FEAT, apply, n_jobs, Y_col, plots, cv_num, TAG, SAVE, short_scores = 100, 'all','F', 1, 'Y', 'False', 10, '', '', ''
+	SEP, THRSHD_test, DF_Y, UNKNOWN, normX, normY, cv_reps = '\t','F1', 'ignore', 'none', 'F', 'F', 10
+
+	# Default parameters for Grid search
+	GS, gs_score = 'F', 'neg_mean_squared_error'
+	
+	# Default Random Forest and GBRT parameters
+	n_estimators, max_depth, max_features, learning_rate = 500, 10, "sqrt", 1.0
+	
+	# Default Linear SVC parameters
+	kernel, C, degree, gamma, loss, max_iter = 'linear', 1, 2, 1, 'hinge', "500"
+	
+	# Default Logistic Regression paramemter
+	penalty, C, intercept_scaling = 'l2', 1.0, 1.0
+	
+	for i in range (1,len(sys.argv),2):
+		if sys.argv[i] == "-df":
+			DF = sys.argv[i+1]
+		if sys.argv[i] == "-sep":
+			SEP = sys.argv[i+1]
+		elif sys.argv[i] == '-save':
+			SAVE = sys.argv[i+1]
+		elif sys.argv[i] == '-feat':
+			FEAT = sys.argv[i+1]
+		elif sys.argv[i] == "-gs":
+			GS = sys.argv[i+1]
+		elif sys.argv[i] == '-normX':
+			normX = sys.argv[i+1].lower()
+		elif sys.argv[i] == "-normY":
+			normY = sys.argv[i+1].lower()
+		elif sys.argv[i] == "-gs_score":
+			gs_score = sys.argv[i+1]
+		elif sys.argv[i] == "-Y":
+			Y = sys.argv[i+1]
+		elif sys.argv[i] == "-unknown":
+			UNKNOWN = sys.argv[i+1]
+		elif sys.argv[i] == "-n":
+			n = int(sys.argv[i+1])
+		elif sys.argv[i] == "-b":
+			n = int(sys.argv[i+1])
+		elif sys.argv[i] == "-alg":
+			ALG = sys.argv[i+1]
+		elif sys.argv[i] == "-cv":
+			cv_num = int(sys.argv[i+1])
+		elif sys.argv[i] == "-cv_reps":
+			cv_reps = int(sys.argv[i+1])
+		elif sys.argv[i] == "-plots":
+			plots = sys.argv[i+1]
+		elif sys.argv[i] == "-tag":
+			TAG = sys.argv[i+1]
+		elif sys.argv[i] == "-threshold_test":
+			THRSHD_test = sys.argv[i+1]
+		elif sys.argv[i] == "-df_Y":
+			DF_Y = sys.argv[i+1]
+		elif sys.argv[i] == "-n_jobs" or sys.argv[i] == "-p":
+			n_jobs = int(sys.argv[i+1])
+		elif sys.argv[i] == "-short":
+			scores_len = sys.argv[i+1]
+			if scores_len.lower() == "true" or scores_len.lower() == "t":
+				short_scores = True
+
+	if len(sys.argv) <= 1:
+		print(__doc__)
+		exit()
+	
+	####### Load Dataframe & Pre-process #######
+	
+	df = pd.read_csv(DF, sep=SEP, index_col = 0)
+	y_name = 'Y'
+	# If feature info and class info are in separate files
+	if DF_Y != 'ignore':
+		df_Y_file, df_Y_col = DF_Y.strip().split(',')
+		df_Y = pd.read_csv(df_Y_file, sep=SEP, index_col = 0)
+		df['Y'] = df_Y[df_Y_col]
+		y_name = df_Y_col
+
+	# Specify Y column - default = Class
+	if Y_col != 'Y':
+		df = df.rename(columns = {Y_col:'Y'})
+		y_name = Y_col
+	
+	# Filter out features not in feat file given - default: keep all
+	if FEAT != 'all':
+		with open(FEAT) as f:
+			features = f.read().strip().splitlines()
+			features = ['Y'] + features
+		df = df.loc[:,features]
+	
+	# Remove instances with NaN or NA values
+	df = df.replace("?",np.nan)
+	df = df.dropna(axis=0)
+	
+	# Set up dataframe of unknown instances that the final models will be applied to and drop unknowns from df for model building
+	if UNKNOWN != 'none':
+		df_unknowns = df[(df['Y']==UNKNOWN)]
+		df = df.drop(df_unknowns.index.values)
+		print("Model built using %i instances and applied to %i unknown instances" % (len(df.index), len(df_unknowns.index)))
+		print('!!!!!!! Feature to apply model to unknowns is not built yet. For now this just removes them!!!!!!!')
+	else:
+		print("Model built using %i instances" % len(df.index))
+
+	
+	if SAVE == "":
+		if TAG == "":
+			SAVE = DF + "_" + ALG
+		else:
+			SAVE = DF + "_" + ALG + "_" + TAG
+	
+	# Normalize feature data (normX)
+	if ALG == "SVM" or normX == 't' or normX == 'true':
+		from sklearn import preprocessing
+		y = df['Y']
+		X = df.drop(['Y'], axis=1)
+		min_max_scaler = preprocessing.MinMaxScaler()
+		X_scaled = min_max_scaler.fit_transform(X)
+		df = pd.DataFrame(X_scaled, columns = X.columns, index = X.index)
+		df.insert(loc=0, column = 'Y', value = y)
+
+	# Normalize y variable (normY)
+	if normY == 't' or normY == 'true':
+		print('normY not implemented yet!!!')
+	
+	
+	print("Snapshot of data being used:")
+	print(df.head())
+
+	n_features = len(list(df)) - 1
+	
+	####### Run parameter sweep using a grid search #######
+	
+	if GS.lower() == 'true' or GS.lower() == 't':
+		start_time = time.time()
+		print("\n\n===>  Grid search started  <===") 
+		
+		params2use = ML.fun.RegGridSearch(df, SAVE, ALG, gs_score, cv_num, n_jobs)
+		
+		print("Parameters selected:")
+		for key,val in params2use.items():
+			print("%s: %s" % (key, val))
+			exec(key + '=val')   # Assigns parameters in the params2use dictionary into variables
+
+	else:
+		params2use = "Default parameters used"
+	 
+	####### Run ML models #######
+	start_time = time.time()
+	print("\n\n===>  ML Pipeline started  <===")
+	
+	results = []
+	predictions = pd.DataFrame(data=df['Y'], index=df.index, columns=['Y'])
+
+	for j in range(0,cv_reps): 
+		print("Running %i of %i" % (j+1, cv_reps))
+		rep_name = "rep_" + str(j+1)
+		# Prime classifier object based on chosen algorithm
+		if ALG == "RF":
+			reg = ML.fun.DefineReg_RandomForest(n_estimators,max_depth,max_features,n_jobs,j)
+		elif ALG == "SVM" or ALG == 'SVMrbf' or ALG == 'SVMpoly':
+			reg = ML.fun.DefineReg_SVM(kernel,C,degree,gamma,j)
+		elif ALG == "GBRT":
+			reg = ML.fun.DefineReg_GBRT(learning_rate,max_features,max_depth,n_jobs,j)
+		elif ALG == "LR":
+			reg = ML.fun.DefineReg_LinReg()
+		
+		# Run ML algorithm on balanced datasets.
+		result,cv_pred = ML.fun.Run_Regression_Model(df, reg, cv_num, ALG)
+		results.append(result)
+		predictions[rep_name] = cv_pred
+
+	print("ML Pipeline time: %f seconds" % (time.time() - start_time))
+
+
+	
+	####### Unpack ML results #######
+	timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+	
+	imp = pd.DataFrame(index = list(df.drop(['Y'], axis=1)))
+	mses, evss, r2s, cors = [], [], [], []
+	for r in results:
+		mses.append(r[0])
+		evss.append(r[1])
+		r2s.append(r[2])
+		cors.append(r[3])
+
+	MSE_stats = [np.mean(mses), np.std(mses), np.std(mses)/np.sqrt(len(mses))]
+	EVS_stats = [np.mean(evss), np.std(evss), np.std(evss)/np.sqrt(len(evss))]
+	r2_stats = [np.mean(r2s), np.std(r2s), np.std(r2s)/np.sqrt(len(r2s))]
+	PCC_stats = [np.mean(cors), np.std(cors), np.std(cors)/np.sqrt(len(cors))]
+
+	# Get average predicted value
+	pred_columns = [c for c in predictions.columns if c.startswith('rep_')]
+	predictions.insert(loc=1, column = 'Mean', value = predictions[pred_columns].mean(axis=1))
+	predictions.insert(loc=2, column = 'stdev', value = predictions[pred_columns].std(axis=1))
+
+	scores_file = SAVE + "_scores.txt"
+	if short_scores == True:
+			predictions.to_csv(scores_file, sep='\t', columns=['Y','Mean','stdev'])
+	else:
+		predictions.to_csv(scores_file, sep='\t')
+
+	# Plot results
+	if plots.lower() == 'true' or plots.lower() == 't':
+		print("\nGenerating prediction plot")
+		pr = ML.fun.PlotsReg(predictions, SAVE)
+		
+	# Export importance scores
+	"""try:
+		imp['mean_imp'] = imp.mean(axis=1)
+		imp = imp.sort_values('mean_imp', 0, ascending = False)
+		imp_out = SAVE + "_imp"
+		imp['mean_imp'].to_csv(imp_out, sep = "\t", index=True)
+		# imp['mean_imp'].to_csv(imp_out, sep = ",", index=True)
+	except:
+		pass
+	"""
+		
+	# Save to summary RESULTS file with all models run from the same directory
+	if not os.path.isfile('RESULTS_reg.txt'):
+		out2 = open('RESULTS_reg.txt', 'a')
+		out2.write('DateTime\tID\tTag\tY\tAlg\tNumInstances\tFeatureNum\tCVfold\tCV_rep')
+		out2.write('MSE\tMSE_sd\tMSE_se\tEVS\tEVS_sd\tEVS_se\tr2\tr2_sd\tr2_se\tPCC\tPCC_sd\tPCC_se\n')
+		out2.close()
+
+	out2 = open('RESULTS_reg.txt', 'a')
+	out2.write('%s\t%s\t%s\t%s\t%s\t%i\t%i\t%i\t%i\t%s\t%s\t%s\t%s\n' % (
+		timestamp, SAVE, TAG, y_name, ALG, len(df.index), n_features, cv_num , cv_reps, 
+		'\t'.join(str(x) for x in MSE_stats), '\t'.join(str(x) for x in EVS_stats), 
+		'\t'.join(str(x) for x in r2_stats), '\t'.join(str(x) for x in PCC_stats)))
+
+
+	# Save detailed results file 
+	with open(SAVE + "_results.txt", 'w') as out:
+		out.write('%s\nID: %s\nTag: %s\nPredicting: %s\nAlgorithm: %s\nNumber of Instances: %s\nNumber of features: %i\n' % (
+			timestamp, SAVE, TAG, y_name, ALG, len(df.index), n_features))
+		out.write('CV folds: %i\nCV_reps: %i\nParameters used:%s\n' % (cv_num, cv_reps, params2use))
+		out.write('Metric\tMean\tstd\tSE\n')
+		out.write('MSE\t%s\nEVS\t%s\nR2\t%s\nPCC\t%s\n' % (
+			'\t'.join(str(x) for x in MSE_stats), '\t'.join(str(x) for x in EVS_stats), 
+			'\t'.join(str(x) for x in r2_stats), '\t'.join(str(x) for x in PCC_stats)))
+
+
+	print("\n\n===>  ML Results  <===")
+	print('Metric\tMean\tstd\tSE')
+	print('MSE\t%s\nEVS\t%s\nR2\t%s\nPCC\t%s\n' % (
+		'\t'.join(str(x) for x in MSE_stats), '\t'.join(str(x) for x in EVS_stats), 
+		'\t'.join(str(x) for x in r2_stats), '\t'.join(str(x) for x in PCC_stats)))
+
+
+
+
+if __name__ == '__main__':
+	main()
