@@ -26,6 +26,8 @@ INPUTS:
 	-threshold_test   What model score to use for setting the optimal threshold (Default = F1. Also avilable: accuracy)
 	-save     Adjust save name prefix. Default = [df]_[alg]_[tag (if used)], CAUTION: will overwrite!
 	-short    Set to True to output only the median and std dev of prediction scores, default = full prediction scores
+	-df_class File with class information. Use only if df contains the features but not the classes 
+								If more than one column in the class file, specify which column contains the class: -df_class class_file.csv,ColumnName
 	
 	PLOT OPTIONS:
 	-cm       T/F - Do you want to output the confusion matrix & confusion matrix figure? (Default = False)
@@ -50,7 +52,7 @@ def main():
 	
 	# Default code parameters
 	n, FEAT, CL_TRAIN, apply, n_jobs, class_col, CM, POS, plots, cv_num, TAG, SAVE, MIN_SIZE, short_scores = 100, 'all', 'all','none', 1, 'Class', 'False', 1, 'False', 10, '', '', '', False
-	THRSHD_test = 'F1'
+	SEP, THRSHD_test, DF_CLASS = '\t','F1', 'ignore'
 
 	# Default parameters for Grid search
 	GS, gs_score = 'F', 'roc_auc'
@@ -67,6 +69,8 @@ def main():
 	for i in range (1,len(sys.argv),2):
 		if sys.argv[i] == "-df":
 			DF = sys.argv[i+1]
+		if sys.argv[i] == "-sep":
+			SEP = sys.argv[i+1]
 		elif sys.argv[i] == '-save':
 			SAVE = sys.argv[i+1]
 		elif sys.argv[i] == '-feat':
@@ -104,6 +108,8 @@ def main():
 			TAG = sys.argv[i+1]
 		elif sys.argv[i] == "-threshold_test":
 			THRSHD_test = sys.argv[i+1]
+		elif sys.argv[i] == "-df_class":
+			DF_CLASS = sys.argv[i+1]
 		elif sys.argv[i] == "-n_jobs" or sys.argv[i] == "-p":
 			n_jobs = int(sys.argv[i+1])
 		elif sys.argv[i] == "-short":
@@ -117,8 +123,14 @@ def main():
 	
 	####### Load Dataframe & Pre-process #######
 	
-	df = pd.read_csv(DF, sep='\t', index_col = 0)
+	df = pd.read_csv(DF, sep=SEP, index_col = 0)
 	
+	# If feature info and class info are in separate files
+	if DF_CLASS != 'ignore':
+		df_class_file, df_class_col = DF_CLASS.strip().split(',')
+		df_class = pd.read_csv(df_class_file, sep=SEP, index_col = 0)
+		df['Class'] = df_class[df_class_col]
+
 	# Specify class column - default = Class
 	if class_col != 'Class':
 		df = df.rename(columns = {class_col:'Class'})
