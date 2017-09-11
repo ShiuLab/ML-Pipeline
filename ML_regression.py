@@ -19,6 +19,7 @@ INPUTS:
 	-sep      Set sep for input data (Default = '\t')
 	-cv       # of cross-validation folds. Default = 10
 	-cv_reps  # of times CV predictions are run
+	-cv_set  	File with cv folds defined
 	-p        # of processors. Default = 1
 	-tag      String for SAVE name and TAG column in RESULTS.txt output.
 	-feat     Import file with subset of features to use. If invoked,-tag arg is recommended. Default: keep all features.
@@ -51,7 +52,7 @@ def main():
 	
 	# Default code parameters
 	n, FEAT, apply, n_jobs, Y_col, plots, cv_num, TAG, SAVE, short_scores = 100, 'all','F', 1, 'Y', 'False', 10, '', '', ''
-	SEP, THRSHD_test, DF_Y, UNKNOWN, normX, normY, cv_reps = '\t','F1', 'ignore', 'none', 'F', 'F', 10
+	SEP, THRSHD_test, DF_Y, df_unknowns,UNKNOWN, normX, normY, cv_reps, cv_sets = '\t','F1', 'ignore', 'none','unk', 'F', 'F', 10, 'none'
 
 	# Default parameters for Grid search
 	GS, gs_score = 'F', 'neg_mean_squared_error'
@@ -84,7 +85,7 @@ def main():
 			gs_score = sys.argv[i+1]
 		elif sys.argv[i] == "-Y":
 			Y = sys.argv[i+1]
-		elif sys.argv[i] == "-unknown":
+		elif sys.argv[i] == "-UNKNOWN":
 			UNKNOWN = sys.argv[i+1]
 		elif sys.argv[i] == "-n":
 			n = int(sys.argv[i+1])
@@ -96,6 +97,9 @@ def main():
 			cv_num = int(sys.argv[i+1])
 		elif sys.argv[i] == "-cv_reps":
 			cv_reps = int(sys.argv[i+1])
+		elif sys.argv[i] == "-cv_set":
+			cv_sets = pd.read_csv(sys.argv[i+1], index_col = 0)
+			cv_reps = len(cv_sets.columns)
 		elif sys.argv[i] == "-plots":
 			plots = sys.argv[i+1]
 		elif sys.argv[i] == "-tag":
@@ -143,13 +147,15 @@ def main():
 	df = df.dropna(axis=0)
 	
 	# Set up dataframe of unknown instances that the final models will be applied to and drop unknowns from df for model building
-	if UNKNOWN != 'none':
+	if UNKNOWN in df['Y'].unique():
 		df_unknowns = df[(df['Y']==UNKNOWN)]
+		predictions = pd.DataFrame(data=df['Y'], index=df.index, columns=['Y'])
 		df = df.drop(df_unknowns.index.values)
-		print("Model built using %i instances and applied to %i unknown instances" % (len(df.index), len(df_unknowns.index)))
-		print('!!!!!!! Feature to apply model to unknowns is not built yet. For now this just removes them!!!!!!!')
+		print("Model built using %i instances and applied to %i unknown instances (see _scores file for results)" % (len(df.index), len(df_unknowns.index)))
 	else:
+		predictions = pd.DataFrame(data=df['Y'], index=df.index, columns=['Y'])
 		print("Model built using %i instances" % len(df.index))
+
 
 	
 	if SAVE == "":
@@ -199,7 +205,7 @@ def main():
 	print("\n\n===>  ML Pipeline started  <===")
 	
 	results = []
-	predictions = pd.DataFrame(data=df['Y'], index=df.index, columns=['Y'])
+	imp = pd.DataFrame(index = list(df.drop(['Y'], axis=1)))
 
 	for j in range(0,cv_reps): 
 		print("Running %i of %i" % (j+1, cv_reps))
@@ -215,9 +221,17 @@ def main():
 			reg = ML.fun.DefineReg_LinReg()
 		
 		# Run ML algorithm on balanced datasets.
-		result,cv_pred = ML.fun.Run_Regression_Model(df, reg, cv_num, ALG)
+		result,cv_pred,importance = ML.fun.Run_Regression_Model(df, reg, cv_num, ALG, df_unknowns)
 		results.append(result)
 		predictions[rep_name] = cv_pred
+		
+		try:
+			imp[rep_name] = importance
+		except:
+			try:
+				imp[rep_name] = importance[0]
+			except:
+				print("Cannot parse importance scores!")
 
 	print("ML Pipeline time: %f seconds" % (time.time() - start_time))
 
@@ -226,8 +240,6 @@ def main():
 	####### Unpack ML results #######
 	timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
-	
-	imp = pd.DataFrame(index = list(df.drop(['Y'], axis=1)))
 	mses, evss, r2s, cors = [], [], [], []
 	for r in results:
 		mses.append(r[0])
@@ -257,15 +269,14 @@ def main():
 		pr = ML.fun.PlotsReg(predictions, SAVE)
 		
 	# Export importance scores
-	"""try:
+	try:
 		imp['mean_imp'] = imp.mean(axis=1)
 		imp = imp.sort_values('mean_imp', 0, ascending = False)
 		imp_out = SAVE + "_imp"
 		imp['mean_imp'].to_csv(imp_out, sep = "\t", index=True)
-		# imp['mean_imp'].to_csv(imp_out, sep = ",", index=True)
 	except:
 		pass
-	"""
+
 		
 	# Save to summary RESULTS file with all models run from the same directory
 	if not os.path.isfile('RESULTS_reg.txt'):

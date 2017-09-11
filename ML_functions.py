@@ -309,7 +309,7 @@ class fun(object):
 
 		return result,current_scores
 
-	def Run_Regression_Model(df, reg, cv_num, ALG):
+	def Run_Regression_Model(df, reg, cv_num, ALG, df_unknowns):
 		from sklearn.model_selection import cross_val_predict
 		from sklearn.metrics import mean_squared_error, r2_score, explained_variance_score
 		
@@ -319,15 +319,42 @@ class fun(object):
 
 		# Obtain the predictions using 10 fold cross validation (uses KFold cv by default):
 		cv_pred = cross_val_predict(estimator=reg, X=X, y=y, cv=cv_num)
-
-		# Get performance statistics
+		cv_pred_df = pd.DataFrame(data=cv_pred, index=df.index, columns=['pred'])
+		
+		# Get performance statistics from cross-validation
+		y = y.astype(float)
 		mse = mean_squared_error(y, cv_pred)
 		evs = explained_variance_score(y, cv_pred)
 		r2 = r2_score(y, cv_pred)
 		cor = np.corrcoef(np.array(y), cv_pred)
 		result = [mse, evs, r2, cor[0,1]]
-			
-		return result,cv_pred
+
+		reg.fit(X,y)		
+		
+		# Apply fit model to unknowns
+		if isinstance(df_unknowns, pd.DataFrame):
+			unk_pred = reg.predict(df_unknowns.drop(['Y'], axis=1))
+			unk_pred_df = pd.DataFrame(data=unk_pred, index=df_unknowns.index, columns=['pred'])
+			cv_pred_df = cv_pred_df.append(unk_pred_df)
+
+		# Try to extract importance scores 
+		if ALG == "RF":
+			importances = reg.feature_importances_
+		elif "SVM" in ALG:
+			importances = reg.coef_
+		elif ALG == "LogReg":
+			importances = reg.coef_
+		else:
+			try:
+				importances = reg.feature_importances_
+			except:
+				try:
+					importances = reg.coef_
+				except:
+					importances = "na"
+					print("Cannot get importance scores")
+		
+		return result, cv_pred_df, importances
 
 	def Performance(y, cv_pred, scores, clf, classes, POS, POS_IND, NEG, ALG, THRSHD_test):
 		""" For binary predictions: This function calculates the best threshold for defining
@@ -357,7 +384,6 @@ class fun(object):
 				else:
 					print('%s is not a scoring option for model thresholding' % THRSHD_test)
 					exit()
-				print(thr,f1)
 				if f1 > max_f1:
 					max_f1 = f1
 					max_f1_thresh = thr
