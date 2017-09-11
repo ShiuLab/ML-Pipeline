@@ -69,7 +69,9 @@ def main():
 	for i in range (1,len(sys.argv),2):
 		if sys.argv[i] == "-df":
 			DF = sys.argv[i+1]
-		if sys.argv[i] == "-sep":
+		elif sys.argv[i] == "-df_Y":
+			DF_Y = sys.argv[i+1]
+		elif sys.argv[i] == "-sep":
 			SEP = sys.argv[i+1]
 		elif sys.argv[i] == '-save':
 			SAVE = sys.argv[i+1]
@@ -100,14 +102,14 @@ def main():
 		elif sys.argv[i] == "-cv_set":
 			cv_sets = pd.read_csv(sys.argv[i+1], index_col = 0)
 			cv_reps = len(cv_sets.columns)
+			cv_num = len(cv_sets.iloc[:,0].unique())
+			print(cv_num)
 		elif sys.argv[i] == "-plots":
 			plots = sys.argv[i+1]
 		elif sys.argv[i] == "-tag":
 			TAG = sys.argv[i+1]
 		elif sys.argv[i] == "-threshold_test":
 			THRSHD_test = sys.argv[i+1]
-		elif sys.argv[i] == "-df_Y":
-			DF_Y = sys.argv[i+1]
 		elif sys.argv[i] == "-n_jobs" or sys.argv[i] == "-p":
 			n_jobs = int(sys.argv[i+1])
 		elif sys.argv[i] == "-short":
@@ -155,7 +157,6 @@ def main():
 	else:
 		predictions = pd.DataFrame(data=df['Y'], index=df.index, columns=['Y'])
 		print("Model built using %i instances" % len(df.index))
-
 
 	
 	if SAVE == "":
@@ -221,7 +222,7 @@ def main():
 			reg = ML.fun.DefineReg_LinReg()
 		
 		# Run ML algorithm on balanced datasets.
-		result,cv_pred,importance = ML.fun.Run_Regression_Model(df, reg, cv_num, ALG, df_unknowns)
+		result,cv_pred,importance = ML.fun.Run_Regression_Model(df, reg, cv_num, ALG, df_unknowns, cv_sets, j)
 		results.append(result)
 		predictions[rep_name] = cv_pred
 		

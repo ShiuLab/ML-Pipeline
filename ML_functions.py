@@ -309,16 +309,22 @@ class fun(object):
 
 		return result,current_scores
 
-	def Run_Regression_Model(df, reg, cv_num, ALG, df_unknowns):
+	def Run_Regression_Model(df, reg, cv_num, ALG, df_unknowns, cv_sets, j):
 		from sklearn.model_selection import cross_val_predict
 		from sklearn.metrics import mean_squared_error, r2_score, explained_variance_score
 		
 		# Data from balanced dataframe
 		y = df['Y']
 		X = df.drop(['Y'], axis=1) 
-
+		
 		# Obtain the predictions using 10 fold cross validation (uses KFold cv by default):
-		cv_pred = cross_val_predict(estimator=reg, X=X, y=y, cv=cv_num)
+		if isinstance(cv_sets, pd.DataFrame):
+			from sklearn.cross_validation import LeaveOneLabelOut
+			cv_folds = LeaveOneLabelOut(cv_sets.iloc[:,j])
+			cv_pred = cross_val_predict(estimator=reg, X=X, y=y, cv=cv_folds)
+		else:
+			cv_pred = cross_val_predict(estimator=reg, X=X, y=y, cv=cv_num)
+		
 		cv_pred_df = pd.DataFrame(data=cv_pred, index=df.index, columns=['pred'])
 		
 		# Get performance statistics from cross-validation
@@ -328,8 +334,6 @@ class fun(object):
 		r2 = r2_score(y, cv_pred)
 		cor = np.corrcoef(np.array(y), cv_pred)
 		result = [mse, evs, r2, cor[0,1]]
-
-		reg.fit(X,y)		
 		
 		# Apply fit model to unknowns
 		if isinstance(df_unknowns, pd.DataFrame):
@@ -337,6 +341,7 @@ class fun(object):
 			unk_pred_df = pd.DataFrame(data=unk_pred, index=df_unknowns.index, columns=['pred'])
 			cv_pred_df = cv_pred_df.append(unk_pred_df)
 
+		reg.fit(X,y)
 		# Try to extract importance scores 
 		if ALG == "RF":
 			importances = reg.feature_importances_
