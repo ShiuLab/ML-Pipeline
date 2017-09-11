@@ -282,7 +282,7 @@ def main():
 	# Save to summary RESULTS file with all models run from the same directory
 	if not os.path.isfile('RESULTS_reg.txt'):
 		out2 = open('RESULTS_reg.txt', 'a')
-		out2.write('DateTime\tID\tTag\tY\tAlg\tNumInstances\tFeatureNum\tCVfold\tCV_rep')
+		out2.write('DateTime\tID\tTag\tY\tAlg\tNumInstances\tFeatureNum\tCVfold\tCV_rep\t')
 		out2.write('MSE\tMSE_sd\tMSE_se\tEVS\tEVS_sd\tEVS_se\tr2\tr2_sd\tr2_se\tPCC\tPCC_sd\tPCC_se\n')
 		out2.close()
 
