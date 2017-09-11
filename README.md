@@ -91,8 +91,6 @@ python compare_classifiers.py -scores [comma sep list of scores files] -ids [com
 
 
 ## TO DO LIST
-
-- Imporve regression model by adding: predicting unknowns, importance scores
 - Merge pre-processing scripts so you can deal with NAs, imputations, and one-hot encoding categorical variables in one script.
 - Add additional classification models: Naive Bayes, basic neural network (1-2 layers)
 - Add validation set hold out option
