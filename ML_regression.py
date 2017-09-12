@@ -9,7 +9,7 @@ INPUTS:
 	
 	REQUIRED ALL:
 	-df       Feature & class dataframe for ML. See "" for an example dataframe
-	-alg      Available: RF, SVM (linear), SVMpoly, SVMrbf, LogReg
+	-alg      Available: RF, SVM (linear), SVMpoly, SVMrbf, GB, and Linear Regression (LR)
 	
 	OPTIONAL:
 	-unknown  String in Y that indicates unknown values you want to predict. Leave as none if you don't have unknowns in your data Default = none
@@ -24,7 +24,6 @@ INPUTS:
 	-tag      String for SAVE name and TAG column in RESULTS.txt output.
 	-feat     Import file with subset of features to use. If invoked,-tag arg is recommended. Default: keep all features.
 	-Y        String for column with what you are trying to predict. Default = Y
-	-threshold_test   What model score to use for setting the optimal threshold (Default = F1. Also avilable: accuracy)
 	-save     Adjust save name prefix. Default = [df]_[alg]_[tag (if used)], CAUTION: will overwrite!
 	-short    Set to True to output only the median and std dev of prediction scores, default = full prediction scores
 	-df_Y     File with class information. Use only if df contains the features but not the Y values 
@@ -57,7 +56,7 @@ def main():
 	# Default parameters for Grid search
 	GS, gs_score = 'F', 'neg_mean_squared_error'
 	
-	# Default Random Forest and GBRT parameters
+	# Default Random Forest and GB parameters
 	n_estimators, max_depth, max_features, learning_rate = 500, 10, "sqrt", 1.0
 	
 	# Default Linear SVC parameters
@@ -216,8 +215,8 @@ def main():
 			reg = ML.fun.DefineReg_RandomForest(n_estimators,max_depth,max_features,n_jobs,j)
 		elif ALG == "SVM" or ALG == 'SVMrbf' or ALG == 'SVMpoly':
 			reg = ML.fun.DefineReg_SVM(kernel,C,degree,gamma,j)
-		elif ALG == "GBRT":
-			reg = ML.fun.DefineReg_GBRT(learning_rate,max_features,max_depth,n_jobs,j)
+		elif ALG == "GB":
+			reg = ML.fun.DefineReg_GB(learning_rate,max_features,max_depth,n_jobs,j)
 		elif ALG == "LR":
 			reg = ML.fun.DefineReg_LinReg()
 		
