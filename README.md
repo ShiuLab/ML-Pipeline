@@ -53,7 +53,7 @@ output: [categorical_matrix]_binary.matrix.txt
 ### Classification
 See ML_classification.py docstrings for additional options (and ML_clf_functions.py)
 
-Available model algorithms: RF, SVM, SVMpoly, SVMrbf, Logistic Regression (LogReg)
+Available model algorithms: RF, Gradent Boosting (GB), SVM, SVMpoly, SVMrbf, Logistic Regression (LogReg)
 
 Example binary classification:
 <pre><code>export PATH=/mnt/home/azodichr/miniconda3/bin:$PATH
@@ -68,7 +68,7 @@ python ML_classification.py -df example_MC.txt -alg [ALG] -class Biotech_cluster
 ### Regression
 See ML_regression.py docstrings for additional options (and ML_clf_functions.py)
 
-Available model algorithms: RF, SVM, SVMpoly, SVMrbf, GradientBoostingRegressor (GBRT), Linear Regression (LR - no GS)
+Available model algorithms: RF, SVM, SVMpoly, SVMrbf, Gradient Boosting (GB), Linear Regression (LR - no GS needed)
 
 <pre><code>export PATH=/mnt/home/azodichr/miniconda3/bin:$PATH
 python ML_regression.py -df data.txt -alg [ALG]</code></pre>
