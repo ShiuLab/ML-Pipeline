@@ -24,6 +24,7 @@ class fun(object):
 		self.tokenList = open(filename, 'r')
 	
 	def EstablishBalanced(df, classes, min_size, gs_n):
+		""" Defines which instances will be used for each balanced dataset """
 		class_ids_dict = {}
 		for cl in classes:
 			cl_ids = list(df[df["Class"]==cl].index)
@@ -42,11 +43,12 @@ class fun(object):
 	# def GridSearch(df, balanced_list, SAVE, ALG, classes, min_size, gs_score, gs_n, n_jobs):
 	
 	def GridSearch(df, SAVE, ALG, classes, min_size, gs_score, n, cv_num, n_jobs, POS, NEG):
-		""" Perform a parameter sweep using grid search CV implemented in SK-learn
+		""" Perform a parameter sweep using GridSearchCV implemented in SK-learn.
+		Need to edit the hard code to modify what parameters are searched
 		"""
 		from sklearn.model_selection import GridSearchCV
 		from sklearn.preprocessing import StandardScaler
-		from sklearn.ensemble import RandomForestClassifier
+		from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 		from sklearn.svm import SVC
 		from sklearn.linear_model import LogisticRegression
 		
@@ -69,7 +71,10 @@ class fun(object):
 		elif ALG == 'LogReg':
 			#parameters = {'penalty': ['l1','l2'], 'C': [0.01, 0.1, 0.5, 1, 10, 50, 100], 'intercept_scaling': [0.1, 0.5, 1, 2, 5, 10]}	
 			parameters = {'C': [0.01, 0.1, 0.5, 1, 10, 50, 100], 'intercept_scaling': [0.1, 0.5, 1, 2, 5, 10],'penalty': ['l1','l2']}	
-		
+
+		elif ALG == 'GB':
+			parameters = {'learning_rate': [0.01, 0.1, 0.5, 1.0, 10.0, 100.0],'max_depth': [3, 5, 10], 'max_features': [0.1, 0.25, 0.5, 0.75, 'sqrt', 'log2', None]}	
+
 		else:
 			print('Grid search is not available for the algorithm selected')
 			exit()
@@ -99,6 +104,8 @@ class fun(object):
 				model = SVC(probability=True)
 			elif ALG == "LogReg":
 				model = LogisticRegression()
+			elif ALG == "GB":
+				model = GradientBoostingClassifier()
 			
 			if gs_score.lower() == 'auprc':
 				gs_score = 'average_precision'
@@ -129,7 +136,8 @@ class fun(object):
 		return top_params,bal_ids_list, param_names
 	
 	def RegGridSearch(df, SAVE, ALG, gs_score, cv_num, n_jobs):
-		""" Perform a parameter sweep using grid search CV implemented in SK-learn"""
+		""" Perform a parameter sweep using GridSearchCV implemented in SK-learn. 
+		Need to edit the hard code to modify what parameters are searched"""
 		from sklearn.metrics import mean_squared_error, r2_score
 		from sklearn.model_selection import GridSearchCV
 		from sklearn.preprocessing import StandardScaler
@@ -150,7 +158,7 @@ class fun(object):
 		elif ALG == 'SVMrbf':
 			parameters = {'kernel': ['rbf'], 'C': [0.01, 0.1, 0.5, 1, 10, 100], 'gamma': np.logspace(-5,1,7)}
 
-		elif ALG == 'GBRT':
+		elif ALG == 'GB':
 			parameters = {'learning_rate': [0.01, 0.1, 0.5, 1.0, 10.0, 100.0], 'max_features': [0.1, 0.25, 0.5, 0.75, 'sqrt', 'log2', None],'max_depth': [3, 5, 10]}	
 
 		else:
@@ -167,7 +175,7 @@ class fun(object):
 		elif ALG == "SVM" or ALG == 'SVMrbf' or ALG == 'SVMpoly':
 			from sklearn.svm import SVR
 			model = SVR()
-		elif ALG == "GBRT":
+		elif ALG == "GB":
 			from sklearn.ensemble import GradientBoostingRegressor
 			model = GradientBoostingRegressor()
 		
@@ -203,9 +211,17 @@ class fun(object):
 			n_jobs=n_jobs)
 		return reg
 
-	def DefineReg_GBRT(learning_rate,max_features,max_depth,n_jobs,j):
+	def DefineReg_GB(learning_rate,max_features,max_depth,n_jobs,j):
 		from sklearn.ensemble import GradientBoostingRegressor
 		reg = GradientBoostingRegressor(learning_rate=learning_rate,
+			max_features=max_features,
+			max_depth=max_depth,
+			random_state=j)
+		return reg
+
+	def DefineClf_GB(learning_rate,max_features,max_depth,n_jobs,j):
+		from sklearn.ensemble import GradientBoostingClassifier
+		reg = GradientBoostingClassifier(learning_rate=learning_rate,
 			max_features=max_features,
 			max_depth=max_depth,
 			random_state=j)
@@ -241,15 +257,6 @@ class fun(object):
 		reg = linear_model.LinearRegression()
 		return reg
 
-
-	# def MakeScoreFrame(cv_proba,POS_IND,sel_labels,score_columns,notSel_proba,notSel_labels,apply_unk,unk_proba,unk_labels):
-		# df_sel_scores = pd.DataFrame(data=cv_proba[POS_IND],index=sel_labels,columns=score_columns)
-		# df_notSel_scores = pd.DataFrame(data=notSel_proba[POS_IND],index=df_notSel.index,columns=score_columns)
-		# current_scores = pd.concat([df_sel_scores,df_notSel_scores], axis = 0)
-		# if apply_unk == True:
-			# df_unk_scores = pd.DataFrame(data=unk_proba[POS_IND],index=df_unknowns.index,columns=score_columns)
-			# current_scores = pd.concat([current_scores,df_unk_scores], axis = 0)
-		# return current_scores
 	
 	def BuildModel_Apply_Performance(df, clf, cv_num, df_notSel, apply_unk, df_unknowns, classes, POS, NEG, j, ALG, THRSHD_test):
 		from sklearn.model_selection import cross_val_predict
@@ -398,11 +405,9 @@ class fun(object):
 		AucPRc = average_precision_score(y1, scores)
 
 		# Try to extract importance scores 
-		if ALG == "RF":
+		if ALG == "RF" or ALG == 'GB':
 			importances = clf.feature_importances_
-		elif "SVM" in ALG:
-			importances = clf.coef_
-		elif ALG == "LogReg":
+		elif "SVM" in ALG or ALG == 'LogReg':
 			importances = clf.coef_
 		else:
 			try:
