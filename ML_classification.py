@@ -9,7 +9,7 @@ INPUTS:
 	
 	REQUIRED ALL:
 	-df       Feature & class dataframe for ML. See "" for an example dataframe
-	-alg      Available: RF, SVM (linear), SVMpoly, SVMrbf, LogReg
+	-alg      Available: RF, SVM (linear), SVMpoly, SVMrbf, LogReg, GB
 	
 	OPTIONAL:
 	-cl_train List of classes to include in the training set. Default = all classes. If binary, first label = positive class.
@@ -26,6 +26,8 @@ INPUTS:
 	-threshold_test   What model score to use for setting the optimal threshold (Default = F1. Also avilable: accuracy)
 	-save     Adjust save name prefix. Default = [df]_[alg]_[tag (if used)], CAUTION: will overwrite!
 	-short    Set to True to output only the median and std dev of prediction scores, default = full prediction scores
+	-df_class File with class information. Use only if df contains the features but not the classes 
+								If more than one column in the class file, specify which column contains the class: -df_class class_file.csv,ColumnName
 	
 	PLOT OPTIONS:
 	-cm       T/F - Do you want to output the confusion matrix & confusion matrix figure? (Default = False)
@@ -50,13 +52,13 @@ def main():
 	
 	# Default code parameters
 	n, FEAT, CL_TRAIN, apply, n_jobs, class_col, CM, POS, plots, cv_num, TAG, SAVE, MIN_SIZE, short_scores = 100, 'all', 'all','none', 1, 'Class', 'False', 1, 'False', 10, '', '', '', False
-	THRSHD_test = 'F1'
+	SEP, THRSHD_test, DF_CLASS = '\t','F1', 'ignore'
 
 	# Default parameters for Grid search
 	GS, gs_score = 'F', 'roc_auc'
 	
-	# Default Random Forest parameters
-	n_estimators, max_depth, max_features = 500, 10, "sqrt"
+	# Default Random Forest and Gradient Boosting parameters
+	n_estimators, max_depth, max_features, learning_rate = 500, 10, "sqrt", 0.1
 	
 	# Default Linear SVC parameters
 	kernel, C, degree, gamma, loss, max_iter = 'linear', 1, 2, 1, 'hinge', "500"
@@ -67,6 +69,8 @@ def main():
 	for i in range (1,len(sys.argv),2):
 		if sys.argv[i] == "-df":
 			DF = sys.argv[i+1]
+		if sys.argv[i] == "-sep":
+			SEP = sys.argv[i+1]
 		elif sys.argv[i] == '-save':
 			SAVE = sys.argv[i+1]
 		elif sys.argv[i] == '-feat':
@@ -104,6 +108,8 @@ def main():
 			TAG = sys.argv[i+1]
 		elif sys.argv[i] == "-threshold_test":
 			THRSHD_test = sys.argv[i+1]
+		elif sys.argv[i] == "-df_class":
+			DF_CLASS = sys.argv[i+1]
 		elif sys.argv[i] == "-n_jobs" or sys.argv[i] == "-p":
 			n_jobs = int(sys.argv[i+1])
 		elif sys.argv[i] == "-short":
@@ -117,8 +123,14 @@ def main():
 	
 	####### Load Dataframe & Pre-process #######
 	
-	df = pd.read_csv(DF, sep='\t', index_col = 0)
+	df = pd.read_csv(DF, sep=SEP, index_col = 0)
 	
+	# If feature info and class info are in separate files
+	if DF_CLASS != 'ignore':
+		df_class_file, df_class_col = DF_CLASS.strip().split(',')
+		df_class = pd.read_csv(df_class_file, sep=SEP, index_col = 0)
+		df['Class'] = df_class[df_class_col]
+
 	# Specify class column - default = Class
 	if class_col != 'Class':
 		df = df.rename(columns = {class_col:'Class'})
@@ -239,7 +251,11 @@ def main():
 		elif ALG == "LogReg":
 			C, intercept_scaling, penalty = params2use
 			print("Parameters selected: penalty=%s, C=%s, intercept_scaling=%s" % (str(penalty), str(C), str(intercept_scaling)))
-		
+
+		elif ALG == "GB":
+			learning_rate, max_depth, max_features = params2use
+			print("Parameters selected: learning rate=%s, max_features=%s, max_depth=%s" % (str(learning_rate), str(max_features), str(max_depth)))
+	
 		print("Grid search complete. Time: %f seconds" % (time.time() - start_time))
 	
 	else:
@@ -281,6 +297,9 @@ def main():
 		elif ALG == "LogReg":
 			parameters_used = [C, intercept_scaling, penalty]
 			clf = ML.fun.DefineClf_LogReg(penalty, C, intercept_scaling)
+		elif ALG == "GB":
+			parameters_used = [learning_rate, max_features, max_depth]
+			clf = ML.fun.DefineClf_GB(learning_rate, max_features, max_depth, n_jobs, j)
 		
 		# Run ML algorithm on balanced datasets.
 		result,current_scores = ML.fun.BuildModel_Apply_Performance(df1, clf, cv_num, df_notSel, apply_unk, df_unknowns, classes, POS, NEG, j, ALG,THRSHD_test)
@@ -361,7 +380,7 @@ def main():
 		
 		
 		# Summarize % of each class predicted as POS and NEG		
-		summary_df_proba = df_proba[[class_col, 'Prediction', class_nm+'_score_Median']].groupby([class_col, 'Prediction']).agg('count').unstack(level=1)
+		summary_df_proba = df_proba[['Class', 'Prediction', class_nm+'_score_Median']].groupby(['Class', 'Prediction']).agg('count').unstack(level=1)
 		summary_df_proba.columns = summary_df_proba.columns.droplevel()
 		summary_df_proba['n_total'] = summary_df_proba[classes].sum(axis=1)
 		for class_nm in classes:
@@ -432,7 +451,7 @@ def main():
 		
 
 		# Summarize % of each class predicted as POS and NEG		
-		summary_df_proba = df_proba[[class_col, Pred_name, 'Mean']].groupby([class_col, Pred_name]).agg('count').unstack(level=1)
+		summary_df_proba = df_proba[['Class', Pred_name, 'Mean']].groupby(['Class', Pred_name]).agg('count').unstack(level=1)
 		summary_df_proba.columns = summary_df_proba.columns.droplevel()
 		try:
 			summary_df_proba['n_total'] = summary_df_proba[POS] + summary_df_proba[NEG]

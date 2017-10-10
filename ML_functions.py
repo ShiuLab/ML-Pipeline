@@ -24,6 +24,7 @@ class fun(object):
 		self.tokenList = open(filename, 'r')
 	
 	def EstablishBalanced(df, classes, min_size, gs_n):
+		""" Defines which instances will be used for each balanced dataset """
 		class_ids_dict = {}
 		for cl in classes:
 			cl_ids = list(df[df["Class"]==cl].index)
@@ -42,11 +43,12 @@ class fun(object):
 	# def GridSearch(df, balanced_list, SAVE, ALG, classes, min_size, gs_score, gs_n, n_jobs):
 	
 	def GridSearch(df, SAVE, ALG, classes, min_size, gs_score, n, cv_num, n_jobs, POS, NEG):
-		""" Perform a parameter sweep using grid search CV implemented in SK-learn
+		""" Perform a parameter sweep using GridSearchCV implemented in SK-learn.
+		Need to edit the hard code to modify what parameters are searched
 		"""
 		from sklearn.model_selection import GridSearchCV
 		from sklearn.preprocessing import StandardScaler
-		from sklearn.ensemble import RandomForestClassifier
+		from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 		from sklearn.svm import SVC
 		from sklearn.linear_model import LogisticRegression
 		
@@ -69,7 +71,10 @@ class fun(object):
 		elif ALG == 'LogReg':
 			#parameters = {'penalty': ['l1','l2'], 'C': [0.01, 0.1, 0.5, 1, 10, 50, 100], 'intercept_scaling': [0.1, 0.5, 1, 2, 5, 10]}	
 			parameters = {'C': [0.01, 0.1, 0.5, 1, 10, 50, 100], 'intercept_scaling': [0.1, 0.5, 1, 2, 5, 10],'penalty': ['l1','l2']}	
-		
+
+		elif ALG == 'GB':
+			parameters = {'learning_rate': [0.01, 0.1, 0.5, 1.0, 10.0, 100.0],'max_depth': [3, 5, 10], 'max_features': [0.1, 0.25, 0.5, 0.75, 'sqrt', 'log2', None]}	
+
 		else:
 			print('Grid search is not available for the algorithm selected')
 			exit()
@@ -99,6 +104,8 @@ class fun(object):
 				model = SVC(probability=True)
 			elif ALG == "LogReg":
 				model = LogisticRegression()
+			elif ALG == "GB":
+				model = GradientBoostingClassifier()
 			
 			if gs_score.lower() == 'auprc':
 				gs_score = 'average_precision'
@@ -128,6 +135,62 @@ class fun(object):
 		gs_results_mean.to_csv(outName)
 		return top_params,bal_ids_list, param_names
 	
+	def RegGridSearch(df, SAVE, ALG, gs_score, cv_num, n_jobs):
+		""" Perform a parameter sweep using GridSearchCV implemented in SK-learn. 
+		Need to edit the hard code to modify what parameters are searched"""
+		from sklearn.metrics import mean_squared_error, r2_score
+		from sklearn.model_selection import GridSearchCV
+		from sklearn.preprocessing import StandardScaler
+		
+		start_time = time.time()
+		
+		### NOTE: The returned top_params will be in alphabetical order - to be consistent add any additional 
+		###       parameters to test in alphabetical order
+		if ALG == 'RF':
+			parameters = {'max_depth':[3, 5, 10, 50], 'max_features': [0.1, 0.25, 0.5, 0.75, 'sqrt', 'log2']}
+			
+		elif ALG == "SVM":
+			parameters = {'kernel': ['linear'], 'C':[0.01, 0.1, 0.5, 1, 10, 50, 100]}
+
+		elif ALG == 'SVMpoly':
+			parameters = {'kernel': ['poly'], 'C':[0.01, 0.1, 0.5, 1, 10, 100],'degree': [2,3,4], 'gamma': np.logspace(-5,1,7)}
+
+		elif ALG == 'SVMrbf':
+			parameters = {'kernel': ['rbf'], 'C': [0.01, 0.1, 0.5, 1, 10, 100], 'gamma': np.logspace(-5,1,7)}
+
+		elif ALG == 'GB':
+			parameters = {'learning_rate': [0.01, 0.1, 0.5, 1.0, 10.0, 100.0], 'max_features': [0.1, 0.25, 0.5, 0.75, 'sqrt', 'log2', None],'max_depth': [3, 5, 10]}	
+
+		else:
+			print('Grid search is not available for the algorithm selected')
+			exit()
+			
+		y = df['Y']
+		x = df.drop(['Y'], axis=1) 
+
+		# Build model, run grid search with 10-fold cross validation and fit
+		if ALG == 'RF':
+			from sklearn.ensemble import RandomForestRegressor
+			model = RandomForestRegressor()
+		elif ALG == "SVM" or ALG == 'SVMrbf' or ALG == 'SVMpoly':
+			from sklearn.svm import SVR
+			model = SVR()
+		elif ALG == "GB":
+			from sklearn.ensemble import GradientBoostingRegressor
+			model = GradientBoostingRegressor()
+		
+		grid_search = GridSearchCV(model, parameters, scoring = gs_score, cv = cv_num, n_jobs = n_jobs, pre_dispatch=2*n_jobs)
+		grid_search.fit(x, y)
+		
+		j_results = pd.DataFrame(grid_search.cv_results_)
+		outName = SAVE + "_GridSearch.txt"
+		j_results.to_csv(outName)
+		top_params = j_results.loc[j_results['rank_test_score'] == 1, 'params'].item()
+		
+		print("Parameter sweep time: %f seconds" % (time.time() - start_time))
+		return top_params
+	
+
 	def DefineClf_RandomForest(n_estimators,max_depth,max_features,j,n_jobs):
 		from sklearn.ensemble import RandomForestClassifier
 		clf = RandomForestClassifier(n_estimators=int(n_estimators), 
@@ -138,7 +201,32 @@ class fun(object):
 			n_jobs=n_jobs)
 		return clf
 	
-	
+	def DefineReg_RandomForest(n_estimators,max_depth,max_features,n_jobs,j):
+		from sklearn.ensemble import RandomForestRegressor
+		reg = RandomForestRegressor(n_estimators=int(n_estimators), 
+			max_depth=max_depth, 
+			max_features=max_features,
+			criterion='mse', 
+			random_state=j, 
+			n_jobs=n_jobs)
+		return reg
+
+	def DefineReg_GB(learning_rate,max_features,max_depth,n_jobs,j):
+		from sklearn.ensemble import GradientBoostingRegressor
+		reg = GradientBoostingRegressor(learning_rate=learning_rate,
+			max_features=max_features,
+			max_depth=max_depth,
+			random_state=j)
+		return reg
+
+	def DefineClf_GB(learning_rate,max_features,max_depth,n_jobs,j):
+		from sklearn.ensemble import GradientBoostingClassifier
+		reg = GradientBoostingClassifier(learning_rate=learning_rate,
+			max_features=max_features,
+			max_depth=max_depth,
+			random_state=j)
+		return reg
+
 	def DefineClf_SVM(kernel,C,degree,gamma,j):
 		from sklearn.svm import SVC
 		clf = SVC(kernel = kernel,
@@ -148,6 +236,14 @@ class fun(object):
 			random_state=j,
 			probability=True)
 		return clf
+
+	def DefineReg_SVM(kernel,C,degree,gamma,j):
+		from sklearn.svm import SVR
+		reg = SVR(kernel = kernel,
+			C=float(C), 
+			degree = degree,
+			gamma = gamma)
+		return reg
 	
 	def DefineClf_LogReg(penalty,C,intercept_scaling):
 		from sklearn.linear_model import LogisticRegression
@@ -156,15 +252,11 @@ class fun(object):
 			intercept_scaling=intercept_scaling)
 		return clf
 
+	def DefineReg_LinReg():
+		from sklearn import linear_model
+		reg = linear_model.LinearRegression()
+		return reg
 
-	# def MakeScoreFrame(cv_proba,POS_IND,sel_labels,score_columns,notSel_proba,notSel_labels,apply_unk,unk_proba,unk_labels):
-		# df_sel_scores = pd.DataFrame(data=cv_proba[POS_IND],index=sel_labels,columns=score_columns)
-		# df_notSel_scores = pd.DataFrame(data=notSel_proba[POS_IND],index=df_notSel.index,columns=score_columns)
-		# current_scores = pd.concat([df_sel_scores,df_notSel_scores], axis = 0)
-		# if apply_unk == True:
-			# df_unk_scores = pd.DataFrame(data=unk_proba[POS_IND],index=df_unknowns.index,columns=score_columns)
-			# current_scores = pd.concat([current_scores,df_unk_scores], axis = 0)
-		# return current_scores
 	
 	def BuildModel_Apply_Performance(df, clf, cv_num, df_notSel, apply_unk, df_unknowns, classes, POS, NEG, j, ALG, THRSHD_test):
 		from sklearn.model_selection import cross_val_predict
@@ -221,10 +313,60 @@ class fun(object):
 			if apply_unk == True:
 				df_unk_scores = pd.DataFrame(data=unk_proba,index=df_unknowns.index,columns=score_columns)
 				current_scores =  pd.concat([current_scores,df_unk_scores], axis = 0)
-			
-			
-			
+
 		return result,current_scores
+
+	def Run_Regression_Model(df, reg, cv_num, ALG, df_unknowns, cv_sets, j):
+		from sklearn.model_selection import cross_val_predict
+		from sklearn.metrics import mean_squared_error, r2_score, explained_variance_score
+		
+		# Data from balanced dataframe
+		y = df['Y']
+		X = df.drop(['Y'], axis=1) 
+		
+		# Obtain the predictions using 10 fold cross validation (uses KFold cv by default):
+		if isinstance(cv_sets, pd.DataFrame):
+			from sklearn.cross_validation import LeaveOneLabelOut
+			cv_folds = LeaveOneLabelOut(cv_sets.iloc[:,j])
+			cv_pred = cross_val_predict(estimator=reg, X=X, y=y, cv=cv_folds)
+		else:
+			cv_pred = cross_val_predict(estimator=reg, X=X, y=y, cv=cv_num)
+		
+		cv_pred_df = pd.DataFrame(data=cv_pred, index=df.index, columns=['pred'])
+		
+		# Get performance statistics from cross-validation
+		y = y.astype(float)
+		mse = mean_squared_error(y, cv_pred)
+		evs = explained_variance_score(y, cv_pred)
+		r2 = r2_score(y, cv_pred)
+		cor = np.corrcoef(np.array(y), cv_pred)
+		result = [mse, evs, r2, cor[0,1]]
+		
+		# Apply fit model to unknowns
+		if isinstance(df_unknowns, pd.DataFrame):
+			unk_pred = reg.predict(df_unknowns.drop(['Y'], axis=1))
+			unk_pred_df = pd.DataFrame(data=unk_pred, index=df_unknowns.index, columns=['pred'])
+			cv_pred_df = cv_pred_df.append(unk_pred_df)
+
+		reg.fit(X,y)
+		# Try to extract importance scores 
+		if ALG == "RF":
+			importances = reg.feature_importances_
+		elif "SVM" in ALG:
+			importances = reg.coef_
+		elif ALG == "LogReg":
+			importances = reg.coef_
+		else:
+			try:
+				importances = reg.feature_importances_
+			except:
+				try:
+					importances = reg.coef_
+				except:
+					importances = "na"
+					print("Cannot get importance scores")
+		
+		return result, cv_pred_df, importances
 
 	def Performance(y, cv_pred, scores, clf, classes, POS, POS_IND, NEG, ALG, THRSHD_test):
 		""" For binary predictions: This function calculates the best threshold for defining
@@ -254,7 +396,6 @@ class fun(object):
 				else:
 					print('%s is not a scoring option for model thresholding' % THRSHD_test)
 					exit()
-				print(thr,f1)
 				if f1 > max_f1:
 					max_f1 = f1
 					max_f1_thresh = thr
@@ -264,11 +405,9 @@ class fun(object):
 		AucPRc = average_precision_score(y1, scores)
 
 		# Try to extract importance scores 
-		if ALG == "RF":
+		if ALG == "RF" or ALG == 'GB':
 			importances = clf.feature_importances_
-		elif "SVM" in ALG:
-			importances = clf.coef_
-		elif ALG == "LogReg":
+		elif "SVM" in ALG or ALG == 'LogReg':
 			importances = clf.coef_
 		else:
 			try:
@@ -425,7 +564,22 @@ class fun(object):
 		plt.savefig(filename)
 		plt.close()
 
+	def PlotsReg(predictions, SAVE):
+		import matplotlib.pyplot as plt
+		plt.switch_backend('agg')
+		
+		y = predictions['Y']
+		yhat = predictions['Mean']
 
+		# Plot the ROC Curve
+		plt.scatter(y,yhat, edgecolors=(0,0,0))
+		plt.plot([y.min(), y.max()], [y.min(), y.max()], 'k--', lw=4)
+		plt.ylabel('Predicted')
+		plt.xlabel('Measured')
+		plt.show()
+		filename = SAVE + ".png"
+		plt.savefig(filename)
+		plt.clf()
 
 	def Plot_ConMatrix(cm, SAVE):
 		import matplotlib.pyplot as plt

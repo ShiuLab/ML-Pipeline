@@ -53,7 +53,7 @@ output: [categorical_matrix]_binary.matrix.txt
 ### Classification
 See ML_classification.py docstrings for additional options (and ML_clf_functions.py)
 
-Available model algorithms: RF, SVM, SVMpoly, SVMrbf
+Available model algorithms: RF, Gradent Boosting (GB), SVM, SVMpoly, SVMrbf, Logistic Regression (LogReg)
 
 Example binary classification:
 <pre><code>export PATH=/mnt/home/azodichr/miniconda3/bin:$PATH
@@ -65,10 +65,19 @@ python ML_classification.py -df example_MC.txt -alg [ALG] -class Biotech_cluster
 
 *Note: To run tests use -gs T -gs_n 3 -n 5 
 
+### Regression
+See ML_regression.py docstrings for additional options (and ML_clf_functions.py)
+
+Available model algorithms: RF, SVM, SVMpoly, SVMrbf, Gradient Boosting (GB), Linear Regression (LR - no GS needed)
+
+<pre><code>export PATH=/mnt/home/azodichr/miniconda3/bin:$PATH
+python ML_regression.py -df data.txt -alg [ALG]</code></pre>
+
+
 ## Post-Processing
 
 ### AUC-ROC & AUC-PR Plots
-Use this code to build plots with multiple results files.
+Use this code to build plots with multiple classification _scores files.
 
 <pre><code>export PATH=/mnt/home/azodichr/miniconda3/bin:$PATH
 python ML_plots.py [SAVE_NAME] name1 [Path_to_1st_scores_file] name3 [Path_to_2nd_scores_file] etc.</code></pre>
@@ -82,8 +91,6 @@ python compare_classifiers.py -scores [comma sep list of scores files] -ids [com
 
 
 ## TO DO LIST
-
-- Add script for regression models
 - Merge pre-processing scripts so you can deal with NAs, imputations, and one-hot encoding categorical variables in one script.
 - Add additional classification models: Naive Bayes, basic neural network (1-2 layers)
 - Add validation set hold out option
