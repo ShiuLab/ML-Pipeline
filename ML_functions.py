@@ -184,9 +184,11 @@ class fun(object):
 		
 		j_results = pd.DataFrame(grid_search.cv_results_)
 		outName = SAVE + "_GridSearch.txt"
+		j_results = j_results.sort_values(by=['rank_test_score','mean_test_score','mean_train_score','mean_fit_time','mean_score_time'])
+
 		j_results.to_csv(outName)
-		top_params = j_results.loc[j_results['rank_test_score'] == 1, 'params'].item()
-		
+		top_params = j_results['params'].iloc[0]
+
 		print("Parameter sweep time: %f seconds" % (time.time() - start_time))
 		return top_params
 	
