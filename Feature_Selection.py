@@ -12,6 +12,7 @@ INPUT:
                 - RandomForest
                 - Enrichment with Fisher's Exact Test (binary feat only) (default pval = 0.05)
                 - LASSO (need -p, -type))
+                - Relief (https://github.com/EpistasisLab/scikit-rebate)
 
 OPTIONAL INPUT:
   -feat     Default: all (i.e. everything in the dataframe given). Can import txt file with list of features to keep.
@@ -62,7 +63,7 @@ def DecisionTree(df, n):
   feat_names = list(df.columns.values)[1:]
   temp_imp = pd.DataFrame(importances, columns = ["imp"], index=feat_names) 
   indices = np.argsort(importances)[::-1]
-  indices_keep = indices[0:n]
+  indices_keep = indices[0:n-1]
   fixed_index = []
 
   # Translate keep indices into the indices in the df
@@ -105,6 +106,31 @@ def Chi2(df, n):
   df = df.loc[:,good]
   return(df)
 
+def Relief(df, n, n_jobs):
+  """Feature selection using Relief on the whole dataframe."""
+  from skrebate import ReliefF
+
+  X_all = df.drop('Class', axis=1).values  
+  Y_all = df.loc[:, 'Class'].values
+
+  feature_names = list(df)
+  feature_names.remove('Class')
+
+
+  # Set selection to chi2 with n to keep
+  fs = ReliefF(n_jobs = int(n_jobs))
+  fs.fit(X_all, Y_all)
+  imp = pd.DataFrame(fs.feature_importances_, index = feature_names, columns = ['relief_imp'])
+  imp_top = imp.sort_values(by='relief_imp', ascending=False)
+  keep = imp_top.index.values[0:int(n)]
+  
+  print("Features selected using Relief from rebase: %s" % str(keep))
+  keep = np.append(np.array(['Class']), keep)
+  df2 = df[keep]
+
+  return(df2)
+
+
 def L1(df, PARAMETER, TYPE):
   """Apply a linear model with a L1 penalty and select features who's coefficients aren't 
   shrunk to zero. Unlike Chi2, this method accounts for the effect of all of the
@@ -118,7 +144,6 @@ def L1(df, PARAMETER, TYPE):
 
   X_all = df.drop('Class', axis=1).values  
   Y_all = df.loc[:, 'Class'].values
-  print(Y_all)
 
   if TYPE == 'c' or TYPE == 'classification':
     estimator = LinearSVC(C = PARAMETER, penalty='l1', dual=False).fit(X_all, Y_all)
@@ -132,10 +157,11 @@ def L1(df, PARAMETER, TYPE):
   feat_names = np.array(list(df)[1:])
   good = feat_names[keep]
   
-  print('Number of features selected using l2 (parameter = %s): %i' % (str(PARAMETER), X_new.shape[1]))
   print("Features selected using l2: %s" % str(good))
+  print('Number of features selected using l2 (parameter = %s): %i' % (str(PARAMETER), X_new.shape[1]))
+  
   df2 = pd.DataFrame(data = X_new, columns=good, index=df.index)
-  df2.insert(0, 'Class', Y_all, )
+  #df2.insert(0, 'Class', Y_all, )
   return(df2)
 
 def FET(df, PARAMETER, pos, neg):
@@ -182,11 +208,20 @@ if __name__ == "__main__":
   save_list = 'false'
   p = 0.05
   CL = 'Class'
+  TYPE = 'c'
+  n_jobs = 1
+  IGNORE = 'pass'
+  SEP = '\t'
+  SAVE, DF_CLASS = 'default', 'default'
 
   for i in range (1,len(sys.argv),2):
 
         if sys.argv[i] == "-df":
           DF = sys.argv[i+1]
+        if sys.argv[i] == "-df_class":
+          DF_CLASS = sys.argv[i+1]
+        if sys.argv[i] == "-sep":
+          SEP = sys.argv[i+1]
         if sys.argv[i] == '-save':
           SAVE = sys.argv[i+1]
         if sys.argv[i] == '-list':
@@ -195,6 +230,8 @@ if __name__ == "__main__":
           F = sys.argv[i+1]
         if sys.argv[i] == '-n':
           N = int(sys.argv[i+1])
+        if sys.argv[i] == '-n_jobs':
+          n_jobs = int(sys.argv[i+1])
         if sys.argv[i] == '-feat':
           FEAT = sys.argv[i+1]
         if sys.argv[i] == '-p':
@@ -207,6 +244,8 @@ if __name__ == "__main__":
           pos = sys.argv[i+1]
         if sys.argv[i] == '-neg':
           neg = sys.argv[i+1]
+        if sys.argv[i] == '-ignore':
+          IGNORE = sys.argv[i+1]
 
 
   if len(sys.argv) <= 1:
@@ -214,16 +253,23 @@ if __name__ == "__main__":
     exit()
 
   #Load feature matrix and save feature names 
-  if isinstance(DF, str):
-    df = pd.read_csv(DF, sep='\t', index_col = 0)
-  else:
-    df = DF
+  df = pd.read_csv(DF, sep=SEP, index_col = 0)
+
+
+  # If feature info and class info are in separate files
+  if DF_CLASS != 'default':
+    df_class_file, df_class_col = DF_CLASS.strip().split(',')
+    df_class = pd.read_csv(df_class_file, sep=SEP, index_col = 0, na_values=IGNORE)
+    df['Class'] = df_class[df_class_col]
 
   print('Original dataframe contained %i features' % df.shape[1])
+  
+  #Recode class as 1 for positive and 0 for negative
+  if TYPE.lower() == 'c':
+    df["Class"] = df["Class"].replace(pos, 1)
+    df["Class"] = df["Class"].replace(neg, 0)
 
-  #Recode class as 1 for positive and 0 for negative, then divide into two dataframes.
-  df["Class"] = df["Class"].replace(pos, 1)
-  df["Class"] = df["Class"].replace(neg, 0)
+  df = df.dropna(axis=0, how = 'any')
 
   #If 'features to keep' list given, remove columns not in that list
   if FEAT != 'all':
@@ -243,16 +289,24 @@ if __name__ == "__main__":
   elif F.lower() == "l1" or F.lower() == "lasso":
     df_feat = L1(df, PARAMETER, TYPE)
     save_name = DF.split("/")[-1] + "_" + F + "_" + TYPE + '_' + str(PARAMETER)
-  elif F.lower() == "fisher" or F.lower() == "fet" or F.lower() == enrich:
+  elif F.lower() == "relief" or F.lower() == "rebate":
+    df_feat = Relief(df, N, n_jobs)
+    save_name = DF.split("/")[-1] + "_" + F + '_' + str(N)
+  elif F.lower() == "fisher" or F.lower() == "fet" or F.lower() == 'enrich':
     df_feat = FET(df, PARAMETER, pos, neg)
     save_name = DF.split("/")[-1] + "_" + F + '_' + str(PARAMETER)
   else:
     print("Feature selection method not available in this script")
 
+  if SAVE != 'default':
+    save_name = SAVE
 
   if save_list.lower() == 't' or save_list.lower() == 'true':
     top_feat = list(df_feat)
-    top_feat.remove('Class')
+    try:
+      top_feat.remove('Class')
+    except:
+      print('Class is not in this list')
     save_name2 = save_name + '_list'
     out = open(save_name2, 'w')
     for f in top_feat:
@@ -260,3 +314,7 @@ if __name__ == "__main__":
   else:
     df_feat.to_csv(save_name, sep='\t', quoting=None)
 
+"""    try:
+      top_feat.remove('Class')
+    except:
+      print('what')"""
