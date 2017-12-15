@@ -51,7 +51,7 @@ def main():
 	
 	# Default code parameters
 	n, FEAT, apply, n_jobs, Y_col, plots, cv_num, TAG, SAVE, short_scores = 100, 'all','F', 1, 'Y', 'False', 10, '', '', ''
-	SEP, THRSHD_test, DF_Y, df_unknowns,UNKNOWN, normX, normY, cv_reps, cv_sets = '\t','F1', 'ignore', 'none','unk', 'F', 'F', 10, 'none'
+	y_name, SEP, THRSHD_test, DF_Y, df_unknowns,UNKNOWN, normX, normY, cv_reps, cv_sets = 'Y', '\t','F1', 'ignore', 'none','unk', 'F', 'F', 10, 'none'
 
 	# Default parameters for Grid search
 	GS, gs_score = 'F', 'neg_mean_squared_error'
@@ -70,6 +70,8 @@ def main():
 			DF = sys.argv[i+1]
 		elif sys.argv[i] == "-df_Y":
 			DF_Y = sys.argv[i+1]
+		elif sys.argv[i] == "-y_name":
+			y_name = sys.argv[i+1]
 		elif sys.argv[i] == "-sep":
 			SEP = sys.argv[i+1]
 		elif sys.argv[i] == '-save':
@@ -123,19 +125,19 @@ def main():
 	####### Load Dataframe & Pre-process #######
 	
 	df = pd.read_csv(DF, sep=SEP, index_col = 0)
-	y_name = 'Y'
 	# If feature info and class info are in separate files
 	if DF_Y != 'ignore':
 		df_Y_file, df_Y_col = DF_Y.strip().split(',')
 		df_Y = pd.read_csv(df_Y_file, sep=SEP, index_col = 0)
-		df['Y'] = df_Y[df_Y_col]
+		df[y_name] = df_Y[df_Y_col]
 		y_name = df_Y_col
 
 	# Specify Y column - default = Class
-	if Y_col != 'Y':
-		df = df.rename(columns = {Y_col:'Y'})
-		y_name = Y_col
+	if y_name != 'Y':
+		df = df.rename(columns = {y_name:'Y'})
+		y_name = y_name
 	
+	print(df.head())
 	# Filter out features not in feat file given - default: keep all
 	if FEAT != 'all':
 		with open(FEAT) as f:
