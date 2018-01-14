@@ -123,7 +123,7 @@ def main():
         df2= df[df.columns[1:y]]#get numeric
         #print(df2)
         col_list= list(df2.columns.values)
-        for i in range(1,len(df2.columns)):
+        for i in range(0,len(df2.columns)):
              x= col_list[i]
              x1 = df2.iloc[:,[i]].dropna(axis=0)
              df2.loc[:,[x]] = df2.loc[:,[x]].fillna(value=np.random.choice(x1[x]), axis=1)#replace NAs with random choice from actual distibution
@@ -242,34 +242,34 @@ def main():
             y= len(col_list)
             print("Replacing NA's for ", y, " columns")
             if dtype2 == 'c':
-                df1= get_cat1(df2, y)
+                df2= get_cat1(df2, y)
             elif dtype2 == 'b':
-                df1= get_cat1(df2, y)
+                df2= get_cat1(df2, y)
             elif dtype2 == 'n':
-                df1= get_num1(df2, y)
+                df2= get_num1(df2, y)
             else:
                 print ("need -dtype2 : n=numeric, c=categorical, b=binary")
     
             #frames  = [df0, df1] #put all frames back together ##need to add back class
             #df2= pd.concat(frames, axis=1)
-            df2=df1
+            #df2=df1
     
         elif mv == 2: #this option imputes median or mode for either numeric or categorical data respectively
             col_list= list(df.columns.values)
             y= len(col_list)
             print("Replacing NA's for ", y, " columns")
             if dtype2 == 'c':
-                df1= get_cat2(df2, y)
+                df2= get_cat2(df2, y)
             elif dtype2 == 'b':
-                df1= get_cat2(df2, y)
+                df2= get_cat2(df2, y)
             elif dtype2 == 'n':
-                df1= get_num2(df2, y)
+                df2= get_num2(df2, y)
             else:
                 print ("need -dtype2 : n=numeric, c=categorical, b=binary")
 	            
             #frames  = [df0, df1] #put all frames back together
             #df2= pd.concat(frames, axis=1)
-            df2=df1
+            #df2=df1
         
     #     elif mv == 0:
     #         df2 = df2.dropna(axis=0)   #third option, also default, remove all rows with NA, thereby leaving out missing values
@@ -290,34 +290,34 @@ def main():
             y= len(col_list)
             print("Replacing NA's for ", y, " columns")
             if dtype3 == 'c':
-                df1= get_cat1(df3, y)
+                df3= get_cat1(df3, y)
             elif dtype3 == 'b':
-                df1= get_cat1(df3, y)
+                df3= get_cat1(df3, y)
             elif dtype3 == 'n':
-                df1= get_num1(df3, y)
+                df3= get_num1(df3, y)
             else:
                 print ("need -dtype2 : n=numeric, c=categorical, b=binary")
     
             # frames  = [df0, df1] #put all frames back together ##need to add back class
             # df3= pd.concat(frames, axis=1)
-            df3=df1
+            #df3=df1
     
         elif mv == 2: #this option imputes median or mode for either numeric or categorical data respectively
             col_list= list(df3.columns.values)
             y= len(col_list)
             print("Replacing NA's for ", y, " columns")
             if dtype3 == 'c':
-                df1= get_cat2(df3, y)
+                df3= get_cat2(df3, y)
             elif dtype3 == 'b':
-                df1= get_cat2(df3, y)
+                df3= get_cat2(df3, y)
             elif dtype3 == 'n':
-                df1= get_num2(df3, y)
+                df3= get_num2(df3, y)
             else:
                 print ("need -dtype2 : n=numeric, c=categorical, b=binary")
 	            
             # frames  = [df0, df1] #put all frames back together
             # df3= pd.concat(frames, axis=1)
-            df3=df1
+            #df3=df1
         # elif mv == 0:
         #     df3 = df3.dropna(axis=0)   #third option, also default, remove all rows with NA, thereby leaving out missing values
         
@@ -329,9 +329,11 @@ def main():
         if mv != 0:
             df.to_csv(path_or_buf=str(DF1)+".NAimputed.txt", sep="\t", header=True)
     elif DF2 != 'NA' and DF3 == 'NA':
+        print ("concatenating dataframes 1 and 2")
         df= pd.concat([df, df2], axis=1)
         df.to_csv(path_or_buf=str(DF1)+".NAimputed.txt", sep="\t", header=True)
     else:
+        print ("concatenating dataframes 1, 2, and 3")
         df= pd.concat([df, df2, df3], axis=1)
         df.to_csv(path_or_buf=str(DF1)+".NAimputed.txt", sep="\t", header=True)
     
