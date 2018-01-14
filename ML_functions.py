@@ -184,9 +184,11 @@ class fun(object):
 		
 		j_results = pd.DataFrame(grid_search.cv_results_)
 		outName = SAVE + "_GridSearch.txt"
+		j_results = j_results.sort_values(by=['rank_test_score','mean_test_score','mean_train_score','mean_fit_time','mean_score_time'])
+
 		j_results.to_csv(outName)
-		top_params = j_results.loc[j_results['rank_test_score'] == 1, 'params'].item()
-		
+		top_params = j_results['params'].iloc[0]
+
 		print("Parameter sweep time: %f seconds" % (time.time() - start_time))
 		return top_params
 	
@@ -543,8 +545,8 @@ class fun(object):
 		plt.ylabel('True Positive Rate')
 		plt.xlabel('False Positive Rate')
 		plt.show()
-		filename = SAVE + "_ROCcurve.png"
-		plt.savefig(filename)
+		filename = SAVE + "_ROCcurve.pdf"
+		plt.savefig(filename, format='pdf')
 		plt.clf()
 		
 		# Plot the Precision-Recall Curve
@@ -560,8 +562,8 @@ class fun(object):
 		plt.ylabel('Precision')
 		plt.xlabel('Recall')
 		plt.show()
-		filename = SAVE + "_PRcurve.png"
-		plt.savefig(filename)
+		filename = SAVE + "_PRcurve.pdf"
+		plt.savefig(filename, format='pdf')
 		plt.close()
 
 	def PlotsReg(predictions, SAVE):
@@ -577,8 +579,8 @@ class fun(object):
 		plt.ylabel('Predicted')
 		plt.xlabel('Measured')
 		plt.show()
-		filename = SAVE + ".png"
-		plt.savefig(filename)
+		filename = SAVE + ".pdf"
+		plt.savefig(filename, format='pdf')
 		plt.clf()
 
 	def Plot_ConMatrix(cm, SAVE):
@@ -605,7 +607,7 @@ class fun(object):
 
 		
 		
-		filename = SAVE + "_CM.png"
-		plt.savefig(filename) 
+		filename = SAVE + "_CM.pdf"
+		plt.savefig(filename, format='pdf') 
 		
 		return 'Confusion matrix plotted.'

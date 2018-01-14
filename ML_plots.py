@@ -47,7 +47,7 @@ for i in items:
   # Read in scores and which genes were part of the balanced run for each run number
   df_proba = pd.read_csv(items[i][0], sep='\t', index_col = 0)
   n = len([c for c in df_proba.columns if c.lower().startswith('score_')])
-
+  print(df_proba.head())
   balanced_ids = []
   with open(items[i][1], 'r') as ids:
     balanced_ids = ids.readlines()
@@ -72,6 +72,8 @@ for i in items:
       
       yhat[df_proba[name] >= float(j)] = POS
       yhat[df_proba[name] < float(j)] = NEG
+      print(y.head())
+      print(yhat.head())
       matrix = confusion_matrix(y, yhat, labels = [POS,NEG])
       TP, FP, TN, FN = matrix[0,0], matrix[1,0], matrix[1,1], matrix[0,1]
       FPR.append(FP/(FP + TN))
