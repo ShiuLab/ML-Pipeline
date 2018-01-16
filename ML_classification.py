@@ -151,7 +151,7 @@ def main():
 	# Set up dataframe of unknown instances that the final models will be applied to
 	if CL_TRAIN != 'all' and apply != 'none':
 		apply_unk = True
-		if apply.lower() == 'all':
+		if apply == 'all':
 			df_unknowns = df[(~df['Class'].isin(CL_TRAIN))]
 		else:
 			df_unknowns = df[(df['Class'].isin(apply))]
