@@ -233,8 +233,8 @@ def main():
 		
 		# Print results from grid search
 		if ALG == 'RF':
-			max_depth, max_features = params2use
-			print("Parameters selected: max_depth=%s, max_features=%s" % (str(max_depth), str(max_features)))
+			max_depth, max_features, n_estimators = params2use
+			print("Parameters selected: max_depth=%s, max_features=%s, n_estimators=%s" % (str(max_depth), str(max_features), str(n_estimators)))
 	
 		elif ALG == 'SVM':
 			C, kernel = params2use
@@ -253,8 +253,8 @@ def main():
 			print("Parameters selected: penalty=%s, C=%s, intercept_scaling=%s" % (str(penalty), str(C), str(intercept_scaling)))
 
 		elif ALG == "GB":
-			learning_rate, max_depth, max_features = params2use
-			print("Parameters selected: learning rate=%s, max_features=%s, max_depth=%s" % (str(learning_rate), str(max_features), str(max_depth)))
+			learning_rate, max_depth, max_features, n_estimators = params2use
+			print("Parameters selected: learning rate=%s, max_features=%s, max_depth=%s, n_estimators=%s" % (str(learning_rate), str(max_features), str(max_depth), str(n_estimators)))
 	
 		print("Grid search complete. Time: %f seconds" % (time.time() - start_time))
 	

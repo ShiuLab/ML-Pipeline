@@ -57,7 +57,7 @@ class fun(object):
 		### NOTE: The returned top_params will be in alphabetical order - to be consistent add any additional 
 		###       parameters to test in alphabetical order
 		if ALG == 'RF':
-			parameters = {'max_depth':[3, 5, 10, 50], 'max_features': [0.1, 0.25, 0.5, 0.75, 0.9999, 'sqrt', 'log2']}
+			parameters = {'max_depth':[3, 5, 10, 50], 'max_features': [0.1, 0.25, 0.5, 0.75, 'sqrt', 'log2', None], 'n_estimators': [100,500,1000]}
 			
 		elif ALG == "SVM":
 			parameters = {'kernel': ['linear'], 'C':[0.01, 0.1, 0.5, 1, 10, 50, 100]}
@@ -69,11 +69,10 @@ class fun(object):
 			parameters = {'kernel': ['rbf'], 'C': [0.01, 0.1, 0.5, 1, 10, 50, 100], 'gamma': np.logspace(-5,1,7)}
 		
 		elif ALG == 'LogReg':
-			#parameters = {'penalty': ['l1','l2'], 'C': [0.01, 0.1, 0.5, 1, 10, 50, 100], 'intercept_scaling': [0.1, 0.5, 1, 2, 5, 10]}	
 			parameters = {'C': [0.01, 0.1, 0.5, 1, 10, 50, 100], 'intercept_scaling': [0.1, 0.5, 1, 2, 5, 10],'penalty': ['l1','l2']}	
 
 		elif ALG == 'GB':
-			parameters = {'learning_rate': [0.01, 0.1, 0.5, 1.0, 10.0, 100.0],'max_depth': [3, 5, 10], 'max_features': [0.1, 0.25, 0.5, 0.75, 'sqrt', 'log2', None]}	
+			parameters = {'learning_rate': [0.01, 0.1, 0.5, 1, 10, 100],'max_depth': [3, 5, 10, 50], 'max_features': [0.1, 0.25, 0.5, 0.75, 'sqrt', 'log2', None],'n_estimators': [100,500,1000]}	
 
 		else:
 			print('Grid search is not available for the algorithm selected')
@@ -131,11 +130,15 @@ class fun(object):
 		top_params = gs_results_mean.index[0]
 		
 		print("Parameter sweep time: %f seconds" % (time.time() - start_time))
-		outName = SAVE + "_GridSearch.txt"
+
+		# Save grid search results
+		outName = open(SAVE + "_GridSearch.txt", 'w')
+		outName.write('# %f sec\n' % (time.time() - start_time))
 		gs_results_mean.to_csv(outName)
+		outName.close()
 		return top_params,bal_ids_list, param_names
 	
-	def RegGridSearch(df, SAVE, ALG, gs_score, cv_num, n_jobs):
+	def RegGridSearch(df, SAVE, ALG, gs_score, n, cv_num, n_jobs):
 		""" Perform a parameter sweep using GridSearchCV implemented in SK-learn. 
 		Need to edit the hard code to modify what parameters are searched"""
 		from sklearn.metrics import mean_squared_error, r2_score
@@ -146,8 +149,10 @@ class fun(object):
 		
 		### NOTE: The returned top_params will be in alphabetical order - to be consistent add any additional 
 		###       parameters to test in alphabetical order
+		### NOTE2: SK-learn uses the conventation that higher scores are better than lower scores, so gs_score is
+		###       the negative MSE, so the largest value is the best parameter combination.
 		if ALG == 'RF':
-			parameters = {'max_depth':[3, 5, 10, 50], 'max_features': [0.1, 0.25, 0.5, 0.75, 'sqrt', 'log2']}
+			parameters = {'max_depth':[3, 5, 10, 50], 'max_features': [0.1, 0.25, 0.5, 0.75, 'sqrt', 'log2', None], 'n_estimators': [100,500,1000]}
 			
 		elif ALG == "SVM":
 			parameters = {'kernel': ['linear'], 'C':[0.01, 0.1, 0.5, 1, 10, 50, 100]}
@@ -159,7 +164,7 @@ class fun(object):
 			parameters = {'kernel': ['rbf'], 'C': [0.01, 0.1, 0.5, 1, 10, 100], 'gamma': np.logspace(-5,1,7)}
 
 		elif ALG == 'GB':
-			parameters = {'learning_rate': [0.01, 0.1, 0.5, 1.0, 10.0, 100.0], 'max_features': [0.1, 0.25, 0.5, 0.75, 'sqrt', 'log2', None],'max_depth': [3, 5, 10]}	
+			parameters = {'learning_rate': [0.01, 0.1, 0.5, 1, 10, 100], 'max_features': [0.1, 0.25, 0.5, 0.75, 'sqrt', 'log2', None],'max_depth': [3, 5, 10, 50], 'n_estimators': [100,500,1000]}	
 
 		else:
 			print('Grid search is not available for the algorithm selected')
@@ -168,19 +173,52 @@ class fun(object):
 		y = df['Y']
 		x = df.drop(['Y'], axis=1) 
 
-		# Build model, run grid search with 10-fold cross validation and fit
-		if ALG == 'RF':
-			from sklearn.ensemble import RandomForestRegressor
-			model = RandomForestRegressor()
-		elif ALG == "SVM" or ALG == 'SVMrbf' or ALG == 'SVMpoly':
-			from sklearn.svm import SVR
-			model = SVR()
-		elif ALG == "GB":
-			from sklearn.ensemble import GradientBoostingRegressor
-			model = GradientBoostingRegressor()
+		gs_results = pd.DataFrame(columns = ['mean_test_score','params'])
 		
-		grid_search = GridSearchCV(model, parameters, scoring = gs_score, cv = cv_num, n_jobs = n_jobs, pre_dispatch=2*n_jobs)
-		grid_search.fit(x, y)
+		
+		for j in range(n):
+			print("  Round %s of %s"%(j+1,n))
+			
+			# Build model
+			if ALG == 'RF':
+				from sklearn.ensemble import RandomForestRegressor
+				model = RandomForestRegressor()
+			elif ALG == "SVM" or ALG == 'SVMrbf' or ALG == 'SVMpoly':
+				from sklearn.svm import SVR
+				model = SVR()
+			elif ALG == "GB":
+				from sklearn.ensemble import GradientBoostingRegressor
+				model = GradientBoostingRegressor()
+			
+			# Run grid search with 10-fold cross validation and fit
+			grid_search = GridSearchCV(model, parameters, scoring = gs_score, cv = cv_num, n_jobs = n_jobs, pre_dispatch=2*n_jobs)
+			grid_search.fit(x, y)
+			
+			# Add results to dataframe
+			j_results = pd.DataFrame(grid_search.cv_results_)
+			gs_results = pd.concat([gs_results, j_results[['params','mean_test_score']]])
+		
+		# Break params into seperate columns
+		gs_results2 = pd.concat([gs_results.drop(['params'], axis=1), gs_results['params'].apply(pd.Series)], axis=1)
+		param_names = list(gs_results2)[1:]
+		#print('Parameters tested: %s' % param_names)
+		
+		# Find the mean score for each set of parameters & select the top set
+		gs_results_mean = gs_results2.groupby(param_names).mean()
+		gs_results_mean = gs_results_mean.sort_values('mean_test_score', 0, ascending = False)
+		top_params = gs_results_mean.index[0]
+		print(gs_results_mean.head())
+		
+		# Save grid search results
+		print("Parameter sweep time: %f seconds" % (time.time() - start_time))
+		outName = open(SAVE + "_GridSearch.txt", 'w')
+		outName.write('# %f sec\n' % (time.time() - start_time))
+		gs_results_mean.to_csv(outName)
+		outName.close()
+		return top_params, param_names
+
+		
+
 		
 		j_results = pd.DataFrame(grid_search.cv_results_)
 		outName = SAVE + "_GridSearch.txt"

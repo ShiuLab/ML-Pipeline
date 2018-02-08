@@ -187,20 +187,43 @@ def main():
 	n_features = len(list(df)) - 1
 	
 	####### Run parameter sweep using a grid search #######
-	
 	if GS.lower() == 'true' or GS.lower() == 't':
 		start_time = time.time()
 		print("\n\n===>  Grid search started  <===") 
 		
-		params2use = ML.fun.RegGridSearch(df, SAVE, ALG, gs_score, cv_num, n_jobs)
+		params2use, param_names = ML.fun.RegGridSearch(df, SAVE, ALG, gs_score, n, cv_num, n_jobs)
 		
-		print("Parameters selected:")
-		for key,val in params2use.items():
-			print("%s: %s" % (key, val))
-			exec(key + '=val')   # Assigns parameters in the params2use dictionary into variables
+		# Print results from grid search
+		if ALG == 'RF':
+			max_depth, max_features, n_estimators = params2use
+			print("Parameters selected: max_depth=%s, max_features=%s, n_estimators=%s" % (str(max_depth), str(max_features), str(n_estimators)))
+	
+		elif ALG == 'SVM':
+			C, kernel = params2use
+			print("Parameters selected: Kernel=%s, C=%s" % (str(kernel), str(C)))
+		
+		elif ALG == "SVMpoly":
+			C, degree, gamma, kernel = params2use
+			print("Parameters selected: Kernel=%s, C=%s, degree=%s, gamma=%s" % (str(kernel), str(C), str(degree), str(gamma)))
+		
+		elif ALG == "SVMrbf":
+			C, gamma, kernel = params2use
+			print("Parameters selected: Kernel=%s, C=%s, gamma=%s" % (str(kernel), str(C), str(gamma)))
+		
+		elif ALG == "LogReg":
+			C, intercept_scaling, penalty = params2use
+			print("Parameters selected: penalty=%s, C=%s, intercept_scaling=%s" % (str(penalty), str(C), str(intercept_scaling)))
 
+		elif ALG == "GB":
+			learning_rate, max_depth, max_features, n_estimators = params2use
+			print("Parameters selected: learning rate=%s, max_features=%s, max_depth=%s, n_estimators=%s" % (str(learning_rate), str(max_features), str(max_depth), str(n_estimators)))
+	
+		print("Grid search complete. Time: %f seconds" % (time.time() - start_time))
+	
 	else:
 		params2use = "Default parameters used"
+	 
+
 	 
 	####### Run ML models #######
 	start_time = time.time()
