@@ -47,6 +47,7 @@ import time
 
 import ML_functions as ML
 
+start_total_time = time.time()
 def main():
 	
 	# Default code parameters
@@ -224,7 +225,7 @@ def main():
 		params2use = "Default parameters used"
 	 
 
-	 
+
 	####### Run ML models #######
 	start_time = time.time()
 	print("\n\n===>  ML Pipeline started  <===")
@@ -302,17 +303,18 @@ def main():
 	except:
 		pass
 
-		
+	run_time = time.time() - start_total_time
+
 	# Save to summary RESULTS file with all models run from the same directory
 	if not os.path.isfile('RESULTS_reg.txt'):
 		out2 = open('RESULTS_reg.txt', 'a')
-		out2.write('DateTime\tID\tTag\tY\tAlg\tNumInstances\tFeatureNum\tCVfold\tCV_rep\t')
+		out2.write('DateTime\tRunTime\tID\tTag\tY\tAlg\tNumInstances\tFeatureNum\tCVfold\tCV_rep\t')
 		out2.write('MSE\tMSE_sd\tMSE_se\tEVS\tEVS_sd\tEVS_se\tr2\tr2_sd\tr2_se\tPCC\tPCC_sd\tPCC_se\n')
 		out2.close()
 
 	out2 = open('RESULTS_reg.txt', 'a')
-	out2.write('%s\t%s\t%s\t%s\t%s\t%i\t%i\t%i\t%i\t%s\t%s\t%s\t%s\n' % (
-		timestamp, SAVE, TAG, y_name, ALG, len(df.index), n_features, cv_num , cv_reps, 
+	out2.write('%s\t%s\t%s\t%s\t%s\t%s\t%i\t%i\t%i\t%i\t%s\t%s\t%s\t%s\n' % (
+		timestamp, run_time, SAVE, TAG, y_name, ALG, len(df.index), n_features, cv_num , cv_reps, 
 		'\t'.join(str(x) for x in MSE_stats), '\t'.join(str(x) for x in EVS_stats), 
 		'\t'.join(str(x) for x in r2_stats), '\t'.join(str(x) for x in PCC_stats)))
 

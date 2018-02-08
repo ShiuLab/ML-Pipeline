@@ -48,6 +48,7 @@ import time
 
 import ML_functions as ML
 
+start_total_time = time.time()
 def main():
 	
 	# Default code parameters
@@ -494,20 +495,20 @@ def main():
 		except:
 			pass
 
-		
+		run_time = time.time() - start_total_time
 		
 		# Save to summary RESULTS file with all models run from the same directory
 		
 		if not os.path.isfile('RESULTS.txt'):
 			out2 = open('RESULTS.txt', 'a')
-			out2.write('DateTime\tID\tTag\tAlg\tClasses\tFeatureNum\tBalancedSize\tCVfold\tBalancedRuns\tAUCROC\tAUCROC_sd\tAUCROC_se\t')
+			out2.write('DateTime\tRunTime\tID\tTag\tAlg\tClasses\tFeatureNum\tBalancedSize\tCVfold\tBalancedRuns\tAUCROC\tAUCROC_sd\tAUCROC_se\t')
 			out2.write('AUCPRc\tAUCPRc_sd\tAUCPRc_se\tAc\tAc_sd\tAc_se\tF1\tF1_sd\tF1_se\tPr\tPr_sd\tPr_se\tTPR\tTPR_sd\tTPR_se\t')
 			out2.write('FPR\tFPR_sd\tFPR_se\tFNR\tFNR_sd\tFNR_se\tTP\tTP_sd\tTP_se\tTN\tTN_sd\tTN_se\tFP\tFP_sd\tFP_se\t')
 			out2.write('FN\tFN_sd\tFN_se\n')
 			out2.close()
 		out2 = open('RESULTS.txt', 'a')
-		out2.write('%s\t%s\t%s\t%s\t%s\t%i\t%i\t%i\t%i\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' % (
-			timestamp, SAVE, TAG, ALG, [POS,NEG], n_features, min_size, cv_num , n, 
+		out2.write('%s\t%s\t%s\t%s\t%s\t%s\t%i\t%i\t%i\t%i\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' % (
+			timestamp, run_time, SAVE, TAG, ALG, [POS,NEG], n_features, min_size, cv_num , n, 
 			'\t'.join(str(x) for x in ROC), '\t'.join(str(x) for x in PRc), '\t'.join(str(x) for x in Ac), '\t'.join(str(x) for x in F1),
 			'\t'.join(str(x) for x in Pr), '\t'.join(str(x) for x in TPR), '\t'.join(str(x) for x in FPR),
 			'\t'.join(str(x) for x in FNR), '\t'.join(str(x) for x in TP), '\t'.join(str(x) for x in TN),
