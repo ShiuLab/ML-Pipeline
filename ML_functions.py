@@ -57,7 +57,7 @@ class fun(object):
 		### NOTE: The returned top_params will be in alphabetical order - to be consistent add any additional 
 		###       parameters to test in alphabetical order
 		if ALG == 'RF':
-			parameters = {'max_depth':[3, 5, 10, 50], 'max_features': [0.1, 0.25, 0.5, 0.75, 'sqrt', 'log2', None], 'n_estimators': [100,500,1000]}
+			parameters = {'max_depth':[3, 5, 10], 'max_features': [0.1, 0.25, 0.5, 0.75, 'sqrt', 'log2', None], 'n_estimators': [100,500,1000]}
 			
 		elif ALG == "SVM":
 			parameters = {'kernel': ['linear'], 'C':[0.01, 0.1, 0.5, 1, 10, 50, 100]}
@@ -72,7 +72,7 @@ class fun(object):
 			parameters = {'C': [0.01, 0.1, 0.5, 1, 10, 50, 100], 'intercept_scaling': [0.1, 0.5, 1, 2, 5, 10],'penalty': ['l1','l2']}	
 
 		elif ALG == 'GB':
-			parameters = {'learning_rate': [0.01, 0.1, 0.5, 1, 10, 100],'max_depth': [3, 5, 10, 50], 'max_features': [0.1, 0.25, 0.5, 0.75, 'sqrt', 'log2', None],'n_estimators': [100,500,1000]}	
+			parameters = {'learning_rate': [0.001, 0.01, 0.1, 0.5, 1],'max_depth': [3, 5, 10], 'max_features': [0.1, 0.25, 0.5, 0.75, 'sqrt', 'log2', None],'n_estimators': [100,500,1000]}	
 
 		else:
 			print('Grid search is not available for the algorithm selected')
@@ -152,19 +152,19 @@ class fun(object):
 		### NOTE2: SK-learn uses the conventation that higher scores are better than lower scores, so gs_score is
 		###       the negative MSE, so the largest value is the best parameter combination.
 		if ALG == 'RF':
-			parameters = {'max_depth':[3, 5, 10, 50], 'max_features': [0.1, 0.25, 0.5, 0.75, 'sqrt', 'log2', None], 'n_estimators': [100,500,1000]}
+			parameters = {'max_depth':[3, 5, 10], 'max_features': [0.1, 0.25, 0.5, 0.75, 'sqrt', 'log2', None], 'n_estimators': [500,1000]}
 			
 		elif ALG == "SVM":
 			parameters = {'kernel': ['linear'], 'C':[0.01, 0.1, 0.5, 1, 10, 50, 100]}
 
 		elif ALG == 'SVMpoly':
-			parameters = {'kernel': ['poly'], 'C':[0.01, 0.1, 0.5, 1, 10, 100],'degree': [2,3,4], 'gamma': np.logspace(-5,1,7)}
+			parameters = {'kernel': ['poly'], 'C':[0.01, 0.1, 0.5, 1, 10, 100],'degree': [2,3], 'gamma': np.logspace(-5,1,7)}
 
 		elif ALG == 'SVMrbf':
 			parameters = {'kernel': ['rbf'], 'C': [0.01, 0.1, 0.5, 1, 10, 100], 'gamma': np.logspace(-5,1,7)}
 
 		elif ALG == 'GB':
-			parameters = {'learning_rate': [0.01, 0.1, 0.5, 1, 10, 100], 'max_features': [0.1, 0.25, 0.5, 0.75, 'sqrt', 'log2', None],'max_depth': [3, 5, 10, 50], 'n_estimators': [100,500,1000]}	
+			parameters = {'learning_rate': [0.001, 0.01, 0.1, 0.5, 1], 'max_features': [0.1, 0.25, 0.5, 0.75, 'sqrt', 'log2', None],'max_depth': [3, 5, 10], 'n_estimators': [500,1000]}	
 
 		else:
 			print('Grid search is not available for the algorithm selected')
