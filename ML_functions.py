@@ -152,7 +152,7 @@ class fun(object):
 		### NOTE2: SK-learn uses the conventation that higher scores are better than lower scores, so gs_score is
 		###       the negative MSE, so the largest value is the best parameter combination.
 		if ALG == 'RF':
-			parameters = {'max_depth':[3, 5, 10], 'max_features': [0.1, 0.25, 0.5, 0.75, 'sqrt', 'log2', None], 'n_estimators': [500,1000]}
+			parameters = {'max_depth':[3, 5, 10], 'max_features': [0.1, 0.5, 'sqrt', 'log2', None]}
 			
 		elif ALG == "SVM":
 			parameters = {'kernel': ['linear'], 'C':[0.01, 0.1, 0.5, 1, 10, 50, 100]}
@@ -164,7 +164,7 @@ class fun(object):
 			parameters = {'kernel': ['rbf'], 'C': [0.01, 0.1, 0.5, 1, 10, 100], 'gamma': np.logspace(-5,1,7)}
 
 		elif ALG == 'GB':
-			parameters = {'learning_rate': [0.001, 0.01, 0.1, 0.5, 1], 'max_features': [0.1, 0.25, 0.5, 0.75, 'sqrt', 'log2', None],'max_depth': [3, 5, 10], 'n_estimators': [500,1000]}	
+			parameters = {'learning_rate': [0.0001, 0.001, 0.01, 0.1, 1], 'max_features': [0.1, 0.5, 'sqrt', 'log2', None], 'max_depth': [3, 5, 10]}	
 
 		else:
 			print('Grid search is not available for the algorithm selected')
@@ -175,8 +175,7 @@ class fun(object):
 
 		gs_results = pd.DataFrame(columns = ['mean_test_score','params'])
 		
-		
-		for j in range(n):
+		for j in range(10):
 			print("  Round %s of %s"%(j+1,n))
 			
 			# Build model
@@ -200,6 +199,7 @@ class fun(object):
 		
 		# Break params into seperate columns
 		gs_results2 = pd.concat([gs_results.drop(['params'], axis=1), gs_results['params'].apply(pd.Series)], axis=1)
+		gs_results.to_csv(SAVE + "_GridSearchFULL.txt")
 		param_names = list(gs_results2)[1:]
 		#print('Parameters tested: %s' % param_names)
 		
@@ -217,18 +217,6 @@ class fun(object):
 		outName.close()
 		return top_params, param_names
 
-		
-
-		
-		j_results = pd.DataFrame(grid_search.cv_results_)
-		outName = SAVE + "_GridSearch.txt"
-		j_results = j_results.sort_values(by=['rank_test_score','mean_test_score','mean_train_score','mean_fit_time','mean_score_time'])
-
-		j_results.to_csv(outName)
-		top_params = j_results['params'].iloc[0]
-
-		print("Parameter sweep time: %f seconds" % (time.time() - start_time))
-		return top_params
 	
 
 	def DefineClf_RandomForest(n_estimators,max_depth,max_features,j,n_jobs):
@@ -392,7 +380,7 @@ class fun(object):
 		# Try to extract importance scores 
 		if ALG == "RF":
 			importances = reg.feature_importances_
-		elif "SVM" in ALG:
+		elif ALG == "SVM":
 			importances = reg.coef_
 		elif ALG == "LogReg":
 			importances = reg.coef_

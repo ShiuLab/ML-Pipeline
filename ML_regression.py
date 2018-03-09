@@ -51,7 +51,7 @@ start_total_time = time.time()
 def main():
 	
 	# Default code parameters
-	n, FEAT, apply, n_jobs, Y_col, plots, cv_num, TAG, SAVE, short_scores = 100, 'all','F', 1, 'Y', 'False', 10, '', '', ''
+	n, FEAT, apply, n_jobs, Y_col, plots, cv_num, TAG, SAVE, short_scores, OUTPUT_LOC = 100, 'all','F', 1, 'Y', 'False', 10, '', '', '', ''
 	y_name, SEP, THRSHD_test, DF_Y, df_unknowns,UNKNOWN, normX, normY, cv_reps, cv_sets = 'Y', '\t','F1', 'ignore', 'none','unk', 'F', 'F', 10, 'none'
 
 	# Default parameters for Grid search
@@ -61,7 +61,7 @@ def main():
 	n_estimators, max_depth, max_features, learning_rate = 500, 10, "sqrt", 1.0
 	
 	# Default Linear SVC parameters
-	kernel, C, degree, gamma, loss, max_iter = 'linear', 1, 2, 1, 'hinge', "500"
+	kernel, C, degree, gamma, loss, max_iter = 'rbf', 0.01, 2, 0.00001, 'hinge', "500"
 	
 	# Default Logistic Regression paramemter
 	penalty, C, intercept_scaling = 'l2', 1.0, 1.0
@@ -105,11 +105,12 @@ def main():
 			cv_sets = pd.read_csv(sys.argv[i+1], index_col = 0)
 			cv_reps = len(cv_sets.columns)
 			cv_num = len(cv_sets.iloc[:,0].unique())
-			print(cv_num)
 		elif sys.argv[i] == "-plots":
 			plots = sys.argv[i+1]
 		elif sys.argv[i] == "-tag":
 			TAG = sys.argv[i+1]
+		elif sys.argv[i] == "-out":
+			OUTPUT_LOC = sys.argv[i+1]
 		elif sys.argv[i] == "-threshold_test":
 			THRSHD_test = sys.argv[i+1]
 		elif sys.argv[i] == "-n_jobs" or sys.argv[i] == "-p":
@@ -138,7 +139,6 @@ def main():
 		df = df.rename(columns = {y_name:'Y'})
 		y_name = y_name
 	
-	print(df.head())
 	# Filter out features not in feat file given - default: keep all
 	if FEAT != 'all':
 		with open(FEAT) as f:
@@ -163,9 +163,15 @@ def main():
 	
 	if SAVE == "":
 		if TAG == "":
-			SAVE = DF + "_" + ALG
+			if OUTPUT_LOC == "":
+				SAVE = DF + "_" + ALG
+			else:
+				SAVE = OUTPUT_LOC + '/' + DF + "_" + ALG
 		else:
-			SAVE = DF + "_" + ALG + "_" + TAG
+			if OUTPUT_LOC == "":
+				SAVE = DF + "_" + ALG + "_" + TAG
+			else:
+				SAVE = OUTPUT_LOC + '/' + DF + "_" + ALG + "_" + TAG
 	
 	# Normalize feature data (normX)
 	if ALG == "SVM" or normX == 't' or normX == 'true':
@@ -196,8 +202,8 @@ def main():
 		
 		# Print results from grid search
 		if ALG == 'RF':
-			max_depth, max_features, n_estimators = params2use
-			print("Parameters selected: max_depth=%s, max_features=%s, n_estimators=%s" % (str(max_depth), str(max_features), str(n_estimators)))
+			max_depth, max_features = params2use
+			print("Parameters selected: max_depth=%s, max_features=%s" % (str(max_depth), str(max_features)))
 	
 		elif ALG == 'SVM':
 			C, kernel = params2use
@@ -216,8 +222,8 @@ def main():
 			print("Parameters selected: penalty=%s, C=%s, intercept_scaling=%s" % (str(penalty), str(C), str(intercept_scaling)))
 
 		elif ALG == "GB":
-			learning_rate, max_depth, max_features, n_estimators = params2use
-			print("Parameters selected: learning rate=%s, max_features=%s, max_depth=%s, n_estimators=%s" % (str(learning_rate), str(max_features), str(max_depth), str(n_estimators)))
+			learning_rate, max_depth, max_features = params2use
+			print("Parameters selected: learning rate=%s, max_features=%s, max_depth=%s" % (str(learning_rate), str(max_features), str(max_depth)))
 	
 		print("Grid search complete. Time: %f seconds" % (time.time() - start_time))
 	
@@ -331,13 +337,4 @@ def main():
 
 
 	print("\n\n===>  ML Results  <===")
-	print('Metric\tMean\tstd\tSE')
-	print('MSE\t%s\nEVS\t%s\nR2\t%s\nPCC\t%s\n' % (
-		'\t'.join(str(x) for x in MSE_stats), '\t'.join(str(x) for x in EVS_stats), 
-		'\t'.join(str(x) for x in r2_stats), '\t'.join(str(x) for x in PCC_stats)))
-
-
-
-
-if __name__ == '__main__':
-	main()
+	print('Metric\tMe
