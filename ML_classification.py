@@ -7,7 +7,7 @@ $ export PATH=/mnt/home/azodichr/miniconda3/bin:$PATH
 
 INPUTS:
 	
-	REQUIRED ALL:
+	REQUIRED:
 	-df       Feature & class dataframe for ML. See "" for an example dataframe
 	-alg      Available: RF, SVM (linear), SVMpoly, SVMrbf, LogReg, GB
 	
@@ -48,10 +48,13 @@ import time
 
 import ML_functions as ML
 
+start_total_time = time.time()
 def main():
 	
 	# Default code parameters
-	n, FEAT, CL_TRAIN, apply, n_jobs, class_col, CM, POS, plots, cv_num, TAG, SAVE, MIN_SIZE, short_scores = 100, 'all', 'all','none', 1, 'Class', 'False', 1, 'False', 10, '', '', '', False
+	n, FEAT, CL_TRAIN, apply_model, n_jobs =  100, 'all', 'all','none', 1,
+	class_col, CM, POS, plots, cv_num = 'Class', 'False', 1, 'False', 10,
+	TAG, SAVE, MIN_SIZE, short_scores =   '', '', '', False
 	SEP, THRSHD_test, DF_CLASS = '\t','F1', 'ignore'
 
 	# Default parameters for Grid search
@@ -80,12 +83,12 @@ def main():
 		elif sys.argv[i] == "-gs_score":
 			gs_score = sys.argv[i+1]
 		elif sys.argv[i] == '-cl_train':
-			CL_TRAIN = sys.argv[i+1].split(',')
+			CL_TRAIN = sys.argv[i+1].strip().split(',')
 			POS = CL_TRAIN[0]
 		elif sys.argv[i] == '-apply':
-			apply = sys.argv[i+1].lower()
-			if apply != "all":
-				apply = sys.argv[i+1].split(',')
+			apply_model = sys.argv[i+1].lower()
+			if apply_model != "all":
+				apply_model = sys.argv[i+1].split(',')
 		elif sys.argv[i] == "-class":
 			class_col = sys.argv[i+1]
 		elif sys.argv[i] == "-n":
@@ -125,7 +128,7 @@ def main():
 	
 	df = pd.read_csv(DF, sep=SEP, index_col = 0)
 	
-	# If feature info and class info are in separate files
+	# If features  and class info are in separate files, merge them: 
 	if DF_CLASS != 'ignore':
 		df_class_file, df_class_col = DF_CLASS.strip().split(',')
 		df_class = pd.read_csv(df_class_file, sep=SEP, index_col = 0)
@@ -137,6 +140,7 @@ def main():
 	
 	# Filter out features not in feat file given - default: keep all
 	if FEAT != 'all':
+		print('Using subset of features from: %s' % FEAT)
 		with open(FEAT) as f:
 			features = f.read().strip().splitlines()
 			features = ['Class'] + features
@@ -149,12 +153,12 @@ def main():
 	
 	
 	# Set up dataframe of unknown instances that the final models will be applied to
-	if CL_TRAIN != 'all' and apply != 'none':
+	if CL_TRAIN != 'all' and apply_model != 'none':
 		apply_unk = True
-		if apply == 'all':
+		if apply_model.lower() == 'all':
 			df_unknowns = df[(~df['Class'].isin(CL_TRAIN))]
 		else:
-			df_unknowns = df[(df['Class'].isin(apply))]
+			df_unknowns = df[(df['Class'].isin(apply_model))]
 	else:
 		apply_unk = False
 		df_unknowns = ''
@@ -163,7 +167,8 @@ def main():
 	if CL_TRAIN != 'all':
 		df = df[(df['Class'].isin(CL_TRAIN))]
 
-	# Generate training classes list. If binary, establish POS and NEG classes. Set grid search scoring: roc_auc for binary, f1_macro for multiclass
+	# Generate training classes list. If binary, establish POS and NEG classes. 
+	# Set grid search scoring: roc_auc for binary, f1_macro for multiclass
 	if CL_TRAIN == 'all':
 		classes = df['Class'].unique()
 		if len(classes) == 2:
@@ -196,9 +201,9 @@ def main():
 		min_size = (df.groupby('Class').size()).min() - 1
 	else:
 		min_size = int(MIN_SIZE)
-
 	print('Balanced dataset will include %i instances of each class' % min_size)
 	
+	# Define save name if not specified using -save
 	if SAVE == "":
 		if TAG == "":
 			SAVE = DF + "_" + ALG
@@ -233,8 +238,8 @@ def main():
 		
 		# Print results from grid search
 		if ALG == 'RF':
-			max_depth, max_features = params2use
-			print("Parameters selected: max_depth=%s, max_features=%s" % (str(max_depth), str(max_features)))
+			max_depth, max_features, n_estimators = params2use
+			print("Parameters selected: max_depth=%s, max_features=%s, n_estimators=%s" % (str(max_depth), str(max_features), str(n_estimators)))
 	
 		elif ALG == 'SVM':
 			C, kernel = params2use
@@ -253,8 +258,8 @@ def main():
 			print("Parameters selected: penalty=%s, C=%s, intercept_scaling=%s" % (str(penalty), str(C), str(intercept_scaling)))
 
 		elif ALG == "GB":
-			learning_rate, max_depth, max_features = params2use
-			print("Parameters selected: learning rate=%s, max_features=%s, max_depth=%s" % (str(learning_rate), str(max_features), str(max_depth)))
+			learning_rate, max_depth, max_features, n_estimators = params2use
+			print("Parameters selected: learning rate=%s, max_features=%s, max_depth=%s, n_estimators=%s" % (str(learning_rate), str(max_features), str(max_depth), str(n_estimators)))
 	
 		print("Grid search complete. Time: %f seconds" % (time.time() - start_time))
 	
@@ -362,27 +367,40 @@ def main():
 ###### Multiclass Specific Output ######
 	if len(classes) > 2:
 		
-		# Write median multiclass scores
+		# For each class, get the median and std score
 		summary_cols = []
-		for class_nm in reversed(classes):
+		mc_score_columns = []
+		keep_for_summary = ['Class', 'Prediction']
+		for class_nm in reversed(classes): # get std
 			class_proba_cols = [c for c in df_proba.columns if c.startswith(class_nm+'_score_')]
 			df_proba.insert(loc=1, column = class_nm+'_score_stdev', value = df_proba[class_proba_cols].std(axis=1))
 			summary_cols.insert(0,class_nm+'_score_stdev')
-		
-		mc_score_columns = []
-		for class_nm in reversed(classes):
+
+		for class_nm in reversed(classes): # get median
+			summary_cols.insert(0,class_nm+'_score_Median')
 			mc_score_columns.append(class_nm+'_score_Median')
+			keep_for_summary.append(class_nm + '_score_Median')
 			class_proba_cols = [c for c in df_proba.columns if c.startswith(class_nm+'_score_')]
 			df_proba.insert(loc=1, column = class_nm+'_score_Median', value = df_proba[class_proba_cols].median(axis=1))
-			summary_cols.insert(0,class_nm+'_score_Median')
+			
+		
+		# Find the max mc_score and set to Prediction column (remove the _score_Median string)
 		df_proba.insert(loc=1, column = 'Prediction', value = df_proba[mc_score_columns].idxmax(axis=1))
 		df_proba['Prediction'] = df_proba.Prediction.str.replace('_score_Median','')
+
 		
-		
-		# Summarize % of each class predicted as POS and NEG		
-		summary_df_proba = df_proba[['Class', 'Prediction', class_nm+'_score_Median']].groupby(['Class', 'Prediction']).agg('count').unstack(level=1)
+		# Count the number of times an instance of class x is predicted as class y 		
+		summary_df_proba = df_proba[['Class', 'Prediction',class_nm + '_score_Median']].groupby(['Class', 'Prediction']).agg('count').unstack(level=1)
 		summary_df_proba.columns = summary_df_proba.columns.droplevel()
+
+		# Check to make sure each class was predicted at least once
+		for cl in classes:
+			if cl not in list(summary_df_proba):
+				print('No instances were predicted as class: %s' % cl)
+				summary_df_proba[cl] = 0
 		summary_df_proba['n_total'] = summary_df_proba[classes].sum(axis=1)
+
+
 		for class_nm in classes:
 			summary_df_proba[str(class_nm) + '_perc'] = summary_df_proba[class_nm]/summary_df_proba['n_total']
 
@@ -400,7 +418,6 @@ def main():
 		f1 = f1[1:]
 		f1.columns = [str(col) + '_F1' for col in f1.columns]
 		f1 = f1.astype(float)		
-		print(f1)
 		
 		# Calculate accuracy and f1 stats
 		AC = np.mean(accuracies)
@@ -415,7 +432,7 @@ def main():
 		# Save detailed results file 
 		with open(SAVE + "_results.txt", 'w') as out:
 			out.write('%s\nID: %s\nTag: %s\nAlgorithm: %s\nTrained on classes: %s\nApplied to: %s\nNumber of features: %i\n' % (
-				timestamp, SAVE, TAG, ALG, classes, apply, n_features))
+				timestamp, SAVE, TAG, ALG, classes, apply_model, n_features))
 			out.write('Min class size: %i\nCV folds: %i\nNumber of balanced datasets: %i\nGrid Search Used: %s\nParameters used:%s\n' % (
 				min_size, cv_num, n, GS, parameters_used))
 
@@ -494,20 +511,20 @@ def main():
 		except:
 			pass
 
-		
+		run_time = time.time() - start_total_time
 		
 		# Save to summary RESULTS file with all models run from the same directory
 		
 		if not os.path.isfile('RESULTS.txt'):
 			out2 = open('RESULTS.txt', 'a')
-			out2.write('DateTime\tID\tTag\tAlg\tClasses\tFeatureNum\tBalancedSize\tCVfold\tBalancedRuns\tAUCROC\tAUCROC_sd\tAUCROC_se\t')
+			out2.write('DateTime\tRunTime\tID\tTag\tAlg\tClasses\tFeatureNum\tBalancedSize\tCVfold\tBalancedRuns\tAUCROC\tAUCROC_sd\tAUCROC_se\t')
 			out2.write('AUCPRc\tAUCPRc_sd\tAUCPRc_se\tAc\tAc_sd\tAc_se\tF1\tF1_sd\tF1_se\tPr\tPr_sd\tPr_se\tTPR\tTPR_sd\tTPR_se\t')
 			out2.write('FPR\tFPR_sd\tFPR_se\tFNR\tFNR_sd\tFNR_se\tTP\tTP_sd\tTP_se\tTN\tTN_sd\tTN_se\tFP\tFP_sd\tFP_se\t')
 			out2.write('FN\tFN_sd\tFN_se\n')
 			out2.close()
 		out2 = open('RESULTS.txt', 'a')
-		out2.write('%s\t%s\t%s\t%s\t%s\t%i\t%i\t%i\t%i\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' % (
-			timestamp, SAVE, TAG, ALG, [POS,NEG], n_features, min_size, cv_num , n, 
+		out2.write('%s\t%s\t%s\t%s\t%s\t%s\t%i\t%i\t%i\t%i\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' % (
+			timestamp, run_time, SAVE, TAG, ALG, [POS,NEG], n_features, min_size, cv_num , n, 
 			'\t'.join(str(x) for x in ROC), '\t'.join(str(x) for x in PRc), '\t'.join(str(x) for x in Ac), '\t'.join(str(x) for x in F1),
 			'\t'.join(str(x) for x in Pr), '\t'.join(str(x) for x in TPR), '\t'.join(str(x) for x in FPR),
 			'\t'.join(str(x) for x in FNR), '\t'.join(str(x) for x in TP), '\t'.join(str(x) for x in TN),
@@ -516,7 +533,7 @@ def main():
 		# Save detailed results file 
 		with open(SAVE + "_results.txt", 'w') as out:
 			out.write('%s\nID: %s\nTag: %s\nAlgorithm: %s\nTrained on classes: %s\nApplied to: %s\nNumber of features: %i\n' % (
-				timestamp, SAVE, TAG, ALG, classes, apply, n_features))
+				timestamp, SAVE, TAG, ALG, classes, apply_model, n_features))
 			out.write('Min class size: %i\nCV folds: %i\nNumber of balanced datasets: %i\nGrid Search Used: %s\nParameters used:%s\n' % (
 				min_size, cv_num, n, GS, parameters_used))
 			

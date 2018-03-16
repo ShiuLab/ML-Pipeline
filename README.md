@@ -2,13 +2,26 @@
 Scripts for Shiu Lab Machine Learning
 
 ## Environment Requirements
-biopython                 1.68
-matplotlib                1.5.1
-numpy                     1.11.3
-pandas                    0.18.1
-python                    3.4.4
-scikit-learn              0.18.1
-scipy                     0.18.1
+* biopython                 1.68
+* matplotlib                1.5.1
+* numpy                     1.11.3
+* pandas                    0.18.1
+* python                    3.4.4
+* scikit-learn              0.18.1
+* scipy                     0.18.1
+
+Example: 
+
+    wget http://repo.continuum.io/miniconda/Miniconda3-3.7.0-Linux-x86_64.sh -O ~/miniconda.sh
+    bash ~/miniconda.sh -b -p $HOME/miniconda
+    export PATH="$HOME/miniconda/bin:$PATH"
+    conda install biopython
+    conda install matplotlib
+    conda install pandas
+    conda install scikit-learn
+    
+MSU HPCC: export PATH=/mnt/home/azodichr/miniconda3/bin:$PATH
+Calculon2: 
 
 ## Data Preprocessing
 
@@ -16,8 +29,8 @@ scipy                     0.18.1
 Available feature selection tools: RandomForest, Chi2, LASSO (L1 penalty), enrichement (Fisher's Exact test).
 
 Example:
-<pre><code>export PATH=/mnt/home/azodichr/miniconda3/bin:$PATH
-python Feature_Selection_sklearn.py -df [path/to/dataframe] -f [rf/chi2/lasso/fet] -n [needed for chi2/rf] -p [needed for LASSO/FET] -type [needed for LASSO] -list T </code></pre>
+    export PATH=/mnt/home/azodichr/miniconda3/bin:$PATH
+    python Feature_Selection_sklearn.py -df [path/to/dataframe] -f [rf/chi2/lasso/fet] -n [needed for chi2/rf] -p [needed for LASSO/FET] -type [needed for LASSO] -list T 
 Use -list T/F to either just save a list of selected features (can use as -feat input during model building) or a filtered data frame
 
 ### Impute Data (Moore)
@@ -38,13 +51,13 @@ Available imputation methods (-mv):
 3. drop all rows with NAs (-mv 0)
 
 Example:
-<pre><code> python impute_data.py -df1 [path/to/dataframe] -dtype1 [n,c,b] -mv [0,1,2] -df2 [path/to/dataframe2] -dtype2 [n,c,b] -df3 [path/to/dataframe3] -dtype3 [n,c,b]</code></pre>
+    python impute_data.py -df1 [path/to/dataframe] -dtype1 [n,c,b] -mv [0,1,2] -df2 [path/to/dataframe2] -dtype2 [n,c,b] -df3 [path/to/dataframe3] -dtype3 [n,c,b]
 
 ### Convert categorical data to binary (Moore)
 
 This script converts a categorical matrix to a binary matrix to run on machine-learning algorithms
 
-<pre><code> python get_cat_as_binmatrix.py [categorical_matrix] </code></pre> 
+    python get_cat_as_binmatrix.py [categorical_matrix]
 
 output: [categorical_matrix]_binary.matrix.txt
 
@@ -56,12 +69,14 @@ See ML_classification.py docstrings for additional options (and ML_clf_functions
 Available model algorithms: RF, Gradent Boosting (GB), SVM, SVMpoly, SVMrbf, Logistic Regression (LogReg)
 
 Example binary classification:
-<pre><code>export PATH=/mnt/home/azodichr/miniconda3/bin:$PATH
-python ML_classification.py -df example_Bin.txt -alg [ALG] </code></pre>
+
+    export PATH=/mnt/home/azodichr/miniconda3/bin:$PATH
+    python ML_classification.py -df example_Bin.txt -alg [ALG]
 
 Example multiclass classification:
-<pre><code>export PATH=/mnt/home/azodichr/miniconda3/bin:$PATH
-python ML_classification.py -df example_MC.txt -alg [ALG] -class Biotech_cluster -cl_train a,b,c -cm T</code></pre>
+
+    export PATH=/mnt/home/azodichr/miniconda3/bin:$PATH
+    python ML_classification.py -df example_MC.txt -alg [ALG] -class Biotech_cluster -cl_train a,b,c -cm T
 
 *Note: To run tests use -gs T -gs_n 3 -n 5 
 
@@ -70,8 +85,8 @@ See ML_regression.py docstrings for additional options (and ML_clf_functions.py)
 
 Available model algorithms: RF, SVM, SVMpoly, SVMrbf, Gradient Boosting (GB), Linear Regression (LR - no GS needed)
 
-<pre><code>export PATH=/mnt/home/azodichr/miniconda3/bin:$PATH
-python ML_regression.py -df data.txt -alg [ALG]</code></pre>
+    export PATH=/mnt/home/azodichr/miniconda3/bin:$PATH
+    python ML_regression.py -df data.txt -alg [ALG]
 
 
 ## Post-Processing
@@ -79,14 +94,15 @@ python ML_regression.py -df data.txt -alg [ALG]</code></pre>
 ### AUC-ROC & AUC-PR Plots
 Use this code to build plots with multiple classification _scores files.
 
-<pre><code>export PATH=/mnt/home/azodichr/miniconda3/bin:$PATH
-python ML_plots.py [SAVE_NAME] name1 [Path_to_1st_scores_file] name3 [Path_to_2nd_scores_file] etc.</code></pre>
+    export PATH=/mnt/home/azodichr/miniconda3/bin:$PATH
+    python ML_plots.py [SAVE_NAME] name1 [Path_to_1st_scores_file] name3 [Path_to_2nd_scores_file] etc.
 
 ### Compare classifiers (Venn-Diagrams)
 Given a set of *_scores.txt results files, output a list of which instances were classified correctly and which incorrectly and summarize with a table of overlaps.
 Example:
-<pre><code>export PATH=/mnt/home/azodichr/miniconda3/bin:$PATH
-python compare_classifiers.py -scores [comma sep list of scores files] -ids [comma sep list of classifier names] -save [out_name]</code></pre>
+
+    export PATH=/mnt/home/azodichr/miniconda3/bin:$PATH
+    python compare_classifiers.py -scores [comma sep list of scores files] -ids [comma sep list of classifier names] -save [out_name] 
 
 
 

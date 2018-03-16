@@ -47,10 +47,11 @@ import time
 
 import ML_functions as ML
 
+start_total_time = time.time()
 def main():
 	
 	# Default code parameters
-	n, FEAT, apply, n_jobs, Y_col, plots, cv_num, TAG, SAVE, short_scores = 100, 'all','F', 1, 'Y', 'False', 10, '', '', ''
+	n, FEAT, apply, n_jobs, Y_col, plots, cv_num, TAG, SAVE, short_scores, OUTPUT_LOC = 100, 'all','F', 1, 'Y', 'False', 10, '', '', '', ''
 	y_name, SEP, THRSHD_test, DF_Y, df_unknowns,UNKNOWN, normX, normY, cv_reps, cv_sets = 'Y', '\t','F1', 'ignore', 'none','unk', 'F', 'F', 10, 'none'
 
 	# Default parameters for Grid search
@@ -60,7 +61,7 @@ def main():
 	n_estimators, max_depth, max_features, learning_rate = 500, 10, "sqrt", 1.0
 	
 	# Default Linear SVC parameters
-	kernel, C, degree, gamma, loss, max_iter = 'linear', 1, 2, 1, 'hinge', "500"
+	kernel, C, degree, gamma, loss, max_iter = 'rbf', 0.01, 2, 0.00001, 'hinge', "500"
 	
 	# Default Logistic Regression paramemter
 	penalty, C, intercept_scaling = 'l2', 1.0, 1.0
@@ -104,11 +105,12 @@ def main():
 			cv_sets = pd.read_csv(sys.argv[i+1], index_col = 0)
 			cv_reps = len(cv_sets.columns)
 			cv_num = len(cv_sets.iloc[:,0].unique())
-			print(cv_num)
 		elif sys.argv[i] == "-plots":
 			plots = sys.argv[i+1]
 		elif sys.argv[i] == "-tag":
 			TAG = sys.argv[i+1]
+		elif sys.argv[i] == "-out":
+			OUTPUT_LOC = sys.argv[i+1]
 		elif sys.argv[i] == "-threshold_test":
 			THRSHD_test = sys.argv[i+1]
 		elif sys.argv[i] == "-n_jobs" or sys.argv[i] == "-p":
@@ -137,7 +139,6 @@ def main():
 		df = df.rename(columns = {y_name:'Y'})
 		y_name = y_name
 	
-	print(df.head())
 	# Filter out features not in feat file given - default: keep all
 	if FEAT != 'all':
 		with open(FEAT) as f:
@@ -162,9 +163,15 @@ def main():
 	
 	if SAVE == "":
 		if TAG == "":
-			SAVE = DF + "_" + ALG
+			if OUTPUT_LOC == "":
+				SAVE = DF + "_" + ALG
+			else:
+				SAVE = OUTPUT_LOC + '/' + DF + "_" + ALG
 		else:
-			SAVE = DF + "_" + ALG + "_" + TAG
+			if OUTPUT_LOC == "":
+				SAVE = DF + "_" + ALG + "_" + TAG
+			else:
+				SAVE = OUTPUT_LOC + '/' + DF + "_" + ALG + "_" + TAG
 	
 	# Normalize feature data (normX)
 	if ALG == "SVM" or normX == 't' or normX == 'true':
@@ -187,21 +194,44 @@ def main():
 	n_features = len(list(df)) - 1
 	
 	####### Run parameter sweep using a grid search #######
-	
 	if GS.lower() == 'true' or GS.lower() == 't':
 		start_time = time.time()
 		print("\n\n===>  Grid search started  <===") 
 		
-		params2use = ML.fun.RegGridSearch(df, SAVE, ALG, gs_score, cv_num, n_jobs)
+		params2use, param_names = ML.fun.RegGridSearch(df, SAVE, ALG, gs_score, n, cv_num, n_jobs)
 		
-		print("Parameters selected:")
-		for key,val in params2use.items():
-			print("%s: %s" % (key, val))
-			exec(key + '=val')   # Assigns parameters in the params2use dictionary into variables
+		# Print results from grid search
+		if ALG == 'RF':
+			max_depth, max_features = params2use
+			print("Parameters selected: max_depth=%s, max_features=%s" % (str(max_depth), str(max_features)))
+	
+		elif ALG == 'SVM':
+			C, kernel = params2use
+			print("Parameters selected: Kernel=%s, C=%s" % (str(kernel), str(C)))
+		
+		elif ALG == "SVMpoly":
+			C, degree, gamma, kernel = params2use
+			print("Parameters selected: Kernel=%s, C=%s, degree=%s, gamma=%s" % (str(kernel), str(C), str(degree), str(gamma)))
+		
+		elif ALG == "SVMrbf":
+			C, gamma, kernel = params2use
+			print("Parameters selected: Kernel=%s, C=%s, gamma=%s" % (str(kernel), str(C), str(gamma)))
+		
+		elif ALG == "LogReg":
+			C, intercept_scaling, penalty = params2use
+			print("Parameters selected: penalty=%s, C=%s, intercept_scaling=%s" % (str(penalty), str(C), str(intercept_scaling)))
 
+		elif ALG == "GB":
+			learning_rate, max_depth, max_features = params2use
+			print("Parameters selected: learning rate=%s, max_features=%s, max_depth=%s" % (str(learning_rate), str(max_features), str(max_depth)))
+	
+		print("Grid search complete. Time: %f seconds" % (time.time() - start_time))
+	
 	else:
 		params2use = "Default parameters used"
 	 
+
+
 	####### Run ML models #######
 	start_time = time.time()
 	print("\n\n===>  ML Pipeline started  <===")
@@ -279,17 +309,18 @@ def main():
 	except:
 		pass
 
-		
+	run_time = time.time() - start_total_time
+
 	# Save to summary RESULTS file with all models run from the same directory
 	if not os.path.isfile('RESULTS_reg.txt'):
 		out2 = open('RESULTS_reg.txt', 'a')
-		out2.write('DateTime\tID\tTag\tY\tAlg\tNumInstances\tFeatureNum\tCVfold\tCV_rep\t')
+		out2.write('DateTime\tRunTime\tID\tTag\tY\tAlg\tNumInstances\tFeatureNum\tCVfold\tCV_rep\t')
 		out2.write('MSE\tMSE_sd\tMSE_se\tEVS\tEVS_sd\tEVS_se\tr2\tr2_sd\tr2_se\tPCC\tPCC_sd\tPCC_se\n')
 		out2.close()
 
 	out2 = open('RESULTS_reg.txt', 'a')
-	out2.write('%s\t%s\t%s\t%s\t%s\t%i\t%i\t%i\t%i\t%s\t%s\t%s\t%s\n' % (
-		timestamp, SAVE, TAG, y_name, ALG, len(df.index), n_features, cv_num , cv_reps, 
+	out2.write('%s\t%s\t%s\t%s\t%s\t%s\t%i\t%i\t%i\t%i\t%s\t%s\t%s\t%s\n' % (
+		timestamp, run_time, SAVE, TAG, y_name, ALG, len(df.index), n_features, cv_num , cv_reps, 
 		'\t'.join(str(x) for x in MSE_stats), '\t'.join(str(x) for x in EVS_stats), 
 		'\t'.join(str(x) for x in r2_stats), '\t'.join(str(x) for x in PCC_stats)))
 
@@ -306,13 +337,4 @@ def main():
 
 
 	print("\n\n===>  ML Results  <===")
-	print('Metric\tMean\tstd\tSE')
-	print('MSE\t%s\nEVS\t%s\nR2\t%s\nPCC\t%s\n' % (
-		'\t'.join(str(x) for x in MSE_stats), '\t'.join(str(x) for x in EVS_stats), 
-		'\t'.join(str(x) for x in r2_stats), '\t'.join(str(x) for x in PCC_stats)))
-
-
-
-
-if __name__ == '__main__':
-	main()
+	print('Metric\tMe

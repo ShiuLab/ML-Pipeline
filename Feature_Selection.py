@@ -51,6 +51,7 @@ def DecisionTree(df, n):
 
   X_all = df.drop('Class', axis=1).values  
   Y_all = df.loc[:, 'Class'].values
+  Y_all = Y_all.astype('int')
 
   fean_num_feat_sel = len(list(df.columns.values)[1:])
   feat_sel_forest = RandomForestClassifier(criterion='entropy', max_features= round(sqrt(fean_num_feat_sel)), n_estimators=500, n_jobs=8)
@@ -87,6 +88,7 @@ def Chi2(df, n):
 
   X_all = df.drop('Class', axis=1).values  
   Y_all = df.loc[:, 'Class'].values
+  Y_all = Y_all.astype('int')
 
   # Set selection to chi2 with n to keep
   ch2 = SelectKBest(chi2, k=n)
@@ -112,6 +114,7 @@ def Relief(df, n, n_jobs):
 
   X_all = df.drop('Class', axis=1).values  
   Y_all = df.loc[:, 'Class'].values
+  Y_all = Y_all.astype('int')
 
   feature_names = list(df)
   feature_names.remove('Class')
@@ -144,6 +147,7 @@ def L1(df, PARAMETER, TYPE):
 
   X_all = df.drop('Class', axis=1).values  
   Y_all = df.loc[:, 'Class'].values
+  Y_all = Y_all.astype('int')
 
   if TYPE == 'c' or TYPE == 'classification':
     estimator = LinearSVC(C = PARAMETER, penalty='l1', dual=False).fit(X_all, Y_all)
@@ -210,9 +214,10 @@ if __name__ == "__main__":
   CL = 'Class'
   TYPE = 'c'
   n_jobs = 1
-  IGNORE = 'pass'
+  IGNORE, CVs, REPS = 'pass', 'pass', 1
   SEP = '\t'
   SAVE, DF_CLASS = 'default', 'default'
+  UNKNOWN = 'unk'
 
   for i in range (1,len(sys.argv),2):
 
@@ -246,6 +251,10 @@ if __name__ == "__main__":
           neg = sys.argv[i+1]
         if sys.argv[i] == '-ignore':
           IGNORE = sys.argv[i+1]
+        if sys.argv[i] == '-CVs':
+          CVs = sys.argv[i+1]
+        if sys.argv[i] == '-reps':
+          REPS = sys.argv[i+1]
 
 
   if len(sys.argv) <= 1:
@@ -280,41 +289,53 @@ if __name__ == "__main__":
 
   # Run feature selection
 
-  if F.lower() == "randomforest" or F.lower() == "rf":
-    df_feat = DecisionTree(df, N)
-    save_name = DF.split("/")[-1] + "_" + F + "_" + str(N)
-  elif F.lower() == "chi2" or F.lower() == "c2":
-    df_feat = Chi2(df, N)
-    save_name = DF.split("/")[-1] + "_" + F + "_" + str(N)
-  elif F.lower() == "l1" or F.lower() == "lasso":
-    df_feat = L1(df, PARAMETER, TYPE)
-    save_name = DF.split("/")[-1] + "_" + F + "_" + TYPE + '_' + str(PARAMETER)
-  elif F.lower() == "relief" or F.lower() == "rebate":
-    df_feat = Relief(df, N, n_jobs)
-    save_name = DF.split("/")[-1] + "_" + F + '_' + str(N)
-  elif F.lower() == "fisher" or F.lower() == "fet" or F.lower() == 'enrich':
-    df_feat = FET(df, PARAMETER, pos, neg)
-    save_name = DF.split("/")[-1] + "_" + F + '_' + str(PARAMETER)
-  else:
-    print("Feature selection method not available in this script")
+  for n in range(1, int(REPS)+1):
+    print("Working on rep %i" % n)
+    df_use = df.copy()
+    
+    # Run FS within a cross-validation scheme
+    if CVs != 'pass':
+      cv_folds = pd.read_csv(CVs, sep=',', index_col=0)
+      cv = cv_folds['cv_' + str(n)]
+      df_use['Class'][cv==5] = 'unk'
+      print(df_use.head(10))
 
-  if SAVE != 'default':
-    save_name = SAVE
+    if UNKNOWN in df_use.loc[:, 'Class'].values:
+      df_use = df_use[df_use.Class != UNKNOWN]
 
-  if save_list.lower() == 't' or save_list.lower() == 'true':
-    top_feat = list(df_feat)
-    try:
-      top_feat.remove('Class')
-    except:
-      print('Class is not in this list')
-    save_name2 = save_name + '_list'
-    out = open(save_name2, 'w')
-    for f in top_feat:
-      out.write(f + '\n')
-  else:
-    df_feat.to_csv(save_name, sep='\t', quoting=None)
+    if F.lower() == "randomforest" or F.lower() == "rf":
+      df_feat = DecisionTree(df_use, N)
+      save_name = DF.split("/")[-1] + "_" + F + "_" + str(N)
+    elif F.lower() == "chi2" or F.lower() == "c2":
+      df_feat = Chi2(df_use, N)
+      save_name = DF.split("/")[-1] + "_" + F + "_" + str(N)
+    elif F.lower() == "l1" or F.lower() == "lasso":
+      df_feat = L1(df_use, PARAMETER, TYPE)
+      save_name = DF.split("/")[-1] + "_" + F + "_" + TYPE + '_' + str(PARAMETER)
+    elif F.lower() == "relief" or F.lower() == "rebate":
+      df_feat = Relief(df_use, N, n_jobs)
+      save_name = DF.split("/")[-1] + "_" + F + '_' + str(N)
+    elif F.lower() == "fisher" or F.lower() == "fet" or F.lower() == 'enrich':
+      df_feat = FET(df_use, PARAMETER, pos, neg)
+      save_name = DF.split("/")[-1] + "_" + F + '_' + str(PARAMETER)
+    else:
+      print("Feature selection method not available in this script")
 
-"""    try:
-      top_feat.remove('Class')
-    except:
-      print('what')"""
+    if SAVE != 'default':
+      save_name = SAVE
+
+    if save_list.lower() == 't' or save_list.lower() == 'true':
+      top_feat = list(df_feat)
+      try:
+        top_feat.remove('Class')
+      except:
+        print('Class is not in this list')
+
+      save_name2 = save_name + '_list' + str(n) + '.txt'
+      out = open(save_name2, 'w')
+      for f in top_feat:
+        out.write(f + '\n')
+
+    else:
+      df_feat.to_csv(save_name, sep='\t', quoting=None)
+
