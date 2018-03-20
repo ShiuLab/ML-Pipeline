@@ -40,22 +40,46 @@ import pandas as pd
 import numpy as np
 import sys, os
 
-def DecisionTree(df, n):
+
+def SaveTopFeats(top, save_name):
+
+    try:
+      top.remove('Class')
+    except:
+      pass
+
+    out = open(save_name, 'w')
+    for f in top:
+      out.write(f + '\n')
+
+
+
+
+def DecisionTree(df, n, TYPE, save_name):
   """Feature selection using DecisionTree on the whole dataframe
   Feature importance from the Random Forest Classifier is the Gini importance
   (i.e. the normalized total reduction of the criterion for the decendent nodes
     compared to the parent node brought by that feature across all trees.)
   """
   from sklearn.ensemble import RandomForestClassifier
+  from sklearn.ensemble import RandomForestRegressor
   from math import sqrt
 
   X_all = df.drop('Class', axis=1).values  
   Y_all = df.loc[:, 'Class'].values
-  Y_all = Y_all.astype('int')
 
   fean_num_feat_sel = len(list(df.columns.values)[1:])
-  feat_sel_forest = RandomForestClassifier(criterion='entropy', max_features= round(sqrt(fean_num_feat_sel)), n_estimators=500, n_jobs=8)
-  
+  if TYPE.lower() == 'c':
+    feat_sel_forest = RandomForestClassifier(criterion='entropy', max_features= round(sqrt(fean_num_feat_sel)), n_estimators=500, n_jobs=1)
+  elif TYPE.lower() == 'r':
+    Y_all = Y_all.astype('float')
+    feat_sel_forest = RandomForestRegressor(max_features= round(sqrt(fean_num_feat_sel)), n_estimators=500, n_jobs=1)
+  else:
+    print('Need to specify -type r/c (regression/classification)')
+    exit()
+
+  print("=====* Running decision tree based feature selection *=====")
+
   #Train the model & derive importance scores
   feat_sel_forest = feat_sel_forest.fit(X_all, Y_all)
   importances = feat_sel_forest.feature_importances_
@@ -64,51 +88,58 @@ def DecisionTree(df, n):
   feat_names = list(df.columns.values)[1:]
   temp_imp = pd.DataFrame(importances, columns = ["imp"], index=feat_names) 
   indices = np.argsort(importances)[::-1]
-  indices_keep = indices[0:n-1]
-  fixed_index = []
 
-  # Translate keep indices into the indices in the df
-  for i in indices_keep:
-    new_i = i + 1
-    fixed_index.append(new_i)
-  fixed_index = [0] + fixed_index
+  for n_size in n:
+    indices_keep = indices[0:int(n_size)]
+    fixed_index = []
+    # Translate keep indices into the indices in the df
+    for i in indices_keep:
+      new_i = i + 1
+      fixed_index.append(new_i)
+    fixed_index = [0] + fixed_index
+    good = [df.columns[i] for i in fixed_index]
+    print("Features selected using DecisionTree feature selection: %s" % str(good))
 
-  good = [df.columns[i] for i in fixed_index]
+    save_name2 = save_name + "_" + str(n_size)
+    SaveTopFeats(good, save_name2)
 
-  df = df.loc[:,good]
-  print("Features selected using DecisionTree feature selection: %s" % str(good))
-  return(df)
   
-def Chi2(df, n):
+  
+def Chi2(df, n, save_name):
   """Feature selection using Chi2 on the whole dataframe. 
   Chi2 measures the dependence between stochastic variables, this method 
   weeds out features that are most likely to be independent of class"""
   from sklearn.feature_selection import SelectKBest
   from sklearn.feature_selection import chi2
+  from sklearn.feature_selection import mutual_info_classif 
 
+  print('This function might not be working right now.... Bug Christina if you need it!')
   X_all = df.drop('Class', axis=1).values  
   Y_all = df.loc[:, 'Class'].values
   Y_all = Y_all.astype('int')
-
+  print(Y_all)
   # Set selection to chi2 with n to keep
-  ch2 = SelectKBest(chi2, k=n)
-  X_new = ch2.fit_transform(X_all, Y_all)
-  index = ch2.get_support(indices=True)
+  for n_size in n:
+    # Set selection to chi2 with n to keep
+    ch2 = SelectKBest(chi2, k=n)
+    ch2.fit_transform(X_all, Y_all)
+    index = ch2.get_support(indices=True)
 
-  # Translate keep indices into the indices in the df
-  fixed_index = []
-  for i in index:
-    new_i = i + 1
-    fixed_index.append(new_i)
-  fixed_index = [0] + fixed_index
+    # Translate keep indices into the indices in the df
+    fixed_index = []
+    for i in index:
+      new_i = i + 1
+      fixed_index.append(new_i)
+    fixed_index = [0] + fixed_index
 
-  good = [df.columns[i] for i in fixed_index]
-  
-  print("Features selected using Chi2 feature selection: %s" % str(good))
-  df = df.loc[:,good]
-  return(df)
+    good = [df.columns[i] for i in fixed_index]
+    print("Features selected using DecisionTree feature selection: %s" % str(good))
 
-def Relief(df, n, n_jobs):
+    save_name2 = save_name + "_" + str(n_size)
+    SaveTopFeats(good, save_name2)
+
+
+def Relief(df, n, n_jobs, save_name):
   """Feature selection using Relief on the whole dataframe."""
   from skrebate import ReliefF
 
@@ -118,23 +149,23 @@ def Relief(df, n, n_jobs):
 
   feature_names = list(df)
   feature_names.remove('Class')
+  print("=====* Running relief/rebase based feature selection *=====")
 
-
-  # Set selection to chi2 with n to keep
+  # Set selection to relief
   fs = ReliefF(n_jobs = int(n_jobs))
   fs.fit(X_all, Y_all)
   imp = pd.DataFrame(fs.feature_importances_, index = feature_names, columns = ['relief_imp'])
   imp_top = imp.sort_values(by='relief_imp', ascending=False)
-  keep = imp_top.index.values[0:int(n)]
-  
-  print("Features selected using Relief from rebase: %s" % str(keep))
-  keep = np.append(np.array(['Class']), keep)
-  df2 = df[keep]
 
-  return(df2)
+  for n_size in n:
+    keep = imp_top.index.values[0:int(n_size)]
+    print("Features selected using Relief from rebase: %s" % str(keep))
+    save_name2 = save_name + "_" + str(n_size)
+    SaveTopFeats(keep, save_name2)
 
 
-def L1(df, PARAMETER, TYPE):
+
+def L1(df, PARAMETER, TYPE, save_name):
   """Apply a linear model with a L1 penalty and select features who's coefficients aren't 
   shrunk to zero. Unlike Chi2, this method accounts for the effect of all of the
   other features when determining if a feature is a good predictor.
@@ -153,6 +184,8 @@ def L1(df, PARAMETER, TYPE):
     estimator = LinearSVC(C = PARAMETER, penalty='l1', dual=False).fit(X_all, Y_all)
   elif TYPE == 'r' or TYPE == 'regression':
     estimator = Lasso(alpha = PARAMETER).fit(X_all, Y_all)
+
+  print("=====* Running L1/LASSO based feature selection *=====")
   
   model = SelectFromModel(estimator, prefit=True)
   keep = model.get_support([])
@@ -164,11 +197,10 @@ def L1(df, PARAMETER, TYPE):
   print("Features selected using l2: %s" % str(good))
   print('Number of features selected using l2 (parameter = %s): %i' % (str(PARAMETER), X_new.shape[1]))
   
-  df2 = pd.DataFrame(data = X_new, columns=good, index=df.index)
-  #df2.insert(0, 'Class', Y_all, )
-  return(df2)
+  save_name2 = save_name 
+  SaveTopFeats(good, save_name2)
 
-def FET(df, PARAMETER, pos, neg):
+def FET(df, PARAMETER, pos, neg, save_name):
   """Use Fisher's Exact Test to look for enriched features"""
   from scipy.stats import fisher_exact
 
@@ -176,7 +208,9 @@ def FET(df, PARAMETER, pos, neg):
   kmers.remove(CL)
 
   enriched = [CL]
-
+  
+  print("=====* Running enrichement based feature selection *=====")
+  
   for k in kmers:
     temp = df.groupby([CL, k]).size().reset_index(name="Count")
     try:
@@ -200,8 +234,9 @@ def FET(df, PARAMETER, pos, neg):
       
     if pvalue <= PARAMETER:
       enriched.append(k)
-  df2 = df[enriched]
-  return(df2)
+
+  save_name2 = save_name 
+  SaveTopFeats(enriched, save_name2)
 
 if __name__ == "__main__":
   
@@ -218,6 +253,7 @@ if __name__ == "__main__":
   SEP = '\t'
   SAVE, DF_CLASS = 'default', 'default'
   UNKNOWN = 'unk'
+  class_col = 'Class'
 
   for i in range (1,len(sys.argv),2):
 
@@ -234,7 +270,7 @@ if __name__ == "__main__":
         if sys.argv[i] == '-f':
           F = sys.argv[i+1]
         if sys.argv[i] == '-n':
-          N = int(sys.argv[i+1])
+          N = sys.argv[i+1]
         if sys.argv[i] == '-n_jobs':
           n_jobs = int(sys.argv[i+1])
         if sys.argv[i] == '-feat':
@@ -253,8 +289,8 @@ if __name__ == "__main__":
           IGNORE = sys.argv[i+1]
         if sys.argv[i] == '-CVs':
           CVs = sys.argv[i+1]
-        if sys.argv[i] == '-reps':
-          REPS = sys.argv[i+1]
+        if sys.argv[i] == '-jobNum':
+          jobNum = sys.argv[i+1]
 
 
   if len(sys.argv) <= 1:
@@ -267,12 +303,18 @@ if __name__ == "__main__":
 
   # If feature info and class info are in separate files
   if DF_CLASS != 'default':
+    start_dim = df.shape
     df_class_file, df_class_col = DF_CLASS.strip().split(',')
-    df_class = pd.read_csv(df_class_file, sep=SEP, index_col = 0, na_values=IGNORE)
-    df['Class'] = df_class[df_class_col]
+    class_col = df_class_col
+    df_class = pd.read_csv(df_class_file, sep=SEP, index_col = 0)
+    df = pd.concat([df_class[df_class_col], df], axis=1, join='inner')
+    print('Merging the feature & class dataframes changed the dimensions from %s to %s (instance, features).' 
+      % (str(start_dim), str(df.shape)))
 
   print('Original dataframe contained %i features' % df.shape[1])
   
+  if class_col != 'Class':
+    df = df.rename(columns = {class_col:'Class'})
   #Recode class as 1 for positive and 0 for negative
   if TYPE.lower() == 'c':
     df["Class"] = df["Class"].replace(pos, 1)
@@ -280,62 +322,63 @@ if __name__ == "__main__":
 
   df = df.dropna(axis=0, how = 'any')
 
+  # If requesting multiple n, convert to list
+  try:
+    N = N.strip().split(',')
+  except:
+    N = [N]
+  print(N)
+
   #If 'features to keep' list given, remove columns not in that list
   if FEAT != 'all':
     with open(FEAT) as f:
       features = f.read().splitlines()
       features = ['Class'] + features
     df = df.loc[:,features]
+  print(df.head())
+  
 
   # Run feature selection
+  df_use = df.copy()
+  
+  # Run FS within a cross-validation scheme
+  if CVs != 'pass':
+    print("Working on cv_%s" % str(jobNum))
+    cv_folds = pd.read_csv(CVs, sep=',', index_col=0)
+    cv = cv_folds['cv_' + str(jobNum)]
+    df_use['Class'][cv==5] = 'unk'
 
-  for n in range(1, int(REPS)+1):
-    print("Working on rep %i" % n)
-    df_use = df.copy()
+
+  # Remove any unknown class values from the data frame
+  if UNKNOWN in df_use.loc[:, 'Class'].values:
+    df_use = df_use[df_use.Class != UNKNOWN]
+
+  if SAVE != 'default':
+    save_name = SAVE
+  else:
+    try:
+      save_name = DF.split("/")[-1] + "_" + F + '_cv' + str(jobNum)
+    except:
+      save_name = DF.split("/")[-1] + "_" + F
+
+  if F.lower() == "randomforest" or F.lower() == "rf":
+    DecisionTree(df_use, N, TYPE, save_name)
     
-    # Run FS within a cross-validation scheme
-    if CVs != 'pass':
-      cv_folds = pd.read_csv(CVs, sep=',', index_col=0)
-      cv = cv_folds['cv_' + str(n)]
-      df_use['Class'][cv==5] = 'unk'
-      print(df_use.head(10))
+  elif F.lower() == "chi2" or F.lower() == "c2":
+    Chi2(df_use, N, save_name)
+    
+  elif F.lower() == "l1" or F.lower() == "lasso":
+    if SAVE == 'default':
+      save_name = save_name + '_' + str(PARAMETER)
+    L1(df_use, PARAMETER, TYPE, save_name)
+    
+  elif F.lower() == "relief" or F.lower() == "rebate":
+    Relief(df_use, N, n_jobs, save_name)
+    
+  elif F.lower() == "fisher" or F.lower() == "fet" or F.lower() == 'enrich':
+    if SAVE == 'default':
+      save_name = save_name + '_' + str(PARAMETER)
+    FET(df_use, PARAMETER, pos, neg, save_name)
+  
 
-    if UNKNOWN in df_use.loc[:, 'Class'].values:
-      df_use = df_use[df_use.Class != UNKNOWN]
-
-    if F.lower() == "randomforest" or F.lower() == "rf":
-      df_feat = DecisionTree(df_use, N)
-      save_name = DF.split("/")[-1] + "_" + F + "_" + str(N)
-    elif F.lower() == "chi2" or F.lower() == "c2":
-      df_feat = Chi2(df_use, N)
-      save_name = DF.split("/")[-1] + "_" + F + "_" + str(N)
-    elif F.lower() == "l1" or F.lower() == "lasso":
-      df_feat = L1(df_use, PARAMETER, TYPE)
-      save_name = DF.split("/")[-1] + "_" + F + "_" + TYPE + '_' + str(PARAMETER)
-    elif F.lower() == "relief" or F.lower() == "rebate":
-      df_feat = Relief(df_use, N, n_jobs)
-      save_name = DF.split("/")[-1] + "_" + F + '_' + str(N)
-    elif F.lower() == "fisher" or F.lower() == "fet" or F.lower() == 'enrich':
-      df_feat = FET(df_use, PARAMETER, pos, neg)
-      save_name = DF.split("/")[-1] + "_" + F + '_' + str(PARAMETER)
-    else:
-      print("Feature selection method not available in this script")
-
-    if SAVE != 'default':
-      save_name = SAVE
-
-    if save_list.lower() == 't' or save_list.lower() == 'true':
-      top_feat = list(df_feat)
-      try:
-        top_feat.remove('Class')
-      except:
-        print('Class is not in this list')
-
-      save_name2 = save_name + '_list' + str(n) + '.txt'
-      out = open(save_name2, 'w')
-      for f in top_feat:
-        out.write(f + '\n')
-
-    else:
-      df_feat.to_csv(save_name, sep='\t', quoting=None)
 

@@ -3,7 +3,7 @@ PURPOSE:
 Machine learning classifications implemented in sci-kit learn. 
 
 To access pandas, numpy, and sklearn packages on MSU HPCC first run:
-$ export PATH=/mnt/home/azodichr/miniconda3/bin:$PATH
+export PATH=/mnt/home/azodichr/miniconda3/bin:$PATH
 
 INPUTS:
 	
@@ -127,12 +127,15 @@ def main():
 	####### Load Dataframe & Pre-process #######
 	
 	df = pd.read_csv(DF, sep=SEP, index_col = 0)
-	
 	# If features  and class info are in separate files, merge them: 
 	if DF_CLASS != 'ignore':
+		start_dim = df.shape
 		df_class_file, df_class_col = DF_CLASS.strip().split(',')
+		class_col = df_class_col
 		df_class = pd.read_csv(df_class_file, sep=SEP, index_col = 0)
-		df['Class'] = df_class[df_class_col]
+		df = pd.concat([df_class[df_class_col], df], axis=1, join='inner')
+		print('Merging the feature & class dataframes changed the dimensions from %s to %s (instance, features).' 
+			% (str(start_dim), str(df.shape)))
 
 	# Specify class column - default = Class
 	if class_col != 'Class':
@@ -145,7 +148,7 @@ def main():
 			features = f.read().strip().splitlines()
 			features = ['Class'] + features
 		df = df.loc[:,features]
-	
+
 	
 	# Remove instances with NaN or NA values
 	df = df.replace("?",np.nan)
@@ -201,7 +204,6 @@ def main():
 		min_size = (df.groupby('Class').size()).min() - 1
 	else:
 		min_size = int(MIN_SIZE)
-	print('Balanced dataset will include %i instances of each class' % min_size)
 	
 	# Define save name if not specified using -save
 	if SAVE == "":
@@ -226,6 +228,7 @@ def main():
 	print("CLASSES:",classes)
 	print("POS:",POS,type(POS))
 	print("NEG:",NEG,type(NEG))
+	print('Balanced dataset will include %i instances of each class' % min_size)
 	n_features = len(list(df)) - 1
 	
 	####### Run parameter sweep using a grid search #######

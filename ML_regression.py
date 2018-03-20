@@ -127,12 +127,16 @@ def main():
 	####### Load Dataframe & Pre-process #######
 	
 	df = pd.read_csv(DF, sep=SEP, index_col = 0)
-	# If feature info and class info are in separate files
+
+	# If features  and class info are in separate files, merge them: 
 	if DF_Y != 'ignore':
-		df_Y_file, df_Y_col = DF_Y.strip().split(',')
-		df_Y = pd.read_csv(df_Y_file, sep=SEP, index_col = 0)
-		df[y_name] = df_Y[df_Y_col]
-		y_name = df_Y_col
+		start_dim = df.shape
+		df_class_file, df_class_col = DF_Y.strip().split(',')
+		y_name = df_class_col
+		df_class = pd.read_csv(df_class_file, sep=SEP, index_col = 0)
+		df = pd.concat([df_class[df_class_col], df], axis=1, join='inner')
+		print('Merging the feature & class dataframes changed the dimensions from %s to %s (instance, features).' 
+			% (str(start_dim), str(df.shape)))
 
 	# Specify Y column - default = Class
 	if y_name != 'Y':
@@ -337,4 +341,10 @@ def main():
 
 
 	print("\n\n===>  ML Results  <===")
-	print('Metric\tMe
+	print('Metric\tMean\tstd\tSE')
+	print('MSE\t%s\nEVS\t%s\nR2\t%s\nPCC\t%s\n' % (
+		'\t'.join(str(x) for x in MSE_stats), '\t'.join(str(x) for x in EVS_stats), 
+		'\t'.join(str(x) for x in r2_stats), '\t'.join(str(x) for x in PCC_stats)))
+
+if __name__ == '__main__':
+	main()
