@@ -8,26 +8,32 @@ export PATH=/mnt/home/azodichr/miniconda3/bin:$PATH
 INPUTS:
 	
 	REQUIRED:
-	-df       Feature & class dataframe for ML. See "" for an example dataframe
-	-alg      Available: RF, SVM (linear), SVMpoly, SVMrbf, LogReg, GB
+	-df       Feature & class dataframe for ML. 
+						  See "example_binary.txt" for an example dataframe
+	-alg      Available: RF, SVM (linear), SVMpoly, SVMrbf, GB, and Logistic Regression (LogReg)
 	
 	OPTIONAL:
-	-cl_train List of classes to include in the training set. Default = all classes. If binary, first label = positive class.
-	-pos      name of positive class (default = 1 or first class provided with -cl_train)
-	-gs       Set to True if grid search over parameter space is desired. Default = False
-	-cv       # of cross-validation folds. Default = 10
-	-b        # of random balanced datasets to run. Default = 100
+	-y_name   Name of the column to predict (Default = Class)
+	-cl_train List of classes to include in the training set. (Default = all)		
+							If binary, first label = positive class.
+	-apply    List of non-training class labels that the models should be applied to.
+							Enter 'all' or a list (comma-delimit if >1)
+	-sep 			Set seperator for input data (Default = '\t')
+	-pos      name of positive class for binary classifier. (Default = 1 or see -cl_train)
+	-drop_na  T/F to drop rows with NAs
+	-gs       T/F if grid search over parameter space is desired. (Default = True)
+	-cv       # of cross-validation folds. (Default = 10)
+	-n/-b     # of random balanced datasets to run (i.e. model replicates). Default = 100
 	-min_size Number of instances to draw from each class. Default = size of smallest class
-	-apply    To which non-training class labels should the models be applied? Enter 'all' or a list (comma-delimit if >1)
-	-p        # of processors. Default = 1
+	-p        # of processors. (Default = 1, max for HPCC = 14)
 	-tag      String for SAVE name and TAG column in RESULTS.txt output.
 	-feat     Import file with subset of features to use. If invoked,-tag arg is recommended. Default: keep all features.
-	-class    String for column with class. Default = Class
 	-threshold_test   What model score to use for setting the optimal threshold (Default = F1. Also avilable: accuracy)
-	-save     Adjust save name prefix. Default = [df]_[alg]_[tag (if used)], CAUTION: will overwrite!
+	-save     Adjust save name prefix. Default = [df]_[alg]_[tag (if used)]
+							CAUTION: will overwrite!
 	-short    Set to True to output only the median and std dev of prediction scores, default = full prediction scores
-	-df_class File with class information. Use only if df contains the features but not the classes 
-								If more than one column in the class file, specify which column contains the class: -df_class class_file.csv,ColumnName
+	-df2      File with class information. Use only if df contains the features but not the classes 
+							* Need to specifiy what column in df2 is y using -y_name 
 	
 	PLOT OPTIONS:
 	-cm       T/F - Do you want to output the confusion matrix & confusion matrix figure? (Default = False)
@@ -45,7 +51,6 @@ import pandas as pd
 import numpy as np
 from datetime import datetime
 import time
-
 import ML_functions as ML
 
 start_total_time = time.time()
@@ -53,12 +58,12 @@ def main():
 	
 	# Default code parameters
 	n, FEAT, CL_TRAIN, apply_model, n_jobs =  100, 'all', 'all','none', 1,
-	class_col, CM, POS, plots, cv_num = 'Class', 'False', 1, 'False', 10,
+	y_name, CM, POS, plots, cv_num = 'Class', 'False', 1, 'False', 10,
 	TAG, SAVE, MIN_SIZE, short_scores =   '', '', '', False
-	SEP, THRSHD_test, DF_CLASS = '\t','F1', 'ignore'
+	SEP, THRSHD_test, DF2 = '\t','F1', 'None'
 
 	# Default parameters for Grid search
-	GS, gs_score = 'F', 'roc_auc'
+	GS, gs_score, GS_REPS = 'F', 'roc_auc', 10
 	
 	# Default Random Forest and Gradient Boosting parameters
 	n_estimators, max_depth, max_features, learning_rate = 500, 10, "sqrt", 0.1
@@ -70,52 +75,54 @@ def main():
 	penalty, C, intercept_scaling = 'l2', 1.0, 1.0
 	
 	for i in range (1,len(sys.argv),2):
-		if sys.argv[i] == "-df":
+		if sys.argv[i].lower() == "-df":
 			DF = sys.argv[i+1]
-		if sys.argv[i] == "-sep":
+		if sys.argv[i].lower() == "-sep":
 			SEP = sys.argv[i+1]
-		elif sys.argv[i] == '-save':
+		elif sys.argv[i].lower() == '-save':
 			SAVE = sys.argv[i+1]
-		elif sys.argv[i] == '-feat':
+		elif sys.argv[i].lower() == '-feat':
 			FEAT = sys.argv[i+1]
-		elif sys.argv[i] == "-gs":
+		elif sys.argv[i].lower() == "-gs":
 			GS = sys.argv[i+1]
-		elif sys.argv[i] == "-gs_score":
+		elif sys.argv[i].lower() == "-gs_score":
 			gs_score = sys.argv[i+1]
-		elif sys.argv[i] == '-cl_train':
+		elif sys.argv[i].lower() == "-gs_reps":
+			gs_score = int(sys.argv[i+1])
+		elif sys.argv[i].lower() == '-cl_train':
 			CL_TRAIN = sys.argv[i+1].strip().split(',')
 			POS = CL_TRAIN[0]
-		elif sys.argv[i] == '-apply':
+		elif sys.argv[i].lower() == '-apply':
 			apply_model = sys.argv[i+1].lower()
 			if apply_model != "all":
 				apply_model = sys.argv[i+1].split(',')
-		elif sys.argv[i] == "-class":
-			class_col = sys.argv[i+1]
-		elif sys.argv[i] == "-n":
+		elif sys.argv[i].lower() == "-y_name":
+			y_name = sys.argv[i+1]
+		elif sys.argv[i].lower() == "-n" or sys.argv[i].lower() == "-b":
 			n = int(sys.argv[i+1])
-		elif sys.argv[i] == "-b":
-			n = int(sys.argv[i+1])
-		elif sys.argv[i] == "-min_size":
+		elif sys.argv[i].lower() == "-drop_na":
+			drop_na = sys.argv[i+1]
+		elif sys.argv[i].lower() == "-min_size":
 			MIN_SIZE = int(sys.argv[i+1])
-		elif sys.argv[i] == "-alg":
+		elif sys.argv[i].lower() == "-alg":
 			ALG = sys.argv[i+1]
-		elif sys.argv[i] == "-cv":
+		elif sys.argv[i].lower() == "-cv":
 			cv_num = int(sys.argv[i+1])
-		elif sys.argv[i] == "-cm":
+		elif sys.argv[i].lower() == "-cm":
 			CM = sys.argv[i+1]
-		elif sys.argv[i] == "-plots":
+		elif sys.argv[i].lower() == "-plots":
 			plots = sys.argv[i+1]
-		elif sys.argv[i] == "-pos":
+		elif sys.argv[i].lower() == "-pos":
 			POS = sys.argv[i+1]
-		elif sys.argv[i] == "-tag":
+		elif sys.argv[i].lower() == "-tag":
 			TAG = sys.argv[i+1]
-		elif sys.argv[i] == "-threshold_test":
+		elif sys.argv[i].lower() == "-threshold_test":
 			THRSHD_test = sys.argv[i+1]
-		elif sys.argv[i] == "-df_class":
-			DF_CLASS = sys.argv[i+1]
-		elif sys.argv[i] == "-n_jobs" or sys.argv[i] == "-p":
+		elif sys.argv[i].lower() == "-df2":
+			DF2 = sys.argv[i+1]
+		elif sys.argv[i].lower() == "-n_jobs" or sys.argv[i].lower() == "-p":
 			n_jobs = int(sys.argv[i+1])
-		elif sys.argv[i] == "-short":
+		elif sys.argv[i].lower() == "-short":
 			scores_len = sys.argv[i+1]
 			if scores_len.lower() == "true" or scores_len.lower() == "t":
 				short_scores = True
@@ -127,19 +134,18 @@ def main():
 	####### Load Dataframe & Pre-process #######
 	
 	df = pd.read_csv(DF, sep=SEP, index_col = 0)
+	
 	# If features  and class info are in separate files, merge them: 
-	if DF_CLASS != 'ignore':
+	if DF2 != 'None':
 		start_dim = df.shape
-		df_class_file, df_class_col = DF_CLASS.strip().split(',')
-		class_col = df_class_col
-		df_class = pd.read_csv(df_class_file, sep=SEP, index_col = 0)
-		df = pd.concat([df_class[df_class_col], df], axis=1, join='inner')
+		df_class = pd.read_csv(DF2, sep=SEP, index_col = 0)
+		df = pd.concat([df_class[y_name], df], axis=1, join='inner')
 		print('Merging the feature & class dataframes changed the dimensions from %s to %s (instance, features).' 
 			% (str(start_dim), str(df.shape)))
 
 	# Specify class column - default = Class
-	if class_col != 'Class':
-		df = df.rename(columns = {class_col:'Class'})
+	if y_name != 'Class':
+		df = df.rename(columns = {y_name:'Class'})
 	
 	# Filter out features not in feat file given - default: keep all
 	if FEAT != 'all':
@@ -149,10 +155,14 @@ def main():
 			features = ['Class'] + features
 		df = df.loc[:,features]
 
-	
-	# Remove instances with NaN or NA values
-	df = df.replace("?",np.nan)
-	df = df.dropna(axis=0)
+	# Check for Nas
+	na_count = len(df) - df.count()
+	if na_count >= 1:
+		if drop_na.lower() == 't' or drop_na.lower() == 'true':
+			df = df.dropna(axis=0)
+		else:
+			print('There are %s Na values in your dataframe.\n Remove them or add -drop_na True to remove rows with nas' % (str(na_count)))
+			quit()
 	
 	
 	# Set up dataframe of unknown instances that the final models will be applied to
@@ -237,30 +247,30 @@ def main():
 		start_time = time.time()
 		print("\n\n===>  Grid search started  <===") 
 		
-		params2use,balanced_ids, param_names = ML.fun.GridSearch(df, SAVE, ALG, classes, min_size, gs_score, n, cv_num, n_jobs, POS, NEG)
+		params2use, balanced_ids, param_names = ML.fun.GridSearch(df, SAVE, ALG, classes, min_size, gs_score, n, cv_num, GS_REPS, POS, NEG)
 		
 		# Print results from grid search
-		if ALG == 'RF':
+		if ALG.lower() == 'rf':
 			max_depth, max_features, n_estimators = params2use
 			print("Parameters selected: max_depth=%s, max_features=%s, n_estimators=%s" % (str(max_depth), str(max_features), str(n_estimators)))
 	
-		elif ALG == 'SVM':
+		elif ALG.lower() == 'svm':
 			C, kernel = params2use
 			print("Parameters selected: Kernel=%s, C=%s" % (str(kernel), str(C)))
 		
-		elif ALG == "SVMpoly":
+		elif ALG.lower() == "svmpoly":
 			C, degree, gamma, kernel = params2use
 			print("Parameters selected: Kernel=%s, C=%s, degree=%s, gamma=%s" % (str(kernel), str(C), str(degree), str(gamma)))
 		
-		elif ALG == "SVMrbf":
+		elif ALG.lower() == "svmrbf":
 			C, gamma, kernel = params2use
 			print("Parameters selected: Kernel=%s, C=%s, gamma=%s" % (str(kernel), str(C), str(gamma)))
 		
-		elif ALG == "LogReg":
+		elif ALG.lower() == "logreg":
 			C, intercept_scaling, penalty = params2use
 			print("Parameters selected: penalty=%s, C=%s, intercept_scaling=%s" % (str(penalty), str(C), str(intercept_scaling)))
 
-		elif ALG == "GB":
+		elif ALG.lower() == "gb":
 			learning_rate, max_depth, max_features, n_estimators = params2use
 			print("Parameters selected: learning rate=%s, max_features=%s, max_depth=%s, n_estimators=%s" % (str(learning_rate), str(max_features), str(max_depth), str(n_estimators)))
 	
@@ -296,16 +306,16 @@ def main():
 			df_notSel = df_notSel[(df_notSel['Class'].isin(CL_TRAIN))]
 		
 		# Prime classifier object based on chosen algorithm
-		if ALG == "RF":
+		if ALG.lower() == "rf":
 			parameters_used = [n_estimators, max_depth, max_features]
 			clf = ML.fun.DefineClf_RandomForest(n_estimators,max_depth,max_features,j,n_jobs)
-		elif ALG == "SVM" or ALG == 'SVMrbf' or ALG == 'SVMpoly':
+		elif ALG.lower() == "svm" or ALG.lower() == 'svmrbf' or ALG.lower() == 'svmpoly':
 			parameters_used = [C, degree, gamma, kernel]
 			clf = ML.fun.DefineClf_SVM(kernel,C,degree,gamma,j)
-		elif ALG == "LogReg":
+		elif ALG.lower() == "logreg":
 			parameters_used = [C, intercept_scaling, penalty]
 			clf = ML.fun.DefineClf_LogReg(penalty, C, intercept_scaling)
-		elif ALG == "GB":
+		elif ALG.lower() == "gb":
 			parameters_used = [learning_rate, max_features, max_depth]
 			clf = ML.fun.DefineClf_GB(learning_rate, max_features, max_depth, n_jobs, j)
 		
