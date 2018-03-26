@@ -26,12 +26,13 @@ Calculon2:
 ## Data Preprocessing
 
 ### Feature Selection (Azodi)
-Available feature selection tools: RandomForest, Chi2, LASSO (L1 penalty), enrichement (Fisher's Exact test).
+Available feature selection tools: RandomForest, Chi2, LASSO (L1 penalty), enrichement (Fisher's Exact test - binary features only), and BayesA (regression only). For parameters needed for each feature selection algorithm run Feature_Selection.py with no parameters.
 
 Example:
+
     export PATH=/mnt/home/azodichr/miniconda3/bin:$PATH
-    python Feature_Selection_sklearn.py -df [path/to/dataframe] -f [rf/chi2/lasso/fet] -n [needed for chi2/rf] -p [needed for LASSO/FET] -type [needed for LASSO] -list T 
-Use -list T/F to either just save a list of selected features (can use as -feat input during model building) or a filtered data frame
+    python Feature_Selection.py -df [path/to/dataframe] -f [rf/chi2/lasso/fet/bayesA] -n [needed for chi2/rf] -p [needed for LASSO/FET] -type [needed for LASSO] -list T 
+    * For more info/additional options run Feature_Selection.py with no parameters
 
 ### Impute Data (Moore)
 
@@ -78,16 +79,17 @@ Example multiclass classification:
     export PATH=/mnt/home/azodichr/miniconda3/bin:$PATH
     python ML_classification.py -df example_MC.txt -alg [ALG] -class Biotech_cluster -cl_train a,b,c -cm T
 
-*Note: To run tests use -gs T -gs_n 3 -n 5 
+* For more info/additional options run ML_classification.py with no parameters
 
 ### Regression
 See ML_regression.py docstrings for additional options (and ML_clf_functions.py)
 
-Available model algorithms: RF, SVM, SVMpoly, SVMrbf, Gradient Boosting (GB), Linear Regression (LR - no GS needed)
+Available model algorithms: RF, SVM, SVMpoly, SVMrbf, Gradient Boosting (GB), Logistic Regression (LogReg - no grid search needed)
 
     export PATH=/mnt/home/azodichr/miniconda3/bin:$PATH
     python ML_regression.py -df data.txt -alg [ALG]
 
+* For more info/additional options run ML_regression.py with no parameters
 
 ## Post-Processing
 
