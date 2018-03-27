@@ -40,9 +40,8 @@ class fun(object):
 			bal_list.append(tmp_l)
 		return bal_list
 	
-	# def GridSearch(df, balanced_list, SAVE, ALG, classes, min_size, gs_score, gs_n, n_jobs):
 	
-	def GridSearch(df, SAVE, ALG, classes, min_size, gs_score, n, cv_num, n_jobs, POS, NEG):
+	def GridSearch(df, SAVE, ALG, classes, min_size, gs_score, n, cv_num, n_jobs, GS_REPS, GS_TYPE, POS, NEG, gs_full):
 		""" Perform a parameter sweep using GridSearchCV implemented in SK-learn.
 		Need to edit the hard code to modify what parameters are searched
 		"""
@@ -56,22 +55,22 @@ class fun(object):
 		
 		### NOTE: The returned top_params will be in alphabetical order - to be consistent add any additional 
 		###       parameters to test in alphabetical order
-		if ALG == 'RF':
+		if ALG.lower() == 'rf':
 			parameters = {'max_depth':[3, 5, 10], 'max_features': [0.1, 0.25, 0.5, 0.75, 'sqrt', 'log2', None], 'n_estimators': [100,500,1000]}
 			
-		elif ALG == "SVM":
+		elif ALG.lower() == "svm":
 			parameters = {'kernel': ['linear'], 'C':[0.01, 0.1, 0.5, 1, 10, 50, 100]}
 
-		elif ALG == 'SVMpoly':
+		elif ALG.lower() == 'svmpoly':
 			parameters = {'kernel': ['poly'], 'C':[0.01, 0.1, 0.5, 1, 10, 50, 100],'degree': [2,3,4], 'gamma': np.logspace(-5,1,7)}
 
-		elif ALG == 'SVMrbf':
+		elif ALG.lower() == 'svmrbf':
 			parameters = {'kernel': ['rbf'], 'C': [0.01, 0.1, 0.5, 1, 10, 50, 100], 'gamma': np.logspace(-5,1,7)}
 		
-		elif ALG == 'LogReg':
+		elif ALG.lower() == 'logreg':
 			parameters = {'C': [0.01, 0.1, 0.5, 1, 10, 50, 100], 'intercept_scaling': [0.1, 0.5, 1, 2, 5, 10],'penalty': ['l1','l2']}	
 
-		elif ALG == 'GB':
+		elif ALG.lower() == 'gb':
 			parameters = {'learning_rate': [0.001, 0.01, 0.1, 0.5, 1],'max_depth': [3, 5, 10], 'max_features': [0.1, 0.25, 0.5, 0.75, 'sqrt', 'log2', None],'n_estimators': [100,500,1000]}	
 
 		else:
@@ -82,7 +81,7 @@ class fun(object):
 		
 		bal_ids_list = []
 		for j in range(n):
-			print("  Round %s of %s"%(j+1,n))
+			
 			
 			# Build balanced dataframe and define x & y
 			df1 = pd.DataFrame(columns=list(df))
@@ -91,44 +90,52 @@ class fun(object):
 				df1 = pd.concat([df1, temp])
 			
 			bal_ids_list.append(list(df1.index))
+
+			if j <= GS_REPS:
+				print("Round %s of %s"%(j+1,GS_REPS))
+				y = df1['Class']
+				x = df1.drop(['Class'], axis=1) 
+				
+				# Build model, run grid search with 10-fold cross validation and fit
+				if ALG.lower() == 'rf':
+					model = RandomForestClassifier()
+				elif ALG.lower() == "svm" or ALG.lower() == 'svmrbf' or ALG.lower() == 'svmpoly':
+					# x = StandardScaler().fit_transform(x)
+					model = SVC(probability=True)
+				elif ALG.lower() == "logreg":
+					model = LogisticRegression()
+				elif ALG.lower() == "gb":
+					model = GradientBoostingClassifier()
+				
+				if gs_score.lower() == 'auprc':
+					gs_score = 'average_precision'
+
+				if GS_TYPE.lower() == 'rand' or GS_TYPE.lower() == 'random':
+					grid_search = RandomizedSearchCV(model, parameters, scoring = gs_score, n_iter = 10, cv = cv_num, n_jobs = n_jobs, pre_dispatch=2*n_jobs)
+				else:
+					grid_search = GridSearchCV(model, parameters, scoring = gs_score, cv = cv_num, n_jobs = n_jobs, pre_dispatch=2*n_jobs)
+				
+				if len(classes) == 2:
+					y = y.replace(to_replace = [POS, NEG], value = [1,0])
+				
+				grid_search.fit(x, y)
+				
+				# Add results to dataframe
+				j_results = pd.DataFrame(grid_search.cv_results_)
+				gs_results = pd.concat([gs_results, j_results[['params','mean_test_score']]])
 			
-			y = df1['Class']
-			x = df1.drop(['Class'], axis=1) 
-			
-			# Build model, run grid search with 10-fold cross validation and fit
-			if ALG == 'RF':
-				model = RandomForestClassifier()
-			elif ALG == "SVM" or ALG == 'SVMrbf' or ALG == 'SVMpoly':
-				# x = StandardScaler().fit_transform(x)
-				model = SVC(probability=True)
-			elif ALG == "LogReg":
-				model = LogisticRegression()
-			elif ALG == "GB":
-				model = GradientBoostingClassifier()
-			
-			if gs_score.lower() == 'auprc':
-				gs_score = 'average_precision'
-			grid_search = GridSearchCV(model, parameters, scoring = gs_score, cv = cv_num, n_jobs = n_jobs, pre_dispatch=2*n_jobs)
-			
-			if len(classes) == 2:
-				y = y.replace(to_replace = [POS, NEG], value = [1,0])
-			
-			grid_search.fit(x, y)
-			
-			# Add results to dataframe
-			j_results = pd.DataFrame(grid_search.cv_results_)
-			gs_results = pd.concat([gs_results, j_results[['params','mean_test_score']]])
-		
 		# Break params into seperate columns
 		gs_results2 = pd.concat([gs_results.drop(['params'], axis=1), gs_results['params'].apply(pd.Series)], axis=1)
 		param_names = list(gs_results2)[1:]
-		#print('Parameters tested: %s' % param_names)
+		
+		if gs_full.lower() == 't' or gs_full.lower() == 'true':
+			gs_results2.to_csv(SAVE + "_GridSearchFULL.txt")		
 		
 		# Find the mean score for each set of parameters & select the top set
 		gs_results_mean = gs_results2.groupby(param_names).mean()
 		gs_results_mean = gs_results_mean.sort_values('mean_test_score', 0, ascending = False)
 		top_params = gs_results_mean.index[0]
-		
+
 		print("Parameter sweep time: %f seconds" % (time.time() - start_time))
 
 		# Save grid search results
@@ -138,32 +145,33 @@ class fun(object):
 		outName.close()
 		return top_params,bal_ids_list, param_names
 	
-	def RegGridSearch(df, SAVE, ALG, gs_score, n, cv_num, n_jobs):
+	def RegGridSearch(df, SAVE, ALG, gs_score, n, cv_num, n_jobs, GS_REPS, GS_TYPE, gs_full):
 		""" Perform a parameter sweep using GridSearchCV implemented in SK-learn. 
 		Need to edit the hard code to modify what parameters are searched"""
 		from sklearn.metrics import mean_squared_error, r2_score
 		from sklearn.model_selection import GridSearchCV
+		from sklearn.model_selection import RandomizedSearchCV
 		from sklearn.preprocessing import StandardScaler
 		
 		start_time = time.time()
 		
 		### NOTE: The returned top_params will be in alphabetical order - to be consistent add any additional 
 		###       parameters to test in alphabetical order
-		### NOTE2: SK-learn uses the conventation that higher scores are better than lower scores, so gs_score is
+		### NOTE2: sk-learn uses the conventation that higher scores are better than lower scores, so gs_score is
 		###       the negative MSE, so the largest value is the best parameter combination.
-		if ALG == 'RF':
+		if ALG.lower() == 'rf':
 			parameters = {'max_depth':[3, 5, 10], 'max_features': [0.1, 0.5, 'sqrt', 'log2', None]}
 			
-		elif ALG == "SVM":
+		elif ALG.lower() == "svm":
 			parameters = {'kernel': ['linear'], 'C':[0.01, 0.1, 0.5, 1, 10, 50, 100]}
 
-		elif ALG == 'SVMpoly':
+		elif ALG.lower() == 'svmpoly':
 			parameters = {'kernel': ['poly'], 'C':[0.01, 0.1, 0.5, 1, 10, 100],'degree': [2,3], 'gamma': np.logspace(-5,1,7)}
 
-		elif ALG == 'SVMrbf':
+		elif ALG.lower() == 'svmrbf':
 			parameters = {'kernel': ['rbf'], 'C': [0.01, 0.1, 0.5, 1, 10, 100], 'gamma': np.logspace(-5,1,7)}
 
-		elif ALG == 'GB':
+		elif ALG.lower() == 'gb':
 			parameters = {'learning_rate': [0.0001, 0.001, 0.01, 0.1, 1], 'max_features': [0.1, 0.5, 'sqrt', 'log2', None], 'max_depth': [3, 5, 10]}	
 
 		else:
@@ -175,22 +183,25 @@ class fun(object):
 
 		gs_results = pd.DataFrame(columns = ['mean_test_score','params'])
 		
-		for j in range(10):
-			print("  Round %s of %s"%(j+1,n))
+		for j in range(GS_REPS):
+			print(" Round %s of %s"%(j+1,GS_REPS))
 			
 			# Build model
-			if ALG == 'RF':
+			if ALG.lower() == 'rf':
 				from sklearn.ensemble import RandomForestRegressor
 				model = RandomForestRegressor()
-			elif ALG == "SVM" or ALG == 'SVMrbf' or ALG == 'SVMpoly':
+			elif ALG.lower() == "svm" or ALG.lower() == 'svmrbf' or ALG.lower() == 'svmpoly':
 				from sklearn.svm import SVR
 				model = SVR()
-			elif ALG == "GB":
+			elif ALG.lower() == "gb":
 				from sklearn.ensemble import GradientBoostingRegressor
 				model = GradientBoostingRegressor()
 			
 			# Run grid search with 10-fold cross validation and fit
-			grid_search = GridSearchCV(model, parameters, scoring = gs_score, cv = cv_num, n_jobs = n_jobs, pre_dispatch=2*n_jobs)
+			if GS_TYPE.lower() == 'rand' or GS_TYPE.lower() == 'random':
+				grid_search = RandomizedSearchCV(model, parameters, scoring = gs_score, n_iter = 10, cv = cv_num, n_jobs = n_jobs, pre_dispatch=2*n_jobs)
+			else:
+				grid_search = GridSearchCV(model, parameters, scoring = gs_score, cv = cv_num, n_jobs = n_jobs, pre_dispatch=2*n_jobs)
 			grid_search.fit(x, y)
 			
 			# Add results to dataframe
@@ -199,7 +210,9 @@ class fun(object):
 		
 		# Break params into seperate columns
 		gs_results2 = pd.concat([gs_results.drop(['params'], axis=1), gs_results['params'].apply(pd.Series)], axis=1)
-		gs_results.to_csv(SAVE + "_GridSearchFULL.txt")
+		
+		if gs_full.lower() == 't' or gs_full.lower() == 'true':
+			gs_results.to_csv(SAVE + "_GridSearchFULL.txt")
 		param_names = list(gs_results2)[1:]
 		#print('Parameters tested: %s' % param_names)
 		
@@ -347,7 +360,6 @@ class fun(object):
 	def Run_Regression_Model(df, reg, cv_num, ALG, df_unknowns, cv_sets, j):
 		from sklearn.model_selection import cross_val_predict
 		from sklearn.metrics import mean_squared_error, r2_score, explained_variance_score
-		
 		# Data from balanced dataframe
 		y = df['Y']
 		X = df.drop(['Y'], axis=1) 
@@ -356,7 +368,15 @@ class fun(object):
 		if isinstance(cv_sets, pd.DataFrame):
 			from sklearn.cross_validation import LeaveOneLabelOut
 			cv_folds = LeaveOneLabelOut(cv_sets.iloc[:,j])
+
 			cv_pred = cross_val_predict(estimator=reg, X=X, y=y, cv=cv_folds)
+		
+			cv_pred_df = pd.DataFrame(data=cv_pred, index=df.index, columns=['pred'])
+			#from sklearn.model_selection import LeaveOneGroupOut
+			#logo = LeaveOneGroupOut()
+			#logo.get_n_splits(X, y, cv_sets.iloc[:,j])
+			#print(logo)
+			#cv_pred = cross_val_predict(estimator=reg, X=X, y=y, cv=logo)
 		else:
 			cv_pred = cross_val_predict(estimator=reg, X=X, y=y, cv=cv_num)
 		
@@ -378,11 +398,11 @@ class fun(object):
 
 		reg.fit(X,y)
 		# Try to extract importance scores 
-		if ALG == "RF":
+		if ALG.lower() == "rf":
 			importances = reg.feature_importances_
-		elif ALG == "SVM":
+		elif ALG.lower() == "svm":
 			importances = reg.coef_
-		elif ALG == "LogReg":
+		elif ALG.lower() == "logreg":
 			importances = reg.coef_
 		else:
 			try:
@@ -433,9 +453,9 @@ class fun(object):
 		AucPRc = average_precision_score(y1, scores)
 
 		# Try to extract importance scores 
-		if ALG == "RF" or ALG == 'GB':
+		if ALG.lower() == "rf" or ALG.lower() == 'gb':
 			importances = clf.feature_importances_
-		elif "SVM" in ALG or ALG == 'LogReg':
+		elif "svm" in ALG.lower() or ALG.lower() == 'logreg':
 			importances = clf.coef_
 		else:
 			try:
@@ -637,3 +657,4 @@ class fun(object):
 		plt.savefig(filename, format='pdf') 
 		
 		return 'Confusion matrix plotted.'
+
