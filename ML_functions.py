@@ -40,9 +40,8 @@ class fun(object):
 			bal_list.append(tmp_l)
 		return bal_list
 	
-	# def GridSearch(df, balanced_list, SAVE, ALG, classes, min_size, gs_score, gs_n, n_jobs):
 	
-	def GridSearch(df, SAVE, ALG, classes, min_size, gs_score, n, cv_num, n_jobs, POS, NEG, gs_full):
+	def GridSearch(df, SAVE, ALG, classes, min_size, gs_score, n, cv_num, n_jobs, GS_REPS, GS_TYPE, POS, NEG, gs_full):
 		""" Perform a parameter sweep using GridSearchCV implemented in SK-learn.
 		Need to edit the hard code to modify what parameters are searched
 		"""
@@ -82,7 +81,7 @@ class fun(object):
 		
 		bal_ids_list = []
 		for j in range(n):
-			print("  Round %s of %s"%(j+1,n))
+			
 			
 			# Build balanced dataframe and define x & y
 			df1 = pd.DataFrame(columns=list(df))
@@ -91,34 +90,40 @@ class fun(object):
 				df1 = pd.concat([df1, temp])
 			
 			bal_ids_list.append(list(df1.index))
+
+			if j <= GS_REPS:
+				print("Round %s of %s"%(j+1,GS_REPS))
+				y = df1['Class']
+				x = df1.drop(['Class'], axis=1) 
+				
+				# Build model, run grid search with 10-fold cross validation and fit
+				if ALG.lower() == 'rf':
+					model = RandomForestClassifier()
+				elif ALG.lower() == "svm" or ALG.lower() == 'svmrbf' or ALG.lower() == 'svmpoly':
+					# x = StandardScaler().fit_transform(x)
+					model = SVC(probability=True)
+				elif ALG.lower() == "logreg":
+					model = LogisticRegression()
+				elif ALG.lower() == "gb":
+					model = GradientBoostingClassifier()
+				
+				if gs_score.lower() == 'auprc':
+					gs_score = 'average_precision'
+
+				if GS_TYPE.lower() == 'rand' or GS_TYPE.lower() == 'random':
+					grid_search = RandomizedSearchCV(model, parameters, scoring = gs_score, n_iter = 10, cv = cv_num, n_jobs = n_jobs, pre_dispatch=2*n_jobs)
+				else:
+					grid_search = GridSearchCV(model, parameters, scoring = gs_score, cv = cv_num, n_jobs = n_jobs, pre_dispatch=2*n_jobs)
+				
+				if len(classes) == 2:
+					y = y.replace(to_replace = [POS, NEG], value = [1,0])
+				
+				grid_search.fit(x, y)
+				
+				# Add results to dataframe
+				j_results = pd.DataFrame(grid_search.cv_results_)
+				gs_results = pd.concat([gs_results, j_results[['params','mean_test_score']]])
 			
-			y = df1['Class']
-			x = df1.drop(['Class'], axis=1) 
-			
-			# Build model, run grid search with 10-fold cross validation and fit
-			if ALG.lower() == 'rf':
-				model = RandomForestClassifier()
-			elif ALG.lower() == "svm" or ALG.lower() == 'svmrbf' or ALG.lower() == 'svmpoly':
-				# x = StandardScaler().fit_transform(x)
-				model = SVC(probability=True)
-			elif ALG.lower() == "logreg":
-				model = LogisticRegression()
-			elif ALG.lower() == "gb":
-				model = GradientBoostingClassifier()
-			
-			if gs_score.lower() == 'auprc':
-				gs_score = 'average_precision'
-			grid_search = GridSearchCV(model, parameters, scoring = gs_score, cv = cv_num, n_jobs = n_jobs, pre_dispatch=2*n_jobs)
-			
-			if len(classes) == 2:
-				y = y.replace(to_replace = [POS, NEG], value = [1,0])
-			
-			grid_search.fit(x, y)
-			
-			# Add results to dataframe
-			j_results = pd.DataFrame(grid_search.cv_results_)
-			gs_results = pd.concat([gs_results, j_results[['params','mean_test_score']]])
-		
 		# Break params into seperate columns
 		gs_results2 = pd.concat([gs_results.drop(['params'], axis=1), gs_results['params'].apply(pd.Series)], axis=1)
 		param_names = list(gs_results2)[1:]
@@ -140,18 +145,19 @@ class fun(object):
 		outName.close()
 		return top_params,bal_ids_list, param_names
 	
-	def RegGridSearch(df, SAVE, ALG, gs_score, n, cv_num, n_jobs, gs_full):
+	def RegGridSearch(df, SAVE, ALG, gs_score, n, cv_num, n_jobs, GS_REPS, GS_TYPE, gs_full):
 		""" Perform a parameter sweep using GridSearchCV implemented in SK-learn. 
 		Need to edit the hard code to modify what parameters are searched"""
 		from sklearn.metrics import mean_squared_error, r2_score
 		from sklearn.model_selection import GridSearchCV
+		from sklearn.model_selection import RandomizedSearchCV
 		from sklearn.preprocessing import StandardScaler
 		
 		start_time = time.time()
 		
 		### NOTE: The returned top_params will be in alphabetical order - to be consistent add any additional 
 		###       parameters to test in alphabetical order
-		### NOTE2: SK-learn uses the conventation that higher scores are better than lower scores, so gs_score is
+		### NOTE2: sk-learn uses the conventation that higher scores are better than lower scores, so gs_score is
 		###       the negative MSE, so the largest value is the best parameter combination.
 		if ALG.lower() == 'rf':
 			parameters = {'max_depth':[3, 5, 10], 'max_features': [0.1, 0.5, 'sqrt', 'log2', None]}
@@ -177,8 +183,8 @@ class fun(object):
 
 		gs_results = pd.DataFrame(columns = ['mean_test_score','params'])
 		
-		for j in range(n_jobs):
-			print(" Round %s of %s"%(j+1,n_jobs))
+		for j in range(GS_REPS):
+			print(" Round %s of %s"%(j+1,GS_REPS))
 			
 			# Build model
 			if ALG.lower() == 'rf':
@@ -192,7 +198,10 @@ class fun(object):
 				model = GradientBoostingRegressor()
 			
 			# Run grid search with 10-fold cross validation and fit
-			grid_search = GridSearchCV(model, parameters, scoring = gs_score, cv = cv_num, n_jobs = n_jobs, pre_dispatch=2*n_jobs)
+			if GS_TYPE.lower() == 'rand' or GS_TYPE.lower() == 'random':
+				grid_search = RandomizedSearchCV(model, parameters, scoring = gs_score, n_iter = 10, cv = cv_num, n_jobs = n_jobs, pre_dispatch=2*n_jobs)
+			else:
+				grid_search = GridSearchCV(model, parameters, scoring = gs_score, cv = cv_num, n_jobs = n_jobs, pre_dispatch=2*n_jobs)
 			grid_search.fit(x, y)
 			
 			# Add results to dataframe
@@ -648,3 +657,4 @@ class fun(object):
 		plt.savefig(filename, format='pdf') 
 		
 		return 'Confusion matrix plotted.'
+

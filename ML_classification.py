@@ -23,7 +23,7 @@ INPUTS:
 	-drop_na  T/F to drop rows with NAs
 	-gs       T/F if grid search over parameter space is desired. (Default = True)
 	-cv       # of cross-validation folds. (Default = 10)
-	-n/-b     # of random balanced datasets to run (i.e. model replicates). Default = 100
+	-n/-b     # of random balanced datasets to run (i.e. model replicates). (Default = 100)
 	-min_size Number of instances to draw from each class. Default = size of smallest class
 	-p        # of processors. (Default = 1, max for HPCC = 14)
 	-tag      String for SAVE name and TAG column in RESULTS.txt output.
@@ -32,12 +32,16 @@ INPUTS:
 	-save     Adjust save name prefix. Default = [df]_[alg]_[tag (if used)]
 							CAUTION: will overwrite!
 	-short    Set to True to output only the median and std dev of prediction scores, default = full prediction scores
+	-gs_full 	T/F Output full results from the grid search. (Default = F)
+	-gs_reps  Number of replicates of the grid search (Default = 10)
+	-gs_type  Full grid search or randomized search (Default = full, alt = random)
 	-df2      File with class information. Use only if df contains the features but not the classes 
 							* Need to specifiy what column in df2 is y using -y_name 
 	
 	PLOT OPTIONS:
-	-cm       T/F - Do you want to output the confusion matrix & confusion matrix figure? (Default = False)
-	-plots    T/F - Do you want to output ROC and PR curve plots for each model? (Default = False)
+	-cm       T/F Output the confusion matrix & confusion matrix figure (Default = False)
+	-plots    T/F Output the ROC and PR curve plots for each model? (Default = False)
+							These plots can be generated after for 1+ model using ML_plots.py
 
 OUTPUT:
 	-SAVE_imp           Importance scores for each feature
@@ -63,7 +67,7 @@ def main():
 	SEP, THRSHD_test, DF2 = '\t','F1', 'None'
 
 	# Default parameters for Grid search
-	GS, gs_score, GS_REPS = 'F', 'roc_auc', 10
+	GS, gs_score, GS_REPS, GS_TYPE, gs_full = 'F', 'roc_auc', 10, 'full', 'f'
 	
 	# Default Random Forest and Gradient Boosting parameters
 	n_estimators, max_depth, max_features, learning_rate = 500, 10, "sqrt", 0.1
@@ -88,7 +92,11 @@ def main():
 		elif sys.argv[i].lower() == "-gs_score":
 			gs_score = sys.argv[i+1]
 		elif sys.argv[i].lower() == "-gs_reps":
-			gs_score = int(sys.argv[i+1])
+			GS_REPS = int(sys.argv[i+1])
+		elif sys.argv[i].lower() == "-gs_type":
+			GS_TYPE = sys.argv[i+1]
+		elif sys.argv[i].lower() == "-gs_full":
+			gs_full = sys.argv[i+1]
 		elif sys.argv[i].lower() == '-cl_train':
 			CL_TRAIN = sys.argv[i+1].strip().split(',')
 			POS = CL_TRAIN[0]
@@ -156,12 +164,15 @@ def main():
 		df = df.loc[:,features]
 
 	# Check for Nas
-	na_count = len(df) - df.count()
-	if na_count >= 1:
+	if df.isnull().values.any() == True:
 		if drop_na.lower() == 't' or drop_na.lower() == 'true':
+			start_dim = df.shape
 			df = df.dropna(axis=0)
+			print('Dropping rows with NA values changed the dimensions from %s to %s.' 
+				% (str(start_dim), str(df.shape)))
 		else:
-			print('There are %s Na values in your dataframe.\n Remove them or add -drop_na True to remove rows with nas' % (str(na_count)))
+			print(df.columns[df.isna().any()].tolist())
+			print('There are Na values in your dataframe.\n Impute them or add -drop_na True to remove rows with nas' )
 			quit()
 	
 	
@@ -247,7 +258,7 @@ def main():
 		start_time = time.time()
 		print("\n\n===>  Grid search started  <===") 
 		
-		params2use, balanced_ids, param_names = ML.fun.GridSearch(df, SAVE, ALG, classes, min_size, gs_score, n, cv_num, GS_REPS, POS, NEG)
+		params2use, balanced_ids, param_names = ML.fun.GridSearch(df, SAVE, ALG, classes, min_size, gs_score, n, cv_num, n_jobs, GS_REPS, GS_TYPE, POS, NEG, gs_full)
 		
 		# Print results from grid search
 		if ALG.lower() == 'rf':

@@ -19,8 +19,8 @@ INPUTS:
 	-normX		T/F to normalize the features (Default = F (except T for SVM))
 	-drop_na  T/F to drop rows with NAs
 	-cv       # of cross-validation folds. (Default = 10)
-	-n/-b			# of times CV predictions are run
 	-cv_set  	File with cv folds defined
+	-n/-b			# of times CV predictions are run (Default = 100)
 	-p        # of processors. (Default = 1, max for HPCC = 14)
 	-tag      String for SAVE name and TAG column in RESULTS.txt output.
 	-feat     Import file with subset of features to use. If invoked,-tag arg is recommended. Default: keep all features.
@@ -29,6 +29,8 @@ INPUTS:
 							CAUTION: will overwrite!
 	-short    Set to True to output only the median and std dev of prediction scores, default = full prediction scores
 	-gs_full 	T/F Output full results from the grid search. (Default = F)
+	-gs_reps  Number of replicates of the grid search (Default = 10)
+	-gs_type  Full grid search or randomized search (Default = full, alt = random)
 	-df2      File with class information. Use only if df contains the features but not the Y values 
 							* Need to specifiy what column in df2 is y using -y_name 
 	
@@ -58,9 +60,9 @@ def main():
 	# Default code parameters
 	n, FEAT, n_jobs, Y_col, plots, cv_num, TAG, SAVE, short_scores, OUTPUT_LOC = 100, 'all', 1, 'Y', 'False', 10, '', '', '', ''
 	y_name, SEP, DF2, df_unknowns, apply_model , normX, normY, cv_reps, cv_sets = 'Y', '\t', 'None', 'none','unk', 'F', 'F', 10, 'none'
-
+	drop_na = 'f'
 	# Default parameters for Grid search
-	GS, gs_score, GS_REPS, gs_full = 'f', 'neg_mean_squared_error', 10, 'f'
+	GS, gs_score, GS_REPS, GS_TYPE, gs_full = 'f', 'neg_mean_squared_error', 10, 'full', 'f'
 	
 	# Default Random Forest and GB parameters
 	n_estimators, max_depth, max_features, learning_rate = 500, 10, "sqrt", 1.0
@@ -88,6 +90,8 @@ def main():
 			GS = sys.argv[i+1]
 		elif sys.argv[i].lower() == "-gs_reps":
 			GS_REPS = int(sys.argv[i+1])
+		elif sys.argv[i].lower() == "-gs_type":
+			GS_TYPE = sys.argv[i+1]
 		elif sys.argv[i].lower() == "-gs_full":
 			gs_full = sys.argv[i+1]
 		elif sys.argv[i].lower() == '-normx':
@@ -131,7 +135,6 @@ def main():
 	
 	df = pd.read_csv(DF, sep=SEP, index_col = 0)
 
-
 	# If features  and class info are in separate files, merge them: 
 	if DF2 != 'None':
 		start_dim = df.shape
@@ -153,12 +156,15 @@ def main():
 		df = df.loc[:,features]
 	
 	# Check for Nas
-	na_count = len(df) - df.count()
-	if na_count >= 1:
+	if df.isnull().values.any() == True:
 		if drop_na.lower() == 't' or drop_na.lower() == 'true':
+			start_dim = df.shape
 			df = df.dropna(axis=0)
+			print('Dropping rows with NA values changed the dimensions from %s to %s.' 
+				% (str(start_dim), str(df.shape)))
 		else:
-			print('There are %s Na values in your dataframe.\n Remove them or add -drop_na True to remove rows with nas' % (str(na_count)))
+			print(df.columns[df.isnull().any()].tolist())
+			print('There are Na values in your dataframe.\n Impute them or add -drop_na True to remove rows with nas')
 			quit()
 
 	# Set up dataframe of unknown instances that the final models will be applied to and drop unknowns from df for model building
@@ -206,7 +212,7 @@ def main():
 		start_time = time.time()
 		print("\n\n===>  Grid search started  <===") 
 		
-		params2use, param_names = ML.fun.RegGridSearch(df, SAVE, ALG, gs_score, n, cv_num, GS_REPS, gs_full)
+		params2use, param_names = ML.fun.RegGridSearch(df, SAVE, ALG, gs_score, n, cv_num, n_jobs, GS_REPS, GS_TYPE, gs_full)
 		
 		# Print results from grid search
 		if ALG.lower() == 'rf':

@@ -6,26 +6,44 @@ Must set path to Miniconda in HPC:  export PATH=/mnt/home/azodichr/miniconda3/bi
 
 
 INPUT:
-  -df       Feature dataframe for ML. Format -> Col 1 = example.name, Col 2 = Class, Col 3-... = Features.
+  -df       Feature file for ML. If class/Y values are in a separate file use -df for features and -df_class for class/Y
   -f        Feature selection method to use 
-                - Chi2
-                - RandomForest
-                - Enrichment with Fisher's Exact Test (binary feat only) (default pval = 0.05)
-                - LASSO (need -p, -type))
-                - Relief (https://github.com/EpistasisLab/scikit-rebate)
+                - Chi2 
+                    need: -n
+                - RandomForest 
+                    need: -n, -type
+                - Enrichment using Fisher's Exact (for classification with binary feats only)
+                    need: -p (default=0.05)
+                - LASSO 
+                    need: -p, -type)
+                - Relief (https://github.com/EpistasisLab/scikit-rebate) (currently for regression only)
+                    need: -n, 
+                - BayesA regression (for regression only)
+                    need: -n
 
 OPTIONAL INPUT:
-  -feat     Default: all (i.e. everything in the dataframe given). Can import txt file with list of features to keep.
-  -class    Name of class column (Default = 'Class')
-  -pos      String for what codes for the positive example (i.e. UUN) Default = 1
-  -neg      String for what codes for the negative example (i.e. NNN) Default = 0
-  -type     r = regression, c = classification
+
+  -n        Number(s) of features you would like to keep (required for chi2, RF, relief, bayesA)
+              Example: -n 10 or -n 10,50,100
+  -save     Save name for list of features selected. Will automatically append _n to the name
+              Default: df_F_n or df_f_cvJobNum_n
+  -sep      Designate file separator (example: -sep ',')
+              Default = '\t'
+  -class    Name of class/Y column that you are wanting to predict
+              Default = 'Class'
+  -df_class Class/Y-value file for ML. Designate what column to use with a .
+              Example: -df_class y_values.txt,column_name
+  -feat     File containing the features you want to use from the df (one feature per line)
+              Default: all (i.e. everything in the dataframe given).
+  -type     r = regression, c = classification (required for LASSO and RF)
   -p        Parameter value for LASSO (L1) or Fisher's Exact Test.
             Fishers: pvalue cut off (Default = 0.05)
             LASSO: If type = r: need alpha value, try 0.01, 0.001. (larger = fewer features selected)
             LASSO: If type = c: need C which controls the sparcity, try 0.01, 0.1 (smaller = fewer features selected)
-  -n        Number of features you would like to keep for RF or chi2
-  -list     T/F Save a list of the selected features (useful for ML_classification.py -feat) (Default: F)
+  -pos      String for what codes for the positive example (i.e. UUN) Default = 1
+  -neg      String for what codes for the negative example (i.e. NNN) Default = 0
+  -cvs      To run feat. sel. withing cross-validation scheme provide a CVs matrix and -JobNum
+              CVs maxtrix: rows = instances, columns = CV replicates, value are the CV-fold each instance belongs to.
 
 OUTPUT:
   -df_f.txt    New dataframe with columns only from feature selection
@@ -33,7 +51,9 @@ OUTPUT:
 
 AUTHOR: Christina Azodi
 
-REVISIONS:   Submitted 8/16/2016
+REVISIONS:   Written 8/16/2016
+             Added relief algorithm 10/22/2017
+             Added BayesA algorithm 3/23/2018
 
 """
 import pandas as pd
@@ -200,6 +220,57 @@ def L1(df, PARAMETER, TYPE, save_name):
   save_name2 = save_name 
   SaveTopFeats(good, save_name2)
 
+
+def BayesA(df_use, n, save_name):
+  """ Use BayesA from BGLR package to select features with largest
+  abs(coefficients) """
+  
+  cwd = os.getcwd()
+  temp_name = 'temp_' + save_name
+  df_use.to_csv(temp_name)
+  #temp_out = 'temp_' + save_name + 'rout'
+  
+  #os.system('R CMD BATCH --vanilla \'--args df=%s\' /mnt/home/azodichr/GitHub/ML-Pipeline/featureselection_BayesA.R temp.out &' % (save_name))
+  #coefs = pd.read_csv(save_name + '_coef', sep = ',')
+  #print(coefs.head())
+  tmpR=open("%s_BayA.R" % temp_name,"w")
+  tmpR.write('library(BGLR)\n')
+  tmpR.write("setwd('%s')\n" % cwd)
+  tmpR.write("df <- read.csv('%s', sep=',', header=TRUE, row.names=1)\n" % temp_name)
+  tmpR.write("Y <- df[, 'Class']\n")
+  tmpR.write("X <- df[, !colnames(df) %in% c('Class')]\n")
+  tmpR.write("X=scale(X)\n")
+  tmpR.write("ETA=list(list(X=X,model='BayesA'))\n")
+  tmpR.write("fm=BGLR(y=Y,ETA=ETA,verbose=FALSE, nIter=12000,burnIn=2000)\n")
+  tmpR.write("coef <- fm$ETA[[1]]$b\n")
+  tmpR.write("coef_df <- as.data.frame(coef)\n")
+  tmpR.write("write.table(coef_df, file='%s', sep=',', row.names=TRUE, quote=FALSE)\n" % (temp_name + '_coef.txt'))
+  tmpR.close()
+  print('Running bayesA model from BGLR inplemented in R.')
+  os.system('export R_LIBS_USER=~/R/library')
+  os.system("R CMD BATCH %s_BayA.R" % temp_name)
+
+  coefs = pd.read_csv(temp_name + '_coef.txt', sep = ',')
+  coefs['coef_abs'] = coefs.coef.abs()
+  coefs_top = coefs.sort_values(by='coef_abs', ascending=False)
+  os.system("rm %s" % temp_name)
+  os.system("rm %s_coef.txt" % temp_name)
+  os.system("rm %s_BayA.R" % temp_name)
+  os.system("rm %s_BayA.Rout" % temp_name)
+  os.system("rm varE.dat")
+  os.system("rm mu.dat")
+  os.system("rm ETA_1_ScaleBayesA.dat")
+
+
+
+  for n_size in n:
+    keep = coefs_top.index.values[0:int(n_size)]
+    print("Top %s features selected using BayesA from BGLR: %s" % (str(n_size), str(keep)))
+    save_name2 = save_name + "_" + str(n_size)
+    SaveTopFeats(keep, save_name2)
+  
+
+
 def FET(df, PARAMETER, pos, neg, save_name):
   """Use Fisher's Exact Test to look for enriched features"""
   from scipy.stats import fisher_exact
@@ -249,7 +320,7 @@ if __name__ == "__main__":
   CL = 'Class'
   TYPE = 'c'
   n_jobs = 1
-  IGNORE, CVs, REPS = 'pass', 'pass', 1
+  CVs, REPS = 'pass', 1
   SEP = '\t'
   SAVE, DF_CLASS = 'default', 'default'
   UNKNOWN = 'unk'
@@ -257,40 +328,36 @@ if __name__ == "__main__":
 
   for i in range (1,len(sys.argv),2):
 
-        if sys.argv[i] == "-df":
-          DF = sys.argv[i+1]
-        if sys.argv[i] == "-df_class":
-          DF_CLASS = sys.argv[i+1]
-        if sys.argv[i] == "-sep":
-          SEP = sys.argv[i+1]
-        if sys.argv[i] == '-save':
-          SAVE = sys.argv[i+1]
-        if sys.argv[i] == '-list':
-          save_list = sys.argv[i+1]
-        if sys.argv[i] == '-f':
-          F = sys.argv[i+1]
-        if sys.argv[i] == '-n':
-          N = sys.argv[i+1]
-        if sys.argv[i] == '-n_jobs':
-          n_jobs = int(sys.argv[i+1])
-        if sys.argv[i] == '-feat':
-          FEAT = sys.argv[i+1]
-        if sys.argv[i] == '-p':
-          PARAMETER = float(sys.argv[i+1])        
-        if sys.argv[i] == '-type':
-          TYPE = sys.argv[i+1]
-        if sys.argv[i] == '-class':
-          CL = sys.argv[i+1]
-        if sys.argv[i] == '-pos':
-          pos = sys.argv[i+1]
-        if sys.argv[i] == '-neg':
-          neg = sys.argv[i+1]
-        if sys.argv[i] == '-ignore':
-          IGNORE = sys.argv[i+1]
-        if sys.argv[i] == '-CVs':
-          CVs = sys.argv[i+1]
-        if sys.argv[i] == '-jobNum':
-          jobNum = sys.argv[i+1]
+    if sys.argv[i].lower() == "-df":
+      DF = sys.argv[i+1]
+    if sys.argv[i].lower() == "-df_class":
+      DF_CLASS = sys.argv[i+1]
+    if sys.argv[i].lower() == "-sep":
+      SEP = sys.argv[i+1]
+    if sys.argv[i].lower() == '-save':
+      SAVE = sys.argv[i+1]
+    if sys.argv[i].lower() == '-f':
+      F = sys.argv[i+1]
+    if sys.argv[i].lower() == '-n':
+      N = sys.argv[i+1]
+    if sys.argv[i].lower() == '-n_jobs':
+      n_jobs = int(sys.argv[i+1])
+    if sys.argv[i].lower() == '-feat':
+      FEAT = sys.argv[i+1]
+    if sys.argv[i].lower() == '-p':
+      PARAMETER = float(sys.argv[i+1])        
+    if sys.argv[i].lower() == '-type':
+      TYPE = sys.argv[i+1]
+    if sys.argv[i].lower() == '-class':
+      CL = sys.argv[i+1]
+    if sys.argv[i].lower() == '-pos':
+      pos = sys.argv[i+1]
+    if sys.argv[i].lower() == '-neg':
+      neg = sys.argv[i+1]
+    if sys.argv[i].lower() == '-cvs':
+      CVs = sys.argv[i+1]
+    if sys.argv[i].lower() == '-jobnum':
+      jobNum = sys.argv[i+1]
 
 
   if len(sys.argv) <= 1:
@@ -315,6 +382,7 @@ if __name__ == "__main__":
   
   if class_col != 'Class':
     df = df.rename(columns = {class_col:'Class'})
+  
   #Recode class as 1 for positive and 0 for negative
   if TYPE.lower() == 'c':
     df["Class"] = df["Class"].replace(pos, 1)
@@ -361,6 +429,7 @@ if __name__ == "__main__":
     except:
       save_name = DF.split("/")[-1] + "_" + F
 
+
   if F.lower() == "randomforest" or F.lower() == "rf":
     DecisionTree(df_use, N, TYPE, save_name)
     
@@ -374,6 +443,9 @@ if __name__ == "__main__":
     
   elif F.lower() == "relief" or F.lower() == "rebate":
     Relief(df_use, N, n_jobs, save_name)
+
+  elif F.lower() == "bayesa" or F.lower() == "ba":
+    BayesA(df_use, N, save_name)
     
   elif F.lower() == "fisher" or F.lower() == "fet" or F.lower() == 'enrich':
     if SAVE == 'default':
