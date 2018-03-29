@@ -46,6 +46,7 @@ class fun(object):
 		Need to edit the hard code to modify what parameters are searched
 		"""
 		from sklearn.model_selection import GridSearchCV
+		from sklearn.model_selection import RandomizedSearchCV
 		from sklearn.preprocessing import StandardScaler
 		from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 		from sklearn.svm import SVC
