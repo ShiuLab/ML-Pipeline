@@ -39,7 +39,7 @@ Available feature selection tools: RandomForest, Chi2, LASSO (L1 penalty), enric
 Example:
 
     export PATH=/mnt/home/azodichr/miniconda3/bin:$PATH
-    python Feature_Selection.py -df [path/to/dataframe] -f [rf/chi2/lasso/fet/bayesA] -n [needed for chi2/rf] -p [needed for LASSO/FET] -type [needed for LASSO] -list T 
+    python Feature_Selection.py -df [path/to/dataframe] -f [rf/chi2/lasso/fet/bayesA] -n [needed for chi2/rf/bayesA] -p [needed for LASSO/FET] -type [needed for LASSO] -ho [needed if using holdout set]
     * For more info/additional options run holdout.py with no parameters
 
 ### Impute Data (Moore)
