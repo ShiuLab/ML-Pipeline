@@ -24,6 +24,7 @@ class fun(object):
 		self.tokenList = open(filename, 'r')
 	
 	def EstablishBalanced(df, classes, min_size, gs_n):
+		""" Defines which instances will be used for each balanced dataset """
 		class_ids_dict = {}
 		for cl in classes:
 			cl_ids = list(df[df["Class"]==cl].index)
@@ -39,14 +40,15 @@ class fun(object):
 			bal_list.append(tmp_l)
 		return bal_list
 	
-	# def GridSearch(df, balanced_list, SAVE, ALG, classes, min_size, gs_score, gs_n, n_jobs):
 	
-	def GridSearch(df, SAVE, ALG, classes, min_size, gs_score, n, cv_num, n_jobs, POS, NEG):
-		""" Perform a parameter sweep using grid search CV implemented in SK-learn
+	def GridSearch(df, SAVE, ALG, classes, min_size, gs_score, n, cv_num, n_jobs, GS_REPS, GS_TYPE, POS, NEG, gs_full):
+		""" Perform a parameter sweep using GridSearchCV implemented in SK-learn.
+		Need to edit the hard code to modify what parameters are searched
 		"""
 		from sklearn.model_selection import GridSearchCV
+		from sklearn.model_selection import RandomizedSearchCV
 		from sklearn.preprocessing import StandardScaler
-		from sklearn.ensemble import RandomForestClassifier
+		from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 		from sklearn.svm import SVC
 		from sklearn.linear_model import LogisticRegression
 		
@@ -54,22 +56,24 @@ class fun(object):
 		
 		### NOTE: The returned top_params will be in alphabetical order - to be consistent add any additional 
 		###       parameters to test in alphabetical order
-		if ALG == 'RF':
-			parameters = {'max_depth':[3, 5, 10, 50], 'max_features': [0.1, 0.25, 0.5, 0.75, 0.9999, 'sqrt', 'log2']}
+		if ALG.lower() == 'rf':
+			parameters = {'max_depth':[3, 5, 10], 'max_features': [0.1, 0.25, 0.5, 0.75, 'sqrt', 'log2', None], 'n_estimators': [100,500,1000]}
 			
-		elif ALG == "SVM":
+		elif ALG.lower() == "svm":
 			parameters = {'kernel': ['linear'], 'C':[0.01, 0.1, 0.5, 1, 10, 50, 100]}
 
-		elif ALG == 'SVMpoly':
+		elif ALG.lower() == 'svmpoly':
 			parameters = {'kernel': ['poly'], 'C':[0.01, 0.1, 0.5, 1, 10, 50, 100],'degree': [2,3,4], 'gamma': np.logspace(-5,1,7)}
 
-		elif ALG == 'SVMrbf':
+		elif ALG.lower() == 'svmrbf':
 			parameters = {'kernel': ['rbf'], 'C': [0.01, 0.1, 0.5, 1, 10, 50, 100], 'gamma': np.logspace(-5,1,7)}
 		
-		elif ALG == 'LogReg':
-			#parameters = {'penalty': ['l1','l2'], 'C': [0.01, 0.1, 0.5, 1, 10, 50, 100], 'intercept_scaling': [0.1, 0.5, 1, 2, 5, 10]}	
+		elif ALG.lower() == 'logreg':
 			parameters = {'C': [0.01, 0.1, 0.5, 1, 10, 50, 100], 'intercept_scaling': [0.1, 0.5, 1, 2, 5, 10],'penalty': ['l1','l2']}	
-		
+
+		elif ALG.lower() == 'gb':
+			parameters = {'learning_rate': [0.001, 0.01, 0.1, 0.5, 1],'max_depth': [3, 5, 10], 'max_features': [0.1, 0.25, 0.5, 0.75, 'sqrt', 'log2', None],'n_estimators': [100,500,1000]}	
+
 		else:
 			print('Grid search is not available for the algorithm selected')
 			exit()
@@ -78,7 +82,7 @@ class fun(object):
 		
 		bal_ids_list = []
 		for j in range(n):
-			print("  Round %s of %s"%(j+1,n))
+			
 			
 			# Build balanced dataframe and define x & y
 			df1 = pd.DataFrame(columns=list(df))
@@ -87,24 +91,119 @@ class fun(object):
 				df1 = pd.concat([df1, temp])
 			
 			bal_ids_list.append(list(df1.index))
+
+			if j < GS_REPS:
+				print("Round %s of %s"%(j+1,GS_REPS))
+				y = df1['Class']
+				x = df1.drop(['Class'], axis=1) 
+				
+				# Build model, run grid search with 10-fold cross validation and fit
+				if ALG.lower() == 'rf':
+					model = RandomForestClassifier()
+				elif ALG.lower() == "svm" or ALG.lower() == 'svmrbf' or ALG.lower() == 'svmpoly':
+					# x = StandardScaler().fit_transform(x)
+					model = SVC(probability=True)
+				elif ALG.lower() == "logreg":
+					model = LogisticRegression()
+				elif ALG.lower() == "gb":
+					model = GradientBoostingClassifier()
+				
+				if gs_score.lower() == 'auprc':
+					gs_score = 'average_precision'
+
+				if GS_TYPE.lower() == 'rand' or GS_TYPE.lower() == 'random':
+					grid_search = RandomizedSearchCV(model, parameters, scoring = gs_score, n_iter = 10, cv = cv_num, n_jobs = n_jobs, pre_dispatch=2*n_jobs)
+				else:
+					grid_search = GridSearchCV(model, parameters, scoring = gs_score, cv = cv_num, n_jobs = n_jobs, pre_dispatch=2*n_jobs)
+				
+				if len(classes) == 2:
+					y = y.replace(to_replace = [POS, NEG], value = [1,0])
+				
+				grid_search.fit(x, y)
+				
+				# Add results to dataframe
+				j_results = pd.DataFrame(grid_search.cv_results_)
+				gs_results = pd.concat([gs_results, j_results[['params','mean_test_score']]])
 			
-			y = df1['Class']
-			x = df1.drop(['Class'], axis=1) 
+		# Break params into seperate columns
+		gs_results2 = pd.concat([gs_results.drop(['params'], axis=1), gs_results['params'].apply(pd.Series)], axis=1)
+		param_names = list(gs_results2)[1:]
+		
+		if gs_full.lower() == 't' or gs_full.lower() == 'true':
+			gs_results2.to_csv(SAVE + "_GridSearchFULL.txt")		
+		
+		# Find the mean score for each set of parameters & select the top set
+		gs_results_mean = gs_results2.groupby(param_names).mean()
+		gs_results_mean = gs_results_mean.sort_values('mean_test_score', 0, ascending = False)
+		top_params = gs_results_mean.index[0]
+
+		print("Parameter sweep time: %f seconds" % (time.time() - start_time))
+
+		# Save grid search results
+		outName = open(SAVE + "_GridSearch.txt", 'w')
+		outName.write('# %f sec\n' % (time.time() - start_time))
+		gs_results_mean.to_csv(outName)
+		outName.close()
+		return top_params,bal_ids_list, param_names
+	
+	def RegGridSearch(df, SAVE, ALG, gs_score, n, cv_num, n_jobs, GS_REPS, GS_TYPE, gs_full):
+		""" Perform a parameter sweep using GridSearchCV implemented in SK-learn. 
+		Need to edit the hard code to modify what parameters are searched"""
+		from sklearn.metrics import mean_squared_error, r2_score
+		from sklearn.model_selection import GridSearchCV
+		from sklearn.model_selection import RandomizedSearchCV
+		from sklearn.preprocessing import StandardScaler
+		
+		start_time = time.time()
+		
+		### NOTE: The returned top_params will be in alphabetical order - to be consistent add any additional 
+		###       parameters to test in alphabetical order
+		### NOTE2: sk-learn uses the conventation that higher scores are better than lower scores, so gs_score is
+		###       the negative MSE, so the largest value is the best parameter combination.
+		if ALG.lower() == 'rf':
+			parameters = {'max_depth':[3, 5, 10], 'max_features': [0.1, 0.5, 'sqrt', 'log2', None]}
 			
-			# Build model, run grid search with 10-fold cross validation and fit
-			if ALG == 'RF':
-				model = RandomForestClassifier()
-			elif ALG == "SVM" or ALG == 'SVMrbf' or ALG == 'SVMpoly':
-				# x = StandardScaler().fit_transform(x)
-				model = SVC(probability=True)
-			elif ALG == "LogReg":
-				model = LogisticRegression()
+		elif ALG.lower() == "svm":
+			parameters = {'kernel': ['linear'], 'C':[0.01, 0.1, 0.5, 1, 10, 50, 100]}
+
+		elif ALG.lower() == 'svmpoly':
+			parameters = {'kernel': ['poly'], 'C':[0.01, 0.1, 0.5, 1, 10, 100],'degree': [2,3], 'gamma': np.logspace(-5,1,7)}
+
+		elif ALG.lower() == 'svmrbf':
+			parameters = {'kernel': ['rbf'], 'C': [0.01, 0.1, 0.5, 1, 10, 100], 'gamma': np.logspace(-5,1,7)}
+
+		elif ALG.lower() == 'gb':
+			parameters = {'learning_rate': [0.0001, 0.001, 0.01, 0.1, 1], 'max_features': [0.1, 0.5, 'sqrt', 'log2', None], 'max_depth': [3, 5, 10]}	
+
+		else:
+			print('Grid search is not available for the algorithm selected')
+			exit()
 			
-			grid_search = GridSearchCV(model, parameters, scoring = gs_score, cv = cv_num, n_jobs = n_jobs, pre_dispatch=2*n_jobs)
+		y = df['Y']
+		x = df.drop(['Y'], axis=1) 
+
+		gs_results = pd.DataFrame(columns = ['mean_test_score','params'])
+		
+		#if j < GS_REPS:
+		for j in range(GS_REPS):
+			print("Round %s of %s"%(j+1,GS_REPS))
 			
-			if len(classes) == 2:
-				y = y.replace(to_replace = [POS, NEG], value = [1,0])
+			# Build model
+			if ALG.lower() == 'rf':
+				from sklearn.ensemble import RandomForestRegressor
+				model = RandomForestRegressor()
+			elif ALG.lower() == "svm" or ALG.lower() == 'svmrbf' or ALG.lower() == 'svmpoly':
+				from sklearn.svm import SVR
+				model = SVR()
+			elif ALG.lower() == "gb":
+				from sklearn.ensemble import GradientBoostingRegressor
+				model = GradientBoostingRegressor()
 			
+			# Run grid search with 10-fold cross validation and fit
+			if GS_TYPE.lower() == 'rand' or GS_TYPE.lower() == 'random':
+				grid_search = RandomizedSearchCV(model, parameters, scoring = gs_score, n_iter = 10, cv = cv_num, n_jobs = n_jobs, pre_dispatch=2*n_jobs)
+			else:
+				grid_search = GridSearchCV(model, parameters, scoring = gs_score, cv = cv_num, n_jobs = n_jobs, pre_dispatch=2*n_jobs)
 			grid_search.fit(x, y)
 			
 			# Add results to dataframe
@@ -113,6 +212,9 @@ class fun(object):
 		
 		# Break params into seperate columns
 		gs_results2 = pd.concat([gs_results.drop(['params'], axis=1), gs_results['params'].apply(pd.Series)], axis=1)
+		
+		if gs_full.lower() == 't' or gs_full.lower() == 'true':
+			gs_results.to_csv(SAVE + "_GridSearchFULL.txt")
 		param_names = list(gs_results2)[1:]
 		#print('Parameters tested: %s' % param_names)
 		
@@ -120,12 +222,18 @@ class fun(object):
 		gs_results_mean = gs_results2.groupby(param_names).mean()
 		gs_results_mean = gs_results_mean.sort_values('mean_test_score', 0, ascending = False)
 		top_params = gs_results_mean.index[0]
+		print(gs_results_mean.head())
 		
+		# Save grid search results
 		print("Parameter sweep time: %f seconds" % (time.time() - start_time))
-		outName = SAVE + "_GridSearch.txt"
+		outName = open(SAVE + "_GridSearch.txt", 'w')
+		outName.write('# %f sec\n' % (time.time() - start_time))
 		gs_results_mean.to_csv(outName)
-		return top_params,bal_ids_list, param_names
+		outName.close()
+		return top_params, param_names
+
 	
+
 	def DefineClf_RandomForest(n_estimators,max_depth,max_features,j,n_jobs):
 		from sklearn.ensemble import RandomForestClassifier
 		clf = RandomForestClassifier(n_estimators=int(n_estimators), 
@@ -136,7 +244,32 @@ class fun(object):
 			n_jobs=n_jobs)
 		return clf
 	
-	
+	def DefineReg_RandomForest(n_estimators,max_depth,max_features,n_jobs,j):
+		from sklearn.ensemble import RandomForestRegressor
+		reg = RandomForestRegressor(n_estimators=int(n_estimators), 
+			max_depth=max_depth, 
+			max_features=max_features,
+			criterion='mse', 
+			random_state=j, 
+			n_jobs=n_jobs)
+		return reg
+
+	def DefineReg_GB(learning_rate,max_features,max_depth,n_jobs,j):
+		from sklearn.ensemble import GradientBoostingRegressor
+		reg = GradientBoostingRegressor(learning_rate=learning_rate,
+			max_features=max_features,
+			max_depth=max_depth,
+			random_state=j)
+		return reg
+
+	def DefineClf_GB(learning_rate,max_features,max_depth,n_jobs,j):
+		from sklearn.ensemble import GradientBoostingClassifier
+		reg = GradientBoostingClassifier(learning_rate=learning_rate,
+			max_features=max_features,
+			max_depth=max_depth,
+			random_state=j)
+		return reg
+
 	def DefineClf_SVM(kernel,C,degree,gamma,j):
 		from sklearn.svm import SVC
 		clf = SVC(kernel = kernel,
@@ -146,6 +279,14 @@ class fun(object):
 			random_state=j,
 			probability=True)
 		return clf
+
+	def DefineReg_SVM(kernel,C,degree,gamma,j):
+		from sklearn.svm import SVR
+		reg = SVR(kernel = kernel,
+			C=float(C), 
+			degree = degree,
+			gamma = gamma)
+		return reg
 	
 	def DefineClf_LogReg(penalty,C,intercept_scaling):
 		from sklearn.linear_model import LogisticRegression
@@ -154,17 +295,13 @@ class fun(object):
 			intercept_scaling=intercept_scaling)
 		return clf
 
+	def DefineReg_LinReg():
+		from sklearn import linear_model
+		reg = linear_model.LinearRegression()
+		return reg
 
-	# def MakeScoreFrame(cv_proba,POS_IND,sel_labels,score_columns,notSel_proba,notSel_labels,apply_unk,unk_proba,unk_labels):
-		# df_sel_scores = pd.DataFrame(data=cv_proba[POS_IND],index=sel_labels,columns=score_columns)
-		# df_notSel_scores = pd.DataFrame(data=notSel_proba[POS_IND],index=df_notSel.index,columns=score_columns)
-		# current_scores = pd.concat([df_sel_scores,df_notSel_scores], axis = 0)
-		# if apply_unk == True:
-			# df_unk_scores = pd.DataFrame(data=unk_proba[POS_IND],index=df_unknowns.index,columns=score_columns)
-			# current_scores = pd.concat([current_scores,df_unk_scores], axis = 0)
-		# return current_scores
 	
-	def BuildModel_Apply_Performance(df, clf, cv_num, df_notSel, apply_unk, df_unknowns, classes, POS, NEG, j, ALG, THRSHD_test):
+	def BuildModel_Apply_Performance(df, clf, cv_num, df_notSel, apply_unk, df_unknowns, ho_df, classes, POS, NEG, j, ALG, THRSHD_test):
 		from sklearn.model_selection import cross_val_predict
 		
 		# Data from balanced dataframe
@@ -175,11 +312,18 @@ class fun(object):
 		cv_proba = cross_val_predict(estimator=clf, X=X, y=y, cv=cv_num, method='predict_proba')
 		cv_pred = cross_val_predict(estimator=clf, X=X, y=y, cv=cv_num)
 		
-		# Fit a model using all data and apply to instances that were not selected and of unknown class
+		# Fit a model using all data and apply to 
+		# (1) instances that were not selected using cl_train
+		# (2) instances with unknown class
+		# (3) holdout instances
+
 		clf.fit(X,y)
 		notSel_proba = clf.predict_proba(df_notSel.drop(['Class'], axis=1))
 		if apply_unk == True:
 			unk_proba = clf.predict_proba(df_unknowns.drop(['Class'], axis=1))
+		if not isinstance(ho_df, str):
+			ho_proba = clf.predict_proba(ho_df.drop(['Class'], axis=1))
+			ho_pred = clf.predict(ho_df.drop(['Class'], axis=1))
 		
 		# Evaluate performance
 		if len(classes) == 2:
@@ -194,6 +338,7 @@ class fun(object):
 			# Generate run statistics from balanced dataset scores
 			result = fun.Performance(y, cv_pred, scores, clf, classes, POS, POS_IND, NEG, ALG, THRSHD_test)
 
+			
 			#Generate data frame with all scores
 			score_columns=["score_%s"%(j)]
 			df_sel_scores = pd.DataFrame(data=cv_proba[:,POS_IND],index=df.index,columns=score_columns)
@@ -202,7 +347,11 @@ class fun(object):
 			if apply_unk == True:
 				df_unk_scores = pd.DataFrame(data=unk_proba[:,POS_IND],index=df_unknowns.index,columns=score_columns)
 				current_scores =  pd.concat([current_scores,df_unk_scores], axis = 0)
-			
+			if not isinstance(ho_df, str):
+				df_ho_scores = pd.DataFrame(data=ho_proba[:,POS_IND],index=ho_df.index,columns=score_columns)
+				current_scores =  pd.concat([current_scores,df_ho_scores], axis = 0)
+				scores_ho = ho_proba[:,POS_IND]
+				result_ho = fun.Performance(ho_df['Class'], ho_pred, scores_ho, clf, classes, POS, POS_IND, NEG, ALG, THRSHD_test)
 		
 		else:
 			# Generate run statistics from balanced dataset scores
@@ -219,17 +368,86 @@ class fun(object):
 			if apply_unk == True:
 				df_unk_scores = pd.DataFrame(data=unk_proba,index=df_unknowns.index,columns=score_columns)
 				current_scores =  pd.concat([current_scores,df_unk_scores], axis = 0)
-			
-			
-			
-		return result,current_scores
+			if not isinstance(ho_df, str):
+				df_ho_scores = pd.DataFrame(data=ho_proba,index=ho_df.index,columns=score_columns)
+				current_scores =  pd.concat([current_scores,df_ho_scores], axis = 0)
+				result_ho = fun.Performance_MC(ho_df['Class'], ho_pred, classes)
+		
+		if not isinstance(ho_df, str):
+			return result,current_scores,result_ho
+		else:
+			return result,current_scores
+
+	def Run_Regression_Model(df, reg, cv_num, ALG, df_unknowns, ho_df, cv_sets, j):
+		from sklearn.model_selection import cross_val_predict
+		from sklearn.metrics import mean_squared_error, r2_score, explained_variance_score
+		# Data from balanced dataframe
+		y = df['Y']
+		X = df.drop(['Y'], axis=1) 
+		
+		# Obtain the predictions using 10 fold cross validation (uses KFold cv by default):
+		if isinstance(cv_sets, pd.DataFrame):
+			from sklearn.cross_validation import LeaveOneLabelOut
+			cv_folds = LeaveOneLabelOut(cv_sets.iloc[:,j])
+			cv_pred = cross_val_predict(estimator=reg, X=X, y=y, cv=cv_folds)
+			cv_pred_df = pd.DataFrame(data=cv_pred, index=df.index, columns=['pred'])
+
+		else:
+			cv_pred = cross_val_predict(estimator=reg, X=X, y=y, cv=cv_num)
+		
+		cv_pred_df = pd.DataFrame(data=cv_pred, index=df.index, columns=['pred'])
+		
+		# Get performance statistics from cross-validation
+		y = y.astype(float)
+		mse = mean_squared_error(y, cv_pred)
+		evs = explained_variance_score(y, cv_pred)
+		r2 = r2_score(y, cv_pred)
+		cor = np.corrcoef(np.array(y), cv_pred)
+		result = [mse, evs, r2, cor[0,1]]
+		
+		reg.fit(X,y)
+
+		# Apply fit model to unknowns
+		if isinstance(df_unknowns, pd.DataFrame):
+			unk_pred = reg.predict(df_unknowns.drop(['Y'], axis=1))
+			unk_pred_df = pd.DataFrame(data=unk_pred, index=df_unknowns.index, columns=['pred'])
+			cv_pred_df = cv_pred_df.append(unk_pred_df)
+
+		if not isinstance(ho_df, str):
+			ho_y = ho_df['Y']
+			ho_pred = reg.predict(ho_df.drop(['Y'], axis=1))
+			ho_pred_df = pd.DataFrame(data=ho_pred, index=ho_df.index, columns=['pred'])
+			cv_pred_df = cv_pred_df.append(ho_pred_df)
+
+			# Get performance stats
+			mse_ho = mean_squared_error(ho_y, ho_pred)
+			evs_ho = explained_variance_score(ho_y, ho_pred)
+			r2_ho = r2_score(ho_y, ho_pred)
+			cor_ho = np.corrcoef(np.array(ho_y), ho_pred)
+			result_ho = [mse_ho, evs_ho, r2_ho, cor_ho[0,1]]
+					
+		# Try to extract importance scores 
+
+		try:
+			importances = reg.feature_importances_
+		except:
+			try:
+				importances = reg.coef_
+			except:
+				importances = "na"
+				print("Cannot get importance scores")
+		
+		if not isinstance(ho_df, str):
+			return result, cv_pred_df, importances, result_ho
+		else:
+			return result, cv_pred_df, importances
 
 	def Performance(y, cv_pred, scores, clf, classes, POS, POS_IND, NEG, ALG, THRSHD_test):
 		""" For binary predictions: This function calculates the best threshold for defining
 		POS/NEG from the prediction probabilities by maximizing the f1_score. Then calcuates 
 		the area under the ROC and PRc 
 		"""
-		from sklearn.metrics import f1_score, roc_auc_score, accuracy_score, average_precision_score, confusion_matrix
+		from sklearn.metrics import f1_score, roc_auc_score, average_precision_score, accuracy_score, average_precision_score, confusion_matrix
 		
 		# Gather balanced model scoring metrics
 		cm = confusion_matrix(y, cv_pred, labels=classes)
@@ -247,10 +465,11 @@ class fun(object):
 					f1 = f1_score(y1, thr_pred, pos_label=1)	# Returns F1 for positive class
 				elif THRSHD_test.lower() == 'acc' or THRSHD_test.lower() == 'a' or THRSHD_test.lower() == 'accuracy':
 					f1 = accuracy_score(y1, thr_pred)  # Returns accuracy score (favors threshold with fewer FP)
+				elif THRSHD_test.lower() == 'auprc':
+					f1 = average_precision_score(y1, thr_pred)
 				else:
 					print('%s is not a scoring option for model thresholding' % THRSHD_test)
 					exit()
-
 				if f1 > max_f1:
 					max_f1 = f1
 					max_f1_thresh = thr
@@ -260,11 +479,9 @@ class fun(object):
 		AucPRc = average_precision_score(y1, scores)
 
 		# Try to extract importance scores 
-		if ALG == "RF":
+		if ALG.lower() == "rf" or ALG.lower() == 'gb':
 			importances = clf.feature_importances_
-		elif "SVM" in ALG:
-			importances = clf.coef_
-		elif ALG == "LogReg":
+		elif "svm" in ALG.lower() or ALG.lower() == 'logreg':
 			importances = clf.coef_
 		else:
 			try:
@@ -291,7 +508,7 @@ class fun(object):
 		return {'cm':cm, 'accuracy':accuracy,'macro_f1':macro_f1,'f1_MC':f1}
 
 
-	def Model_Performance_Thresh(df_proba, final_threshold, balanced_ids, POS, NEG):
+	def Model_Performance_Thresh(df_proba, final_threshold, balanced_ids, POS, NEG, ho_instances):
 		
 		from sklearn.metrics import f1_score, confusion_matrix
 		
@@ -304,6 +521,11 @@ class fun(object):
 			df_proba_thresh[proba_column] = np.where(df_proba_thresh[proba_column] > final_threshold, POS,NEG)
 		balanced_count = 0
 
+		if ho_instances != 'None':
+			df_proba_thresh_ho = df_proba_thresh.loc[ho_instances, :]
+			df_proba_thresh = df_proba_thresh.drop(ho_instances)
+
+
 		# Get predictions scores from the balanced runs using the final threshold
 		for i in proba_columns:
 
@@ -313,7 +535,6 @@ class fun(object):
 			balanced_count += 1
 
 			matrix = confusion_matrix(y, yhat, labels = [POS,NEG])
-			
 			TP1, FP1, TN1, FN1 = matrix[0,0], matrix[1,0], matrix[1,1], matrix[0,1]
 
 			TP.append(TP1)
@@ -338,7 +559,20 @@ class fun(object):
 		Precision = [np.mean(Precision), np.std(Precision), np.std(Precision)/denominator]
 		Accuracy = [np.mean(Accuracy), np.std(Accuracy), np.std(Accuracy)/denominator]
 		F1 = [np.mean(F1), np.std(F1), np.std(F1)/denominator]
-		return TP,TN,FP,FN,TPR,FPR,FNR,Precision,Accuracy,F1
+
+		if ho_instances != 'None':
+			y_ho = df_proba_thresh_ho['Class']
+			yhat_ho = df_proba_thresh_ho.filter(regex='Predicted_')
+			matrix_ho = confusion_matrix(y_ho, yhat_ho, labels = [POS,NEG])
+			TP_ho, FP_ho, TN_ho, FN_ho = matrix[0,0], matrix[1,0], matrix[1,1], matrix[0,1]
+			Precision_ho = TP_ho/(TP_ho+FP_ho)
+			Accuracy_ho = (TP_ho + TN_ho)/ (TP_ho + TN_ho + FP_ho + FN_ho)
+			F1_ho = (2*TP_ho)/((2*TP_ho) + FP_ho + FN_ho)
+			print(TP,TN,FP,FN,TPR,FPR,FNR,Precision,Accuracy,F1,Precision_ho,Accuracy_ho,F1_ho)
+			return TP,TN,FP,FN,TPR,FPR,FNR,Precision,Accuracy,F1,Precision_ho,Accuracy_ho,F1_ho
+		
+		else:
+			return TP,TN,FP,FN,TPR,FPR,FNR,Precision,Accuracy,F1
 
 
 	def Plots(df_proba, balanced_ids, ROC, PRc, POS, NEG, n, SAVE):
@@ -391,8 +625,6 @@ class fun(object):
 		plt.title('ROC Curve: ' + SAVE)
 		plt.plot(FPR_mean, TPR_mean, lw=3, color= 'black', label='AUC-ROC: ' + str(round(ROC[0], 3)))
 		plt.fill_between(FPR_mean, TPR_mean-TPR_sd, TPR_mean+TPR_sd, facecolor='black', alpha=0.4, linewidth = 0, label='SD_TPR')
-		#plt.plot(FPRs_df.median(axis=1), TPRs_df.mean(axis=1), lw=2, color= 'blue', label='AUC-ROC: ' + str(round(ROC[0], 3)))
-		#plt.fill_between(FPRs_df.median(axis=1), TPRs_df.min(axis=1), TPRs_df.max(axis=1), facecolor='blue', alpha=0.5, label='SD_TPR')
 		plt.plot([0,1],[0,1],'r--', lw = 2, label = 'Random Expectation')
 		plt.legend(loc='lower right')
 		plt.xlim([0,1])
@@ -400,8 +632,8 @@ class fun(object):
 		plt.ylabel('True Positive Rate')
 		plt.xlabel('False Positive Rate')
 		plt.show()
-		filename = SAVE + "_ROCcurve.png"
-		plt.savefig(filename)
+		filename = SAVE + "_ROCcurve.pdf"
+		plt.savefig(filename, format='pdf')
 		plt.clf()
 		
 		# Plot the Precision-Recall Curve
@@ -417,11 +649,26 @@ class fun(object):
 		plt.ylabel('Precision')
 		plt.xlabel('Recall')
 		plt.show()
-		filename = SAVE + "_PRcurve.png"
-		plt.savefig(filename)
+		filename = SAVE + "_PRcurve.pdf"
+		plt.savefig(filename, format='pdf')
 		plt.close()
 
+	def PlotsReg(predictions, SAVE):
+		import matplotlib.pyplot as plt
+		plt.switch_backend('agg')
+		
+		y = predictions['Y']
+		yhat = predictions['Mean']
 
+		# Plot the ROC Curve
+		plt.scatter(y,yhat, edgecolors=(0,0,0))
+		plt.plot([y.min(), y.max()], [y.min(), y.max()], 'k--', lw=4)
+		plt.ylabel('Predicted')
+		plt.xlabel('Measured')
+		plt.show()
+		filename = SAVE + ".pdf"
+		plt.savefig(filename, format='pdf')
+		plt.clf()
 
 	def Plot_ConMatrix(cm, SAVE):
 		import matplotlib.pyplot as plt
@@ -447,7 +694,8 @@ class fun(object):
 
 		
 		
-		filename = SAVE + "_CM.png"
-		plt.savefig(filename) 
+		filename = SAVE + "_CM.pdf"
+		plt.savefig(filename, format='pdf') 
 		
 		return 'Confusion matrix plotted.'
+

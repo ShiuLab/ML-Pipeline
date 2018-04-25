@@ -3,33 +3,46 @@ PURPOSE:
 Machine learning classifications implemented in sci-kit learn. 
 
 To access pandas, numpy, and sklearn packages on MSU HPCC first run:
-$ export PATH=/mnt/home/azodichr/miniconda3/bin:$PATH
+export PATH=/mnt/home/azodichr/miniconda3/bin:$PATH
 
 INPUTS:
 	
-	REQUIRED ALL:
-	-df       Feature & class dataframe for ML. See "" for an example dataframe
-	-alg      Available: RF, SVM (linear), SVMpoly, SVMrbf, LogReg
+	REQUIRED:
+	-df       Feature & class dataframe for ML. 
+						  See "example_binary.txt" for an example dataframe
+	-alg      Available: RF, SVM (linear), SVMpoly, SVMrbf, GB, and Logistic Regression (LogReg)
 	
 	OPTIONAL:
-	-cl_train List of classes to include in the training set. Default = all classes. If binary, first label = positive class.
-	-pos      name of positive class (default = 1 or first class provided with -cl_train)
-	-gs       Set to True if grid search over parameter space is desired. Default = False
-	-cv       # of cross-validation folds. Default = 10
-	-b        # of random balanced datasets to run. Default = 100
+	-y_name   Name of the column to predict (Default = Class)
+	-cl_train List of classes to include in the training set. (Default = all)		
+							If binary, first label = positive class.
+	-apply    List of non-training class labels that the models should be applied to.
+							Enter 'all' or a list (comma-delimit if >1)
+	-ho       File with list of intances to holdout from feature selection
+	-sep 			Set seperator for input data (Default = '\t')
+	-pos      name of positive class for binary classifier. (Default = 1 or see -cl_train)
+	-drop_na  T/F to drop rows with NAs
+	-gs       T/F if grid search over parameter space is desired. (Default = True)
+	-cv       # of cross-validation folds. (Default = 10)
+	-n/-b     # of random balanced datasets to run (i.e. model replicates). (Default = 100)
 	-min_size Number of instances to draw from each class. Default = size of smallest class
-	-apply    To which non-training class labels should the models be applied? Enter 'all' or a list (comma-delimit if >1)
-	-p        # of processors. Default = 1
+	-p        # of processors. (Default = 1, max for HPCC = 14)
 	-tag      String for SAVE name and TAG column in RESULTS.txt output.
 	-feat     Import file with subset of features to use. If invoked,-tag arg is recommended. Default: keep all features.
-	-class    String for column with class. Default = Class
 	-threshold_test   What model score to use for setting the optimal threshold (Default = F1. Also avilable: accuracy)
-	-save     Adjust save name prefix. Default = [df]_[alg]_[tag (if used)], CAUTION: will overwrite!
+	-save     Adjust save name prefix. Default = [df]_[alg]_[tag (if used)]
+							CAUTION: will overwrite!
 	-short    Set to True to output only the median and std dev of prediction scores, default = full prediction scores
+	-gs_full 	T/F Output full results from the grid search. (Default = F)
+	-gs_reps  Number of replicates of the grid search (Default = 10)
+	-gs_type  Full grid search or randomized search (Default = full, alt = random)
+	-df2      File with class information. Use only if df contains the features but not the classes 
+							* Need to specifiy what column in df2 is y using -y_name 
 	
 	PLOT OPTIONS:
-	-cm       T/F - Do you want to output the confusion matrix & confusion matrix figure? (Default = False)
-	-plots    T/F - Do you want to output ROC and PR curve plots for each model? (Default = False)
+	-cm       T/F Output the confusion matrix & confusion matrix figure (Default = False)
+	-plots    T/F Output the ROC and PR curve plots for each model? (Default = False)
+							These plots can be generated after for 1+ model using ML_plots.py
 
 OUTPUT:
 	-SAVE_imp           Importance scores for each feature
@@ -43,20 +56,23 @@ import pandas as pd
 import numpy as np
 from datetime import datetime
 import time
-
 import ML_functions as ML
 
+start_total_time = time.time()
 def main():
 	
 	# Default code parameters
-	n, FEAT, CL_TRAIN, apply, n_jobs, class_col, CM, POS, plots, cv_num, TAG, SAVE, MIN_SIZE, short_scores = 100, 'all', 'all','none', 1, 'Class', 'False', 1, 'False', 10, '', '', '', False
-	THRSHD_test = 'F1'
+	n, FEAT, CL_TRAIN, apply_model, n_jobs =  100, 'all', 'all','none', 1,
+	y_name, CM, POS, plots, cv_num = 'Class', 'False', 1, 'False', 10,
+	TAG, SAVE, MIN_SIZE, short_scores =   '', '', '', False
+	SEP, THRSHD_test, DF2 = '\t','F1', 'None'
+	drop_na, ho = 'False', ''
 
 	# Default parameters for Grid search
-	GS, gs_score = 'F', 'roc_auc'
+	GS, gs_score, GS_REPS, GS_TYPE, gs_full = 'F', 'roc_auc', 10, 'full', 'f'
 	
-	# Default Random Forest parameters
-	n_estimators, max_depth, max_features = 500, 10, "sqrt"
+	# Default Random Forest and Gradient Boosting parameters
+	n_estimators, max_depth, max_features, learning_rate = 500, 10, "sqrt", 0.1
 	
 	# Default Linear SVC parameters
 	kernel, C, degree, gamma, loss, max_iter = 'linear', 1, 2, 1, 'hinge', "500"
@@ -65,48 +81,60 @@ def main():
 	penalty, C, intercept_scaling = 'l2', 1.0, 1.0
 	
 	for i in range (1,len(sys.argv),2):
-		if sys.argv[i] == "-df":
+		if sys.argv[i].lower() == "-df":
 			DF = sys.argv[i+1]
-		elif sys.argv[i] == '-save':
+		if sys.argv[i].lower() == "-sep":
+			SEP = sys.argv[i+1]
+		elif sys.argv[i].lower() == '-save':
 			SAVE = sys.argv[i+1]
-		elif sys.argv[i] == '-feat':
+		elif sys.argv[i].lower() == '-feat':
 			FEAT = sys.argv[i+1]
-		elif sys.argv[i] == "-gs":
+		elif sys.argv[i].lower() == "-gs":
 			GS = sys.argv[i+1]
-		elif sys.argv[i] == "-gs_score":
+		elif sys.argv[i].lower() == "-gs_score":
 			gs_score = sys.argv[i+1]
-		elif sys.argv[i] == '-cl_train':
-			CL_TRAIN = sys.argv[i+1].split(',')
+		elif sys.argv[i].lower() == "-gs_reps":
+			GS_REPS = int(sys.argv[i+1])
+		elif sys.argv[i].lower() == "-gs_type":
+			GS_TYPE = sys.argv[i+1]
+		elif sys.argv[i].lower() == "-gs_full":
+			gs_full = sys.argv[i+1]
+		elif sys.argv[i].lower() == '-cl_train':
+			CL_TRAIN = sys.argv[i+1].strip().split(',')
 			POS = CL_TRAIN[0]
-		elif sys.argv[i] == '-apply':
-			apply = sys.argv[i+1].lower()
-			if apply != "all":
-				apply = sys.argv[i+1].split(',')
-		elif sys.argv[i] == "-class":
-			class_col = sys.argv[i+1]
-		elif sys.argv[i] == "-n":
+		elif sys.argv[i].lower() == '-apply':
+			apply_model = sys.argv[i+1]
+			if apply_model != "all":
+				apply_model = sys.argv[i+1].split(',')
+		elif sys.argv[i].lower() == "-y_name":
+			y_name = sys.argv[i+1]
+		elif sys.argv[i].lower() == "-n" or sys.argv[i].lower() == "-b":
 			n = int(sys.argv[i+1])
-		elif sys.argv[i] == "-b":
-			n = int(sys.argv[i+1])
-		elif sys.argv[i] == "-min_size":
+		elif sys.argv[i].lower() == '-ho':
+			ho = sys.argv[i+1]
+		elif sys.argv[i].lower() == "-drop_na":
+			drop_na = sys.argv[i+1]
+		elif sys.argv[i].lower() == "-min_size":
 			MIN_SIZE = int(sys.argv[i+1])
-		elif sys.argv[i] == "-alg":
+		elif sys.argv[i].lower() == "-alg":
 			ALG = sys.argv[i+1]
-		elif sys.argv[i] == "-cv":
+		elif sys.argv[i].lower() == "-cv":
 			cv_num = int(sys.argv[i+1])
-		elif sys.argv[i] == "-cm":
+		elif sys.argv[i].lower() == "-cm":
 			CM = sys.argv[i+1]
-		elif sys.argv[i] == "-plots":
+		elif sys.argv[i].lower() == "-plots":
 			plots = sys.argv[i+1]
-		elif sys.argv[i] == "-pos":
+		elif sys.argv[i].lower() == "-pos":
 			POS = sys.argv[i+1]
-		elif sys.argv[i] == "-tag":
+		elif sys.argv[i].lower() == "-tag":
 			TAG = sys.argv[i+1]
-		elif sys.argv[i] == "-threshold_test":
+		elif sys.argv[i].lower() == "-threshold_test":
 			THRSHD_test = sys.argv[i+1]
-		elif sys.argv[i] == "-n_jobs" or sys.argv[i] == "-p":
+		elif sys.argv[i].lower() == "-df2":
+			DF2 = sys.argv[i+1]
+		elif sys.argv[i].lower() == "-n_jobs" or sys.argv[i].lower() == "-p":
 			n_jobs = int(sys.argv[i+1])
-		elif sys.argv[i] == "-short":
+		elif sys.argv[i].lower() == "-short":
 			scores_len = sys.argv[i+1]
 			if scores_len.lower() == "true" or scores_len.lower() == "t":
 				short_scores = True
@@ -117,32 +145,49 @@ def main():
 	
 	####### Load Dataframe & Pre-process #######
 	
-	df = pd.read_csv(DF, sep='\t', index_col = 0)
+	df = pd.read_csv(DF, sep=SEP, index_col = 0)
 	
+	# If features  and class info are in separate files, merge them: 
+	if DF2 != 'None':
+		start_dim = df.shape
+		df_class = pd.read_csv(DF2, sep=SEP, index_col = 0)
+		df = pd.concat([df_class[y_name], df], axis=1, join='inner')
+		print('Merging the feature & class dataframes changed the dimensions from %s to %s (instance, features).' 
+			% (str(start_dim), str(df.shape)))
+
 	# Specify class column - default = Class
-	if class_col != 'Class':
-		df = df.rename(columns = {class_col:'Class'})
+	if y_name != 'Class':
+		df = df.rename(columns = {y_name:'Class'})
 	
 	# Filter out features not in feat file given - default: keep all
 	if FEAT != 'all':
+		print('Using subset of features from: %s' % FEAT)
 		with open(FEAT) as f:
 			features = f.read().strip().splitlines()
 			features = ['Class'] + features
 		df = df.loc[:,features]
-	
-	
-	# Remove instances with NaN or NA values
-	df = df.replace("?",np.nan)
-	df = df.dropna(axis=0)
+
+	# Check for Nas
+	if df.isnull().values.any() == True:
+		if drop_na.lower() == 't' or drop_na.lower() == 'true':
+			start_dim = df.shape
+			df = df.dropna(axis=0)
+			print('Dropping rows with NA values changed the dimensions from %s to %s.' 
+				% (str(start_dim), str(df.shape)))
+		else:
+			print(df.columns[df.isna().any()].tolist())
+			print('There are Na values in your dataframe.\n Impute them or add -drop_na True to remove rows with nas' )
+			quit()
 	
 	
 	# Set up dataframe of unknown instances that the final models will be applied to
-	if CL_TRAIN != 'all' and apply != 'none':
+	if CL_TRAIN != 'all' and apply_model != 'none':
 		apply_unk = True
-		if apply.lower() == 'all':
+		# if apply to all, select all instances with a class not in CL_TRAIN
+		if apply_model == 'all':
 			df_unknowns = df[(~df['Class'].isin(CL_TRAIN))]
-		else:
-			df_unknowns = df[(df['Class'].isin(apply))]
+		else: # apply to specified classes
+			df_unknowns = df[(df['Class'].isin(apply_model))]
 	else:
 		apply_unk = False
 		df_unknowns = ''
@@ -151,7 +196,28 @@ def main():
 	if CL_TRAIN != 'all':
 		df = df[(df['Class'].isin(CL_TRAIN))]
 
-	# Generate training classes list. If binary, establish POS and NEG classes. Set grid search scoring: roc_auc for binary, f1_macro for multiclass
+	# Set up dataframe of holdout instances that the final models will be applied to
+	if ho !='':
+		df_all = df.copy()
+		print('Removing holdout instances to apply model on later...')
+		with open(ho) as ho_file:
+			ho_instances = ho_file.read().splitlines()
+		try:
+			ho_df = df.loc[ho_instances, :]
+			df = df.drop(ho_instances)
+		except:
+			ho_instances = [int(x) for x in ho_instances]
+			ho_df = df.loc[ho_instances, :]
+			df = df.drop(ho_instances)
+
+	else:
+		ho_df = 'None'
+		ho_instances = 'None'
+	
+
+
+	# Generate training classes list. If binary, establish POS and NEG classes. 
+	# Set grid search scoring: roc_auc for binary, f1_macro for multiclass
 	if CL_TRAIN == 'all':
 		classes = df['Class'].unique()
 		if len(classes) == 2:
@@ -184,9 +250,8 @@ def main():
 		min_size = (df.groupby('Class').size()).min() - 1
 	else:
 		min_size = int(MIN_SIZE)
-
-	print('Balanced dataset will include %i instances of each class' % min_size)
 	
+	# Define save name if not specified using -save
 	if SAVE == "":
 		if TAG == "":
 			SAVE = DF + "_" + ALG
@@ -209,6 +274,7 @@ def main():
 	print("CLASSES:",classes)
 	print("POS:",POS,type(POS))
 	print("NEG:",NEG,type(NEG))
+	print('Balanced dataset will include %i instances of each class' % min_size)
 	n_features = len(list(df)) - 1
 	
 	####### Run parameter sweep using a grid search #######
@@ -217,32 +283,37 @@ def main():
 		start_time = time.time()
 		print("\n\n===>  Grid search started  <===") 
 		
-		params2use,balanced_ids, param_names = ML.fun.GridSearch(df, SAVE, ALG, classes, min_size, gs_score, n, cv_num, n_jobs, POS, NEG)
+		params2use, balanced_ids, param_names = ML.fun.GridSearch(df, SAVE, ALG, classes, min_size, gs_score, n, cv_num, n_jobs, GS_REPS, GS_TYPE, POS, NEG, gs_full)
 		
 		# Print results from grid search
-		if ALG == 'RF':
-			max_depth, max_features = params2use
-			print("Parameters selected: max_depth=%s, max_features=%s" % (str(max_depth), str(max_features)))
+		if ALG.lower() == 'rf':
+			max_depth, max_features, n_estimators = params2use
+			print("Parameters selected: max_depth=%s, max_features=%s, n_estimators=%s" % (str(max_depth), str(max_features), str(n_estimators)))
 	
-		elif ALG == 'SVM':
+		elif ALG.lower() == 'svm':
 			C, kernel = params2use
 			print("Parameters selected: Kernel=%s, C=%s" % (str(kernel), str(C)))
 		
-		elif ALG == "SVMpoly":
+		elif ALG.lower() == "svmpoly":
 			C, degree, gamma, kernel = params2use
 			print("Parameters selected: Kernel=%s, C=%s, degree=%s, gamma=%s" % (str(kernel), str(C), str(degree), str(gamma)))
 		
-		elif ALG == "SVMrbf":
+		elif ALG.lower() == "svmrbf":
 			C, gamma, kernel = params2use
 			print("Parameters selected: Kernel=%s, C=%s, gamma=%s" % (str(kernel), str(C), str(gamma)))
 		
-		elif ALG == "LogReg":
+		elif ALG.lower() == "logreg":
 			C, intercept_scaling, penalty = params2use
 			print("Parameters selected: penalty=%s, C=%s, intercept_scaling=%s" % (str(penalty), str(C), str(intercept_scaling)))
-		
+
+		elif ALG.lower() == "gb":
+			learning_rate, max_depth, max_features, n_estimators = params2use
+			print("Parameters selected: learning rate=%s, max_features=%s, max_depth=%s, n_estimators=%s" % (str(learning_rate), str(max_features), str(max_depth), str(n_estimators)))
+	
 		print("Grid search complete. Time: %f seconds" % (time.time() - start_time))
 	
 	else:
+		print('Using default parameters')
 		balanced_ids = ML.fun.EstablishBalanced(df,classes,int(min_size),n)
 	
 	bal_id = pd.DataFrame(balanced_ids)
@@ -254,7 +325,8 @@ def main():
 	print("\n\n===>  ML Pipeline started  <===")
 
 	results = []
-	df_proba = pd.DataFrame(data=df['Class'], index=df.index, columns=['Class'])
+	results_ho = []
+	df_proba = pd.DataFrame(data=df_all['Class'], index=df_all.index, columns=['Class'])
 	if apply_unk == True:
 		df_proba2 = pd.DataFrame(data=df_unknowns['Class'], index=df_unknowns.index, columns=['Class'])
 		df_proba = pd.concat([df_proba,df_proba2],axis=0)
@@ -272,18 +344,26 @@ def main():
 			df_notSel = df_notSel[(df_notSel['Class'].isin(CL_TRAIN))]
 		
 		# Prime classifier object based on chosen algorithm
-		if ALG == "RF":
+		if ALG.lower() == "rf":
 			parameters_used = [n_estimators, max_depth, max_features]
 			clf = ML.fun.DefineClf_RandomForest(n_estimators,max_depth,max_features,j,n_jobs)
-		elif ALG == "SVM" or ALG == 'SVMrbf' or ALG == 'SVMpoly':
+		elif ALG.lower() == "svm" or ALG.lower() == 'svmrbf' or ALG.lower() == 'svmpoly':
 			parameters_used = [C, degree, gamma, kernel]
 			clf = ML.fun.DefineClf_SVM(kernel,C,degree,gamma,j)
-		elif ALG == "LogReg":
+		elif ALG.lower() == "logreg":
 			parameters_used = [C, intercept_scaling, penalty]
 			clf = ML.fun.DefineClf_LogReg(penalty, C, intercept_scaling)
+		elif ALG.lower() == "gb":
+			parameters_used = [learning_rate, max_features, max_depth]
+			clf = ML.fun.DefineClf_GB(learning_rate, max_features, max_depth, n_jobs, j)
 		
 		# Run ML algorithm on balanced datasets.
-		result,current_scores = ML.fun.BuildModel_Apply_Performance(df1, clf, cv_num, df_notSel, apply_unk, df_unknowns, classes, POS, NEG, j, ALG,THRSHD_test)
+		if ho !='':
+			result,current_scores,result_ho = ML.fun.BuildModel_Apply_Performance(df1, clf, cv_num, df_notSel, apply_unk, df_unknowns, ho_df, classes, POS, NEG, j, ALG,THRSHD_test)
+			results_ho.append(result_ho)	
+		else:
+			result,current_scores = ML.fun.BuildModel_Apply_Performance(df1, clf, cv_num, df_notSel, apply_unk, df_unknowns, ho_df, classes, POS, NEG, j, ALG,THRSHD_test)
+
 		results.append(result)
 		df_proba = pd.concat([df_proba,current_scores], axis = 1)
 
@@ -338,32 +418,66 @@ def main():
 	if CM.lower() == 'true' or CM.lower() == 't':
 		cm_mean.to_csv(SAVE + "_cm.csv",sep="\t")
 		done = ML.fun.Plot_ConMatrix(cm_mean, SAVE)
-	
+
+	# Unpack results from hold out
+	if ho !='':
+		AucRoc_ho_array = []
+		AucPRc_ho_array = []
+		accuracies_ho = []
+		f1_array_ho = np.array([np.insert(arr = classes.astype(np.str), obj = 0, values = 'M')])
+		
+		for r_ho in results_ho:			
+			# For binary predictions
+			if 'AucRoc' in r_ho:
+				AucRoc_ho_array.append(r_ho['AucRoc'])
+			if 'AucPRc' in r_ho:
+				AucPRc_ho_array.append(r_ho['AucPRc'])
+
+			# For Multi-class predictions
+			if 'accuracy' in r_ho:
+				accuracies_ho.append(r['accuracy'])
+			if 'macro_f1' in r_ho:
+				f1_temp_ho_array = np.insert(arr = r_ho['f1_MC'], obj = 0, values = r_ho['macro_f1'])
+				f1_array_ho = np.append(f1_array_ho, [f1_temp_ho_array], axis=0)
+		
 
 ###### Multiclass Specific Output ######
 	if len(classes) > 2:
 		
-		# Write median multiclass scores
+		# For each class, get the median and std score
 		summary_cols = []
-		for class_nm in reversed(classes):
+		mc_score_columns = []
+		keep_for_summary = ['Class', 'Prediction']
+		for class_nm in reversed(classes): # get std
 			class_proba_cols = [c for c in df_proba.columns if c.startswith(class_nm+'_score_')]
 			df_proba.insert(loc=1, column = class_nm+'_score_stdev', value = df_proba[class_proba_cols].std(axis=1))
 			summary_cols.insert(0,class_nm+'_score_stdev')
-		
-		mc_score_columns = []
-		for class_nm in reversed(classes):
+
+		for class_nm in reversed(classes): # get median
+			summary_cols.insert(0,class_nm+'_score_Median')
 			mc_score_columns.append(class_nm+'_score_Median')
+			keep_for_summary.append(class_nm + '_score_Median')
 			class_proba_cols = [c for c in df_proba.columns if c.startswith(class_nm+'_score_')]
 			df_proba.insert(loc=1, column = class_nm+'_score_Median', value = df_proba[class_proba_cols].median(axis=1))
-			summary_cols.insert(0,class_nm+'_score_Median')
+			
+		
+		# Find the max mc_score and set to Prediction column (remove the _score_Median string)
 		df_proba.insert(loc=1, column = 'Prediction', value = df_proba[mc_score_columns].idxmax(axis=1))
 		df_proba['Prediction'] = df_proba.Prediction.str.replace('_score_Median','')
+
 		
-		
-		# Summarize % of each class predicted as POS and NEG		
-		summary_df_proba = df_proba[[class_col, 'Prediction', class_nm+'_score_Median']].groupby([class_col, 'Prediction']).agg('count').unstack(level=1)
+		# Count the number of times an instance of class x is predicted as class y 		
+		summary_df_proba = df_proba[['Class', 'Prediction',class_nm + '_score_Median']].groupby(['Class', 'Prediction']).agg('count').unstack(level=1)
 		summary_df_proba.columns = summary_df_proba.columns.droplevel()
+
+		# Check to make sure each class was predicted at least once
+		for cl in classes:
+			if cl not in list(summary_df_proba):
+				print('No instances were predicted as class: %s' % cl)
+				summary_df_proba[cl] = 0
 		summary_df_proba['n_total'] = summary_df_proba[classes].sum(axis=1)
+
+
 		for class_nm in classes:
 			summary_df_proba[str(class_nm) + '_perc'] = summary_df_proba[class_nm]/summary_df_proba['n_total']
 
@@ -381,7 +495,6 @@ def main():
 		f1 = f1[1:]
 		f1.columns = [str(col) + '_F1' for col in f1.columns]
 		f1 = f1.astype(float)		
-		print(f1)
 		
 		# Calculate accuracy and f1 stats
 		AC = np.mean(accuracies)
@@ -392,11 +505,24 @@ def main():
 		print("\nML Results: \nAccuracy: %03f (+/- stdev %03f)\nF1 (macro): %03f (+/- stdev %03f)\n" % (
 		AC, AC_std, MacF1, MacF1_std))
 
+		# Unpack results from hold out
+		if ho !='':
+			f1_ho = pd.DataFrame(f1_array_ho)
+			f1_ho.columns = f1_ho.iloc[0]
+			f1_ho = f1_ho[1:]
+			f1_ho.columns = [str(col) + '_F1' for col in f1_ho.columns]
+			f1_ho = f1_ho.astype(float)	
+			AC_ho = np.mean(accuracies_ho)
+			AC_std_ho = np.std(accuracies_ho)
+			MacF1_ho = f1_ho['M_F1'].mean()
+			MacF1_std_ho = f1_ho['M_F1'].std()
+			print("\nML Results from Hold Out Validation: \nAccuracy: %03f (+/- stdev %03f)\nF1 (macro): %03f (+/- stdev %03f)\n" % (
+				AC_ho, AC_std_ho, MacF1_ho, MacF1_std_ho))
 
 		# Save detailed results file 
 		with open(SAVE + "_results.txt", 'w') as out:
 			out.write('%s\nID: %s\nTag: %s\nAlgorithm: %s\nTrained on classes: %s\nApplied to: %s\nNumber of features: %i\n' % (
-				timestamp, SAVE, TAG, ALG, classes, apply, n_features))
+				timestamp, SAVE, TAG, ALG, classes, apply_model, n_features))
 			out.write('Min class size: %i\nCV folds: %i\nNumber of balanced datasets: %i\nGrid Search Used: %s\nParameters used:%s\n' % (
 				min_size, cv_num, n, GS, parameters_used))
 
@@ -409,14 +535,24 @@ def main():
 			cm_mean.to_csv(out, mode='a', sep='\t')
 			out.write('\n\nCount and percent of instances of each class (row) predicted as a class (col):\n')
 			summary_df_proba.to_csv(out, mode='a', header=True, sep='\t')
-
+			
+			# Add results from hold out
+			if ho !='':
+				out.write('\n\nResults from the hold out validation set\n')
+				out.write('HO Accuracy\t%05f +/-%05f\nHO F1_macro\t%05f +/-%05f' % (AC_ho, AC_std_ho, MacF1_ho, MacF1_std_ho))
 
 ###### Binary Prediction Output ######
 	else: 
 		# Get AUC for ROC and PR curve (mean, sd, se)
 		ROC = [np.mean(AucRoc_array), np.std(AucRoc_array), np.std(AucRoc_array)/np.sqrt(len(AucRoc_array))]
 		PRc = [np.mean(AucPRc_array), np.std(AucPRc_array), np.std(AucPRc_array)/np.sqrt(len(AucPRc_array))]
-		
+		if ho !='':
+			ROC_ho = [np.mean(AucRoc_ho_array), np.std(AucRoc_ho_array), np.std(AucRoc_ho_array)/np.sqrt(len(AucRoc_ho_array))]
+			PRc_ho = [np.mean(AucPRc_ho_array), np.std(AucPRc_ho_array), np.std(AucPRc_ho_array)/np.sqrt(len(AucPRc_ho_array))]
+		else:
+			ROC_ho = ['na', 'na', 'na']
+			PRc_ho = ['na', 'na', 'na']
+
 		# Find mean threshold
 		final_threshold = round(np.mean(threshold_array),2)
 
@@ -432,7 +568,7 @@ def main():
 		
 
 		# Summarize % of each class predicted as POS and NEG		
-		summary_df_proba = df_proba[[class_col, Pred_name, 'Mean']].groupby([class_col, Pred_name]).agg('count').unstack(level=1)
+		summary_df_proba = df_proba[['Class', Pred_name, 'Mean']].groupby(['Class', Pred_name]).agg('count').unstack(level=1)
 		summary_df_proba.columns = summary_df_proba.columns.droplevel()
 		try:
 			summary_df_proba['n_total'] = summary_df_proba[POS] + summary_df_proba[NEG]
@@ -455,10 +591,12 @@ def main():
 		# df_proba.to_csv(SAVE + "_scores.txt", sep="\t")
 		
 		
-		
 		# Get model preformance scores using final_threshold
-		TP,TN,FP,FN,TPR,FPR,FNR,Pr,Ac,F1 = ML.fun.Model_Performance_Thresh(df_proba, final_threshold, balanced_ids, POS, NEG)
-		
+		if ho !='':
+			TP,TN,FP,FN,TPR,FPR,FNR,Pr,Ac,F1,Pr_ho,Ac_ho,F1_ho = ML.fun.Model_Performance_Thresh(df_proba, final_threshold, balanced_ids, POS, NEG, ho_instances)
+		else:
+			TP,TN,FP,FN,TPR,FPR,FNR,Pr,Ac,F1 = ML.fun.Model_Performance_Thresh(df_proba, final_threshold, balanced_ids, POS, NEG, ho_instances)
+			Pr_ho, Ac_ho, F1_ho = 'na', 'na', 'na'
 
 		# Plot ROC & PR curves
 		if plots.lower() == 'true' or plots.lower() == 't':
@@ -475,29 +613,30 @@ def main():
 		except:
 			pass
 
-		
+		run_time = time.time() - start_total_time
 		
 		# Save to summary RESULTS file with all models run from the same directory
 		
 		if not os.path.isfile('RESULTS.txt'):
 			out2 = open('RESULTS.txt', 'a')
-			out2.write('DateTime\tID\tTag\tAlg\tClasses\tFeatureNum\tBalancedSize\tCVfold\tBalancedRuns\tAUCROC\tAUCROC_sd\tAUCROC_se\t')
+			out2.write('DateTime\tRunTime\tID\tTag\tAlg\tClasses\tFeatureNum\tBalancedSize\tCVfold\tBalancedRuns\tAUCROC\tAUCROC_sd\tAUCROC_se\t')
 			out2.write('AUCPRc\tAUCPRc_sd\tAUCPRc_se\tAc\tAc_sd\tAc_se\tF1\tF1_sd\tF1_se\tPr\tPr_sd\tPr_se\tTPR\tTPR_sd\tTPR_se\t')
 			out2.write('FPR\tFPR_sd\tFPR_se\tFNR\tFNR_sd\tFNR_se\tTP\tTP_sd\tTP_se\tTN\tTN_sd\tTN_se\tFP\tFP_sd\tFP_se\t')
-			out2.write('FN\tFN_sd\tFN_se\n')
+			out2.write('FN\tFN_sd\tFN_se\tPr_ho\tAc_ho\tF1_ho\tAUCROC_ho\tAUCROC_ho_sd\tAUCROC_ho_se\tAUCPRc_ho\tAUCPRc_ho_sd\tAUCPRc_ho_se\n')
 			out2.close()
 		out2 = open('RESULTS.txt', 'a')
-		out2.write('%s\t%s\t%s\t%s\t%s\t%i\t%i\t%i\t%i\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' % (
-			timestamp, SAVE, TAG, ALG, [POS,NEG], n_features, min_size, cv_num , n, 
+		out2.write('%s\t%s\t%s\t%s\t%s\t%s\t%i\t%i\t%i\t%i\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%05f\t%05f\t%05f\t%s\t%s\n' % (
+			timestamp, run_time, SAVE, TAG, ALG, [POS,NEG], n_features, min_size, cv_num , n, 
 			'\t'.join(str(x) for x in ROC), '\t'.join(str(x) for x in PRc), '\t'.join(str(x) for x in Ac), '\t'.join(str(x) for x in F1),
 			'\t'.join(str(x) for x in Pr), '\t'.join(str(x) for x in TPR), '\t'.join(str(x) for x in FPR),
 			'\t'.join(str(x) for x in FNR), '\t'.join(str(x) for x in TP), '\t'.join(str(x) for x in TN),
-			'\t'.join(str(x) for x in FP), '\t'.join(str(x) for x in FN)))
+			'\t'.join(str(x) for x in FP), '\t'.join(str(x) for x in FN), Pr_ho, Ac_ho, F1_ho, 
+			'\t'.join(str(x) for x in ROC_ho), '\t'.join(str(x) for x in PRc_ho)))
 
 		# Save detailed results file 
 		with open(SAVE + "_results.txt", 'w') as out:
 			out.write('%s\nID: %s\nTag: %s\nAlgorithm: %s\nTrained on classes: %s\nApplied to: %s\nNumber of features: %i\n' % (
-				timestamp, SAVE, TAG, ALG, classes, apply, n_features))
+				timestamp, SAVE, TAG, ALG, classes, apply_model, n_features))
 			out.write('Min class size: %i\nCV folds: %i\nNumber of balanced datasets: %i\nGrid Search Used: %s\nParameters used:%s\n' % (
 				min_size, cv_num, n, GS, parameters_used))
 			
@@ -512,13 +651,20 @@ def main():
 			cm_mean.to_csv(out, mode='a', sep='\t')
 			out.write('\n\nCount and percent of instances of each class (row) predicted as a class (col):\n')
 			summary_df_proba.to_csv(out, mode='a', header=True, sep='\t')
+			if ho !='':
+				out.write('\n\nResults from the hold out validation set\n')
+				out.write('HO Precision\t%05f\nHO Accuracy\t%05f\nHO F1\t%05f\n' % (Pr_ho, Ac_ho, F1_ho))
+				out.write('HO AucROC\t%s\nHO AucPRc\t%s\n' % ('\t'.join(str(x) for x in ROC_ho), '\t'.join(str(x) for x in PRc_ho)))
+
 
 
 		print("\n\n===>  ML Results  <===")
-		print("Accuracy: %03f (+/- stdev %03f)\nF1: %03f (+/- stdev %03f)\nAUC-ROC: %03f (+/- stdev %03f)\nAUC-PRC: %03f (+/- stdev %03f)" % (
+		print("Testing Set Scores\nAccuracy: %03f (+/- stdev %03f)\nF1: %03f (+/- stdev %03f)\nAUC-ROC: %03f (+/- stdev %03f)\nAUC-PRC: %03f (+/- stdev %03f)" % (
 			Ac[0], Ac[1], F1[0], F1[1], ROC[0], ROC[1], PRc[0], PRc[1]))
-	
-	
+		if ho !='':
+			print('\n\nHold Out Set Scores:\nPrecision: %03f\nAccuracy: %03f\nF1: %03f\nAUC-ROC: %03f (+/- stdev %03f)\nAUC-PRC: %03f (+/- stdev %03f)' % (
+				Pr_ho, Ac_ho, F1_ho, ROC_ho[0], ROC_ho[1], PRc_ho[0], PRc_ho[1]))
+		print('finished!')	
 	
 
 if __name__ == '__main__':
