@@ -2,8 +2,8 @@
 PURPOSE:
 
 Define a validation set to hold out during feature selection/model training.
-For regression models will hold out a ranomd X percent.
-For classification models, will hold out X percent of each class
+For regression models will hold out a random X percent.
+For classification models, will hold out X percent or number of each class
 
 
 INPUTS:
@@ -11,7 +11,8 @@ INPUTS:
 	REQUIRED:
 	-df       Feature & class dataframe for ML
 	-type     c/r (classification vs. regression)
-	-p 		  Percent of values to hold out (0.1 = 10%)
+	-p or -n	-p: Percent of instances to hold out (0.1 = 10%)
+			-n: Number of instances to hold out
 	
 	OPTIONAL:
 	-y_name   Name of the column to predict (Default = Class)
@@ -34,6 +35,7 @@ import pandas as pd
 
 DF2, SAVE, SEP, y_name = 'None','', '\t', 'Class'
 apply_ho, drop_na, SKIP =  'all', 'f', 'None'
+p = n = ''
 
 for i in range (1,len(sys.argv),2):
 	if sys.argv[i].lower() == "-df":
@@ -58,6 +60,8 @@ for i in range (1,len(sys.argv),2):
 		model_type = sys.argv[i+1]
 	elif sys.argv[i].lower() == "-p":
 		p = sys.argv[i+1]
+	elif sys.argv[i].lower() == "-n":
+		n = sys.argv[i+1]
 
 if len(sys.argv) <= 1:
 	print(__doc__)
@@ -110,9 +114,25 @@ else:
 	save_name = SAVE
 
 
+if p != '':
+	per_ho = float(p)
+	print('Holding out %.1f percent' % (per_ho*100))
+elif n != '':
+	per_ho = int(n)
+	print('Holding out %i instances per class' % (per_ho))
+else:
+	print('Arg for -p or -n required!')
+	print('  p:',p)
+	print('  n:',n)
+	print('  Quitting!')
+	quit()
 
-per_ho = float(p)
-print('Holding out %.1f percent' % (per_ho*100))
+def pull_sample(temp, p, n):
+	if p != '':
+		temp_sample = temp.sample(frac = per_ho)
+	elif n != '':
+		temp_sample = temp.sample(n = per_ho)
+	return temp_sample
 
 # Define hold out for regression
 holdout = []
@@ -122,7 +142,11 @@ if model_type.lower() == 'c' or model_type.lower() == 'classificaton':
 		print('Pulling holdout set from classes: %s' % str(classes))
 		for cl in classes:
 			temp = df[(df['Class']==cl)] 
-			temp_sample = temp.sample(frac = per_ho)
+			temp_sample = pull_sample(temp, p, n)
+			#if p != '':
+			#	temp_sample = temp.sample(frac = per_ho)
+			#elif n != '':
+			#	temp_sample = temp.sample(n = per_ho)
 			keep_ho = list(temp_sample.index)
 			holdout.extend(keep_ho)
 			print(holdout)
@@ -130,6 +154,7 @@ if model_type.lower() == 'c' or model_type.lower() == 'classificaton':
 		apply_to = apply_ho.strip().split(',')
 		for cl in apply_to:
 			temp = df[(df['Class']==cl)] 
+			temp_sample = pull_sample(temp, p, n)
 			temp_sample = temp.sample(frac = per_ho)
 			keep_ho = list(temp_sample.index)
 			holdout.extend(keep_ho)
@@ -152,3 +177,4 @@ for ho in holdout:
 	out.write('%s\n' % ho)
 
 print('finished!')
+
