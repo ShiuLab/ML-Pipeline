@@ -21,6 +21,7 @@ Example:
     conda install scikit-learn
     
 MSU HPCC: export PATH=/mnt/home/azodichr/miniconda3/bin:$PATH
+
 Calculon2: 
 
 ## Data Preprocessing
