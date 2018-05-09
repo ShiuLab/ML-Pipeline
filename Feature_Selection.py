@@ -6,7 +6,7 @@ Must set path to Miniconda in HPC:  export PATH=/mnt/home/azodichr/miniconda3/bi
 
 
 INPUT:
-  -df       Feature file for ML. If class/Y values are in a separate file use -df for features and -df_class for class/Y
+  -df       Feature file for ML. If class/Y values are in a separate file use -df for features and -df2 for class/Y
   -f        Feature selection method to use 
                 - Chi2 
                     need: -n
@@ -25,14 +25,14 @@ OPTIONAL INPUT:
 
   -n        Number(s) of features you would like to keep (required for chi2, RF, relief, bayesA)
               Example: -n 10 or -n 10,50,100
+  -ho       File with list of intances to holdout from feature selection
   -save     Save name for list of features selected. Will automatically append _n to the name
               Default: df_F_n or df_f_cvJobNum_n
-  -sep      Designate file separator (example: -sep ',')
-              Default = '\t'
-  -class    Name of class/Y column that you are wanting to predict
-              Default = 'Class'
-  -df_class Class/Y-value file for ML. Designate what column to use with a .
-              Example: -df_class y_values.txt,column_name
+  -sep      Set seperator for input data (Default = '\t')
+  -df2      File with class information. Use only if df contains the features but not the classes 
+              * Need to specifiy what column in df2 is y using -y_name 
+  -y_name   Name of the column to predict (Default = Class)
+  -drop_na  T/F to drop rows with NAs
   -feat     File containing the features you want to use from the df (one feature per line)
               Default: all (i.e. everything in the dataframe given).
   -type     r = regression, c = classification (required for LASSO and RF)
@@ -322,16 +322,18 @@ if __name__ == "__main__":
   n_jobs = 1
   CVs, REPS = 'pass', 1
   SEP = '\t'
-  SAVE, DF_CLASS = 'default', 'default'
+  SAVE, DF2 = 'default', 'None'
   UNKNOWN = 'unk'
-  class_col = 'Class'
+  y_name = 'Class'
+  ho = 'None'
+  drop_na = 'f'
 
   for i in range (1,len(sys.argv),2):
 
     if sys.argv[i].lower() == "-df":
       DF = sys.argv[i+1]
-    if sys.argv[i].lower() == "-df_class":
-      DF_CLASS = sys.argv[i+1]
+    if sys.argv[i].lower() == "-df2":
+      DF2 = sys.argv[i+1]
     if sys.argv[i].lower() == "-sep":
       SEP = sys.argv[i+1]
     if sys.argv[i].lower() == '-save':
@@ -348,8 +350,8 @@ if __name__ == "__main__":
       PARAMETER = float(sys.argv[i+1])        
     if sys.argv[i].lower() == '-type':
       TYPE = sys.argv[i+1]
-    if sys.argv[i].lower() == '-class':
-      CL = sys.argv[i+1]
+    if sys.argv[i].lower() == '-y_name':
+      y_name = sys.argv[i+1]
     if sys.argv[i].lower() == '-pos':
       pos = sys.argv[i+1]
     if sys.argv[i].lower() == '-neg':
@@ -358,44 +360,59 @@ if __name__ == "__main__":
       CVs = sys.argv[i+1]
     if sys.argv[i].lower() == '-jobnum':
       jobNum = sys.argv[i+1]
+    if sys.argv[i].lower() == '-ho':
+      ho = sys.argv[i+1]
+    if sys.argv[i].lower() == '-drop_na':
+      drop_na = sys.argv[i+1]
 
 
   if len(sys.argv) <= 1:
     print(__doc__)
     exit()
-
   #Load feature matrix and save feature names 
   df = pd.read_csv(DF, sep=SEP, index_col = 0)
-
-
-  # If feature info and class info are in separate files
-  if DF_CLASS != 'default':
+  
+  # If features  and class info are in separate files, merge them: 
+  if DF2 != 'None':
     start_dim = df.shape
-    df_class_file, df_class_col = DF_CLASS.strip().split(',')
-    class_col = df_class_col
-    df_class = pd.read_csv(df_class_file, sep=SEP, index_col = 0)
-    df = pd.concat([df_class[df_class_col], df], axis=1, join='inner')
+    df_class = pd.read_csv(DF2, sep=SEP, index_col = 0)
+    df = pd.concat([df_class[y_name], df], axis=1, join='inner')
     print('Merging the feature & class dataframes changed the dimensions from %s to %s (instance, features).' 
       % (str(start_dim), str(df.shape)))
 
-  print('Original dataframe contained %i features' % df.shape[1])
-  
-  if class_col != 'Class':
-    df = df.rename(columns = {class_col:'Class'})
-  
+  # Specify class column - default = Class
+  if y_name != 'Class':
+    df = df.rename(columns = {y_name:'Class'})
+
   #Recode class as 1 for positive and 0 for negative
   if TYPE.lower() == 'c':
     df["Class"] = df["Class"].replace(pos, 1)
     df["Class"] = df["Class"].replace(neg, 0)
 
-  df = df.dropna(axis=0, how = 'any')
+  # Check for Nas
+  if df.isnull().values.any() == True:
+    if drop_na.lower() == 't' or drop_na.lower() == 'true':
+      start_dim = df.shape
+      df = df.dropna(axis=0)
+      print('Dropping rows with NA values changed the dimensions from %s to %s.' 
+        % (str(start_dim), str(df.shape)))
+    else:
+      print(df.columns[df.isnull().any()].tolist())
+      print('There are Na values in your dataframe.\n Impute them or add -drop_na True to remove rows with nas')
+      quit()
 
+  # Drop instances in hold out set if provided
+  if ho !='':
+    print('Removing holdout instances...')
+    with open(ho) as ho_file:
+      ho_instances = ho_file.read().splitlines()
+    df = df.drop(ho_instances)
+  
   # If requesting multiple n, convert to list
   try:
     N = N.strip().split(',')
   except:
     N = [N]
-  print(N)
 
   #If 'features to keep' list given, remove columns not in that list
   if FEAT != 'all':
@@ -425,7 +442,7 @@ if __name__ == "__main__":
     save_name = SAVE
   else:
     try:
-      save_name = DF.split("/")[-1] + "_" + F + '_cv' + str(jobNum)
+      save_name = DF.split("/")[-1] + "_" + y_name + '_'+ F + '_cv' + str(jobNum)
     except:
       save_name = DF.split("/")[-1] + "_" + F
 

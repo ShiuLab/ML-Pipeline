@@ -46,6 +46,7 @@ class fun(object):
 		Need to edit the hard code to modify what parameters are searched
 		"""
 		from sklearn.model_selection import GridSearchCV
+		from sklearn.model_selection import RandomizedSearchCV
 		from sklearn.preprocessing import StandardScaler
 		from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 		from sklearn.svm import SVC
@@ -91,7 +92,7 @@ class fun(object):
 			
 			bal_ids_list.append(list(df1.index))
 
-			if j <= GS_REPS:
+			if j < GS_REPS:
 				print("Round %s of %s"%(j+1,GS_REPS))
 				y = df1['Class']
 				x = df1.drop(['Class'], axis=1) 
@@ -183,8 +184,9 @@ class fun(object):
 
 		gs_results = pd.DataFrame(columns = ['mean_test_score','params'])
 		
+		#if j < GS_REPS:
 		for j in range(GS_REPS):
-			print(" Round %s of %s"%(j+1,GS_REPS))
+			print("Round %s of %s"%(j+1,GS_REPS))
 			
 			# Build model
 			if ALG.lower() == 'rf':
@@ -299,7 +301,7 @@ class fun(object):
 		return reg
 
 	
-	def BuildModel_Apply_Performance(df, clf, cv_num, df_notSel, apply_unk, df_unknowns, classes, POS, NEG, j, ALG, THRSHD_test):
+	def BuildModel_Apply_Performance(df, clf, cv_num, df_notSel, apply_unk, df_unknowns, ho_df, classes, POS, NEG, j, ALG, THRSHD_test):
 		from sklearn.model_selection import cross_val_predict
 		
 		# Data from balanced dataframe
@@ -310,11 +312,18 @@ class fun(object):
 		cv_proba = cross_val_predict(estimator=clf, X=X, y=y, cv=cv_num, method='predict_proba')
 		cv_pred = cross_val_predict(estimator=clf, X=X, y=y, cv=cv_num)
 		
-		# Fit a model using all data and apply to instances that were not selected and of unknown class
+		# Fit a model using all data and apply to 
+		# (1) instances that were not selected using cl_train
+		# (2) instances with unknown class
+		# (3) holdout instances
+
 		clf.fit(X,y)
 		notSel_proba = clf.predict_proba(df_notSel.drop(['Class'], axis=1))
 		if apply_unk == True:
 			unk_proba = clf.predict_proba(df_unknowns.drop(['Class'], axis=1))
+		if not isinstance(ho_df, str):
+			ho_proba = clf.predict_proba(ho_df.drop(['Class'], axis=1))
+			ho_pred = clf.predict(ho_df.drop(['Class'], axis=1))
 		
 		# Evaluate performance
 		if len(classes) == 2:
@@ -329,6 +338,7 @@ class fun(object):
 			# Generate run statistics from balanced dataset scores
 			result = fun.Performance(y, cv_pred, scores, clf, classes, POS, POS_IND, NEG, ALG, THRSHD_test)
 
+			
 			#Generate data frame with all scores
 			score_columns=["score_%s"%(j)]
 			df_sel_scores = pd.DataFrame(data=cv_proba[:,POS_IND],index=df.index,columns=score_columns)
@@ -337,7 +347,11 @@ class fun(object):
 			if apply_unk == True:
 				df_unk_scores = pd.DataFrame(data=unk_proba[:,POS_IND],index=df_unknowns.index,columns=score_columns)
 				current_scores =  pd.concat([current_scores,df_unk_scores], axis = 0)
-			
+			if not isinstance(ho_df, str):
+				df_ho_scores = pd.DataFrame(data=ho_proba[:,POS_IND],index=ho_df.index,columns=score_columns)
+				current_scores =  pd.concat([current_scores,df_ho_scores], axis = 0)
+				scores_ho = ho_proba[:,POS_IND]
+				result_ho = fun.Performance(ho_df['Class'], ho_pred, scores_ho, clf, classes, POS, POS_IND, NEG, ALG, THRSHD_test)
 		
 		else:
 			# Generate run statistics from balanced dataset scores
@@ -354,10 +368,17 @@ class fun(object):
 			if apply_unk == True:
 				df_unk_scores = pd.DataFrame(data=unk_proba,index=df_unknowns.index,columns=score_columns)
 				current_scores =  pd.concat([current_scores,df_unk_scores], axis = 0)
+			if not isinstance(ho_df, str):
+				df_ho_scores = pd.DataFrame(data=ho_proba,index=ho_df.index,columns=score_columns)
+				current_scores =  pd.concat([current_scores,df_ho_scores], axis = 0)
+				result_ho = fun.Performance_MC(ho_df['Class'], ho_pred, classes)
+		
+		if not isinstance(ho_df, str):
+			return result,current_scores,result_ho
+		else:
+			return result,current_scores
 
-		return result,current_scores
-
-	def Run_Regression_Model(df, reg, cv_num, ALG, df_unknowns, cv_sets, j):
+	def Run_Regression_Model(df, reg, cv_num, ALG, df_unknowns, ho_df, cv_sets, j):
 		from sklearn.model_selection import cross_val_predict
 		from sklearn.metrics import mean_squared_error, r2_score, explained_variance_score
 		# Data from balanced dataframe
@@ -368,15 +389,9 @@ class fun(object):
 		if isinstance(cv_sets, pd.DataFrame):
 			from sklearn.cross_validation import LeaveOneLabelOut
 			cv_folds = LeaveOneLabelOut(cv_sets.iloc[:,j])
-
 			cv_pred = cross_val_predict(estimator=reg, X=X, y=y, cv=cv_folds)
-		
 			cv_pred_df = pd.DataFrame(data=cv_pred, index=df.index, columns=['pred'])
-			#from sklearn.model_selection import LeaveOneGroupOut
-			#logo = LeaveOneGroupOut()
-			#logo.get_n_splits(X, y, cv_sets.iloc[:,j])
-			#print(logo)
-			#cv_pred = cross_val_predict(estimator=reg, X=X, y=y, cv=logo)
+
 		else:
 			cv_pred = cross_val_predict(estimator=reg, X=X, y=y, cv=cv_num)
 		
@@ -390,31 +405,42 @@ class fun(object):
 		cor = np.corrcoef(np.array(y), cv_pred)
 		result = [mse, evs, r2, cor[0,1]]
 		
+		reg.fit(X,y)
+
 		# Apply fit model to unknowns
 		if isinstance(df_unknowns, pd.DataFrame):
 			unk_pred = reg.predict(df_unknowns.drop(['Y'], axis=1))
 			unk_pred_df = pd.DataFrame(data=unk_pred, index=df_unknowns.index, columns=['pred'])
 			cv_pred_df = cv_pred_df.append(unk_pred_df)
 
-		reg.fit(X,y)
+		if not isinstance(ho_df, str):
+			ho_y = ho_df['Y']
+			ho_pred = reg.predict(ho_df.drop(['Y'], axis=1))
+			ho_pred_df = pd.DataFrame(data=ho_pred, index=ho_df.index, columns=['pred'])
+			cv_pred_df = cv_pred_df.append(ho_pred_df)
+
+			# Get performance stats
+			mse_ho = mean_squared_error(ho_y, ho_pred)
+			evs_ho = explained_variance_score(ho_y, ho_pred)
+			r2_ho = r2_score(ho_y, ho_pred)
+			cor_ho = np.corrcoef(np.array(ho_y), ho_pred)
+			result_ho = [mse_ho, evs_ho, r2_ho, cor_ho[0,1]]
+					
 		# Try to extract importance scores 
-		if ALG.lower() == "rf":
+
+		try:
 			importances = reg.feature_importances_
-		elif ALG.lower() == "svm":
-			importances = reg.coef_
-		elif ALG.lower() == "logreg":
-			importances = reg.coef_
-		else:
+		except:
 			try:
-				importances = reg.feature_importances_
+				importances = reg.coef_
 			except:
-				try:
-					importances = reg.coef_
-				except:
-					importances = "na"
-					print("Cannot get importance scores")
+				importances = "na"
+				print("Cannot get importance scores")
 		
-		return result, cv_pred_df, importances
+		if not isinstance(ho_df, str):
+			return result, cv_pred_df, importances, result_ho
+		else:
+			return result, cv_pred_df, importances
 
 	def Performance(y, cv_pred, scores, clf, classes, POS, POS_IND, NEG, ALG, THRSHD_test):
 		""" For binary predictions: This function calculates the best threshold for defining
@@ -482,7 +508,7 @@ class fun(object):
 		return {'cm':cm, 'accuracy':accuracy,'macro_f1':macro_f1,'f1_MC':f1}
 
 
-	def Model_Performance_Thresh(df_proba, final_threshold, balanced_ids, POS, NEG):
+	def Model_Performance_Thresh(df_proba, final_threshold, balanced_ids, POS, NEG, ho_instances):
 		
 		from sklearn.metrics import f1_score, confusion_matrix
 		
@@ -495,6 +521,11 @@ class fun(object):
 			df_proba_thresh[proba_column] = np.where(df_proba_thresh[proba_column] > final_threshold, POS,NEG)
 		balanced_count = 0
 
+		if ho_instances != 'None':
+			df_proba_thresh_ho = df_proba_thresh.loc[ho_instances, :]
+			df_proba_thresh = df_proba_thresh.drop(ho_instances)
+
+
 		# Get predictions scores from the balanced runs using the final threshold
 		for i in proba_columns:
 
@@ -504,7 +535,6 @@ class fun(object):
 			balanced_count += 1
 
 			matrix = confusion_matrix(y, yhat, labels = [POS,NEG])
-			
 			TP1, FP1, TN1, FN1 = matrix[0,0], matrix[1,0], matrix[1,1], matrix[0,1]
 
 			TP.append(TP1)
@@ -529,7 +559,20 @@ class fun(object):
 		Precision = [np.mean(Precision), np.std(Precision), np.std(Precision)/denominator]
 		Accuracy = [np.mean(Accuracy), np.std(Accuracy), np.std(Accuracy)/denominator]
 		F1 = [np.mean(F1), np.std(F1), np.std(F1)/denominator]
-		return TP,TN,FP,FN,TPR,FPR,FNR,Precision,Accuracy,F1
+
+		if ho_instances != 'None':
+			y_ho = df_proba_thresh_ho['Class']
+			yhat_ho = df_proba_thresh_ho.filter(regex='Predicted_')
+			matrix_ho = confusion_matrix(y_ho, yhat_ho, labels = [POS,NEG])
+			TP_ho, FP_ho, TN_ho, FN_ho = matrix[0,0], matrix[1,0], matrix[1,1], matrix[0,1]
+			Precision_ho = TP_ho/(TP_ho+FP_ho)
+			Accuracy_ho = (TP_ho + TN_ho)/ (TP_ho + TN_ho + FP_ho + FN_ho)
+			F1_ho = (2*TP_ho)/((2*TP_ho) + FP_ho + FN_ho)
+			print(TP,TN,FP,FN,TPR,FPR,FNR,Precision,Accuracy,F1,Precision_ho,Accuracy_ho,F1_ho)
+			return TP,TN,FP,FN,TPR,FPR,FNR,Precision,Accuracy,F1,Precision_ho,Accuracy_ho,F1_ho
+		
+		else:
+			return TP,TN,FP,FN,TPR,FPR,FNR,Precision,Accuracy,F1
 
 
 	def Plots(df_proba, balanced_ids, ROC, PRc, POS, NEG, n, SAVE):
@@ -582,8 +625,6 @@ class fun(object):
 		plt.title('ROC Curve: ' + SAVE)
 		plt.plot(FPR_mean, TPR_mean, lw=3, color= 'black', label='AUC-ROC: ' + str(round(ROC[0], 3)))
 		plt.fill_between(FPR_mean, TPR_mean-TPR_sd, TPR_mean+TPR_sd, facecolor='black', alpha=0.4, linewidth = 0, label='SD_TPR')
-		#plt.plot(FPRs_df.median(axis=1), TPRs_df.mean(axis=1), lw=2, color= 'blue', label='AUC-ROC: ' + str(round(ROC[0], 3)))
-		#plt.fill_between(FPRs_df.median(axis=1), TPRs_df.min(axis=1), TPRs_df.max(axis=1), facecolor='blue', alpha=0.5, label='SD_TPR')
 		plt.plot([0,1],[0,1],'r--', lw = 2, label = 'Random Expectation')
 		plt.legend(loc='lower right')
 		plt.xlim([0,1])

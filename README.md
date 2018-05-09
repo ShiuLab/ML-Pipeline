@@ -21,18 +21,27 @@ Example:
     conda install scikit-learn
     
 MSU HPCC: export PATH=/mnt/home/azodichr/miniconda3/bin:$PATH
+
 Calculon2: 
 
 ## Data Preprocessing
 
+### Define Holdout Set (Azodi)
+Randomly select X% of instances to be held out for feature selection and model training (imputation will happen on all data). For classification models, holds out X% from each class
+
+Example:
+
+    python holdout.py -df [path/to/dataframe] -type c -p 0.1  
+    * For more info/additional options run Feature_Selection.py with no parameters
+    
 ### Feature Selection (Azodi)
 Available feature selection tools: RandomForest, Chi2, LASSO (L1 penalty), enrichement (Fisher's Exact test - binary features only), and BayesA (regression only). For parameters needed for each feature selection algorithm run Feature_Selection.py with no parameters.
 
 Example:
 
     export PATH=/mnt/home/azodichr/miniconda3/bin:$PATH
-    python Feature_Selection.py -df [path/to/dataframe] -f [rf/chi2/lasso/fet/bayesA] -n [needed for chi2/rf] -p [needed for LASSO/FET] -type [needed for LASSO] -list T 
-    * For more info/additional options run Feature_Selection.py with no parameters
+    python Feature_Selection.py -df [path/to/dataframe] -f [rf/chi2/lasso/fet/bayesA] -n [needed for chi2/rf/bayesA] -p [needed for LASSO/FET] -type [needed for LASSO] -ho [needed if using holdout set]
+    * For more info/additional options run holdout.py with no parameters
 
 ### Impute Data (Moore)
 
