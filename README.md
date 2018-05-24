@@ -22,7 +22,7 @@ Example:
     
 MSU HPCC: export PATH=/mnt/home/azodichr/miniconda3/bin:$PATH
 
-Calculon2: 
+Calculon2: export PATH=/home/azodi/miniconda/bin:$PATH
 
 ## Data Preprocessing
 
