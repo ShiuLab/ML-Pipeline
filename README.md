@@ -120,5 +120,7 @@ Example:
 ## TO DO LIST
 - Merge pre-processing scripts so you can deal with NAs, imputations, and one-hot encoding categorical variables in one script.
 - Add additional classification models: Naive Bayes, basic neural network (1-2 layers)
-- Add validation set hold out option
+- Make -gs_type random also make -gs T automatically
+- Look into using MCC as a performance metric - would be useful for selecting the threshold since it doesn't depend on the ratio of +/- instances (https://en.wikipedia.org/wiki/Matthews_correlation_coefficient)
+-Incorporate PCA summary features into pre-processing script
 
