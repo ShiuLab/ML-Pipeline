@@ -479,20 +479,15 @@ class fun(object):
 		AucPRc = average_precision_score(y1, scores)
 
 		# Try to extract importance scores 
-		if ALG.lower() == "rf" or ALG.lower() == 'gb':
+		try:
 			importances = clf.feature_importances_
-		elif "svm" in ALG.lower() or ALG.lower() == 'logreg':
-			importances = clf.coef_
-		else:
+		except:
 			try:
-				importances = clf.feature_importances_
+				importances = clf.coef_
 			except:
-				try:
-					importances = clf.coef_
-				except:
-					print("Cannot get importance scores")
-					return {'cm':cm, 'threshold':max_f1_thresh,'AucPRc':AucPRc, 'AucRoc':AucRoc, 'MaxF1': max_f1}
-		
+				importances = "na"
+				print("Cannot get importance scores")
+
 		return {'cm':cm, 'threshold':max_f1_thresh,'AucPRc':AucPRc, 'AucRoc':AucRoc, 'MaxF1': max_f1, 'importances':importances}
 	
 
