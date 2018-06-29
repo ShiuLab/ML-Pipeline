@@ -38,6 +38,23 @@ INPUTS:
 	-gs_type  Full grid search or randomized search (Default = full, alt = random)
 	-df2      File with class information. Use only if df contains the features but not the classes 
 							* Need to specifiy what column in df2 is y using -y_name 
+
+	PARAMETER OPTIONS
+	* If you are not using the grid search, you can run default parameters or define your own
+	RF & GB:
+	-n_estimators		Grid Search [100, 500, 1000]
+	-max_depth			Grid Search [3, 5, 10]
+	-max_features		Grid Search [0.1, 0.25, 0.5, 0.75, 'sqrt', 'log2', None (i.e. all)]
+	-learning_rate	(GB only!) Grid Search [0.001, 0.01, 0.1, 0.5, 1]
+	SVM:
+	-kernel  				Not in the grid search, to try different kernels, run with -alg SVM / SVMrbf / or SVMpoly
+	-C 							Grid Search [0.001, 0.01, 0.1, 0.5, 1, 10, 50]
+	-gamma 					(poly & rbf only!) Grid Search [np.logspace(-5,1,7)]
+	-degree 				(poly only!) Grid Search [2,3,4]
+	LogReg:
+	-C 							Grid Search [0.001, 0.01, 0.1, 0.5, 1, 10, 50]
+	-intercept_scaling Grid Search  [0.1, 0.5, 1, 2, 5, 10]
+	-penalty 				Grid Search [l1, l2]
 	
 	PLOT OPTIONS:
 	-cm       T/F Output the confusion matrix & confusion matrix figure (Default = False)
@@ -91,6 +108,30 @@ def main():
 			FEAT = sys.argv[i+1]
 		elif sys.argv[i].lower() == "-gs":
 			GS = sys.argv[i+1]
+		elif sys.argv[i].lower() == "-kernel":
+			kernel = sys.argv[i+1]
+		elif sys.argv[i].lower() == "-C":
+			C = sys.argv[i+1]
+		elif sys.argv[i].lower() == "-degree":
+			degree = sys.argv[i+1]
+		elif sys.argv[i].lower() == "-gamma":
+			gamma = sys.argv[i+1]
+		elif sys.argv[i].lower() == "-loss":
+			loss = sys.argv[i+1]
+		elif sys.argv[i].lower() == "-penalty":
+			penalty = sys.argv[i+1]
+		elif sys.argv[i].lower() == "-intercept_scaling":
+			intercept_scaling = sys.argv[i+1]
+		elif sys.argv[i].lower() == "-n_estimators":
+			n_estimators = sys.argv[i+1]
+		elif sys.argv[i].lower() == "-max_depth":
+			max_depth = sys.argv[i+1]
+		elif sys.argv[i].lower() == "-max_features":
+			max_features = sys.argv[i+1]
+		elif sys.argv[i].lower() == "-learning_rate":
+			learning_rate = sys.argv[i+1]
+		elif sys.argv[i].lower() == "-max_iter":
+			max_iter = sys.argv[i+1]
 		elif sys.argv[i].lower() == "-gs_score":
 			gs_score = sys.argv[i+1]
 		elif sys.argv[i].lower() == "-gs_reps":
@@ -314,7 +355,7 @@ def main():
 		print("Grid search complete. Time: %f seconds" % (time.time() - start_time))
 	
 	else:
-		print('Using default parameters')
+		print('Not running grid search. Using default or given parameters instead')
 		balanced_ids = ML.fun.EstablishBalanced(df,classes,int(min_size),n)
 	
 	bal_id = pd.DataFrame(balanced_ids)
