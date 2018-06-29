@@ -38,6 +38,23 @@ INPUTS:
 	-gs_type  Full grid search or randomized search (Default = full, alt = random)
 	-df2      File with class information. Use only if df contains the features but not the classes 
 							* Need to specifiy what column in df2 is y using -y_name 
+
+	PARAMETER OPTIONS
+	* If you are not using the grid search, you can run default parameters or define your own
+	RF & GB:
+	-n_estimators		Grid Search [100, 500, 1000]
+	-max_depth			Grid Search [3, 5, 10]
+	-max_features		Grid Search [0.1, 0.25, 0.5, 0.75, 'sqrt', 'log2', None (i.e. all)]
+	-learning_rate	(GB only!) Grid Search [0.001, 0.01, 0.1, 0.5, 1]
+	SVM:
+	-kernel  				Not in the grid search, to try different kernels, run with -alg SVM / SVMrbf / or SVMpoly
+	-C 							Grid Search [0.001, 0.01, 0.1, 0.5, 1, 10, 50]
+	-gamma 					(poly & rbf only!) Grid Search [np.logspace(-5,1,7)]
+	-degree 				(poly only!) Grid Search [2,3,4]
+	LogReg:
+	-C 							Grid Search [0.001, 0.01, 0.1, 0.5, 1, 10, 50]
+	-intercept_scaling Grid Search  [0.1, 0.5, 1, 2, 5, 10]
+	-penalty 				Grid Search [l1, l2]
 	
 	PLOT OPTIONS:
 	-cm       T/F Output the confusion matrix & confusion matrix figure (Default = False)
@@ -91,6 +108,30 @@ def main():
 			FEAT = sys.argv[i+1]
 		elif sys.argv[i].lower() == "-gs":
 			GS = sys.argv[i+1]
+		elif sys.argv[i].lower() == "-kernel":
+			kernel = sys.argv[i+1]
+		elif sys.argv[i].lower() == "-C":
+			C = sys.argv[i+1]
+		elif sys.argv[i].lower() == "-degree":
+			degree = sys.argv[i+1]
+		elif sys.argv[i].lower() == "-gamma":
+			gamma = sys.argv[i+1]
+		elif sys.argv[i].lower() == "-loss":
+			loss = sys.argv[i+1]
+		elif sys.argv[i].lower() == "-penalty":
+			penalty = sys.argv[i+1]
+		elif sys.argv[i].lower() == "-intercept_scaling":
+			intercept_scaling = sys.argv[i+1]
+		elif sys.argv[i].lower() == "-n_estimators":
+			n_estimators = sys.argv[i+1]
+		elif sys.argv[i].lower() == "-max_depth":
+			max_depth = sys.argv[i+1]
+		elif sys.argv[i].lower() == "-max_features":
+			max_features = sys.argv[i+1]
+		elif sys.argv[i].lower() == "-learning_rate":
+			learning_rate = sys.argv[i+1]
+		elif sys.argv[i].lower() == "-max_iter":
+			max_iter = sys.argv[i+1]
 		elif sys.argv[i].lower() == "-gs_score":
 			gs_score = sys.argv[i+1]
 		elif sys.argv[i].lower() == "-gs_reps":
@@ -213,6 +254,7 @@ def main():
 	else:
 		ho_df = 'None'
 		ho_instances = 'None'
+		df_all = df.copy()
 	
 
 
@@ -313,7 +355,7 @@ def main():
 		print("Grid search complete. Time: %f seconds" % (time.time() - start_time))
 	
 	else:
-		print('Using default parameters')
+		print('Not running grid search. Using default or given parameters instead')
 		balanced_ids = ML.fun.EstablishBalanced(df,classes,int(min_size),n)
 	
 	bal_id = pd.DataFrame(balanced_ids)
@@ -392,10 +434,11 @@ def main():
 		
 		# For binary predictions
 		if 'importances' in r:
-			if ALG.lower() == 'rf':
-				imp[count] = r['importances']
-			else:
-				imp[count] = r['importances'][0]
+			if r['importances'] != 'na':
+				if ALG.lower() == 'rf' or ALG.lower() == 'gb':
+					imp[count] = r['importances']
+				else:
+					imp[count] = r['importances'][0]
 		if 'AucRoc' in r:
 			AucRoc_array.append(r['AucRoc'])
 		if 'AucPRc' in r:
@@ -596,7 +639,7 @@ def main():
 			TP,TN,FP,FN,TPR,FPR,FNR,Pr,Ac,F1,Pr_ho,Ac_ho,F1_ho = ML.fun.Model_Performance_Thresh(df_proba, final_threshold, balanced_ids, POS, NEG, ho_instances)
 		else:
 			TP,TN,FP,FN,TPR,FPR,FNR,Pr,Ac,F1 = ML.fun.Model_Performance_Thresh(df_proba, final_threshold, balanced_ids, POS, NEG, ho_instances)
-			Pr_ho, Ac_ho, F1_ho = 'na', 'na', 'na'
+			Pr_ho, Ac_ho, F1_ho = 0, 0, 0
 
 		# Plot ROC & PR curves
 		if plots.lower() == 'true' or plots.lower() == 't':
@@ -622,16 +665,18 @@ def main():
 			out2.write('DateTime\tRunTime\tID\tTag\tAlg\tClasses\tFeatureNum\tBalancedSize\tCVfold\tBalancedRuns\tAUCROC\tAUCROC_sd\tAUCROC_se\t')
 			out2.write('AUCPRc\tAUCPRc_sd\tAUCPRc_se\tAc\tAc_sd\tAc_se\tF1\tF1_sd\tF1_se\tPr\tPr_sd\tPr_se\tTPR\tTPR_sd\tTPR_se\t')
 			out2.write('FPR\tFPR_sd\tFPR_se\tFNR\tFNR_sd\tFNR_se\tTP\tTP_sd\tTP_se\tTN\tTN_sd\tTN_se\tFP\tFP_sd\tFP_se\t')
-			out2.write('FN\tFN_sd\tFN_se\tPr_ho\tAc_ho\tF1_ho\tAUCROC_ho\tAUCROC_ho_sd\tAUCROC_ho_se\tAUCPRc_ho\tAUCPRc_ho_sd\tAUCPRc_ho_se\n')
+			out2.write('FN\tFN_sd\tFN_se\tPr_ho\tAc_ho\tF1_ho\tAUCROC_ho\tAUCROC_ho_sd\tAUCROC_ho_se\tAUCPRc_ho\tAUCPRc_ho_sd\tAUCPRc_ho_se')
 			out2.close()
 		out2 = open('RESULTS.txt', 'a')
-		out2.write('%s\t%s\t%s\t%s\t%s\t%s\t%i\t%i\t%i\t%i\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%05f\t%05f\t%05f\t%s\t%s\n' % (
-			timestamp, run_time, SAVE, TAG, ALG, [POS,NEG], n_features, min_size, cv_num , n, 
+		out2.write('\n%s\t%s\t%s\t%s\t%s\t%s\t%i\t%i\t%i\t%i\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%05f\t%05f\t%05f\t%s\t%s' % (
+			str(timestamp), run_time, SAVE, TAG, ALG, [POS,NEG], n_features, min_size, cv_num , n, 
 			'\t'.join(str(x) for x in ROC), '\t'.join(str(x) for x in PRc), '\t'.join(str(x) for x in Ac), '\t'.join(str(x) for x in F1),
 			'\t'.join(str(x) for x in Pr), '\t'.join(str(x) for x in TPR), '\t'.join(str(x) for x in FPR),
 			'\t'.join(str(x) for x in FNR), '\t'.join(str(x) for x in TP), '\t'.join(str(x) for x in TN),
-			'\t'.join(str(x) for x in FP), '\t'.join(str(x) for x in FN), Pr_ho, Ac_ho, F1_ho, 
-			'\t'.join(str(x) for x in ROC_ho), '\t'.join(str(x) for x in PRc_ho)))
+			'\t'.join(str(x) for x in FP), '\t'.join(str(x) for x in FN), Pr_ho, Ac_ho, F1_ho,
+			'\t'.join(str(x) for x in ROC_ho),'\t'.join(str(x) for x in PRc_ho)))
+			 
+			
 
 		# Save detailed results file 
 		with open(SAVE + "_results.txt", 'w') as out:
