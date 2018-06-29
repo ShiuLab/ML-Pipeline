@@ -126,7 +126,10 @@ def main():
         for i in range(0,len(df2.columns)):
              x= col_list[i]
              x1 = df2.iloc[:,[i]].dropna(axis=0)
-             df2.loc[:,[x]] = df2.loc[:,[x]].fillna(value=np.random.choice(x1[x]), axis=1)#replace NAs with random choice from actual distibution
+             if x1.empty == True:
+                 pass
+             else:
+                 df2.loc[:,[x]] = df2.loc[:,[x]].fillna(value=np.random.choice(x1[x]), axis=1)#replace NAs with random choice from actual distibution
         return df2
     
     def get_cat2(df, y):
@@ -164,7 +167,7 @@ def main():
         
     df0 = df.iloc[:,[0]]
     df=replaceNAs(df)
-    df=drop_missing50(df)
+    
     if mv == 0:
         if DF2 and DF3 == 'NA':
             df= df.dropna(axis=0)
@@ -184,6 +187,7 @@ def main():
             df= df.dropna(axis=0)
     
     elif mv == 1: #choice 1, impute missing values with random choice from a distribution
+        df=drop_missing50(df) #drop column if over 50% is missing
         #print (mv)
         #df1= df.select_dtypes(include=['object'])#get categorical
         col_list= list(df.columns.values)
@@ -204,6 +208,7 @@ def main():
         df= pd.concat(frames, axis=1)
     
     elif mv == 2: #this option imputes median or mode for either numeric or categorical data respectively
+        df=drop_missing50(df) #drop column if over 50% is missing
         col_list= list(df.columns.values)
         y= len(col_list)
         print("Replacing NA's for ", y, " columns")
