@@ -60,16 +60,16 @@ class fun(object):
 			parameters = {'max_depth':[3, 5, 10], 'max_features': [0.1, 0.25, 0.5, 0.75, 'sqrt', 'log2', None], 'n_estimators': [100,500,1000]}
 			
 		elif ALG.lower() == "svm":
-			parameters = {'kernel': ['linear'], 'C':[0.01, 0.1, 0.5, 1, 10, 50, 100]}
+			parameters = {'kernel': ['linear'], 'C':[0.001, 0.01, 0.1, 0.5, 1, 10, 50]}
 
 		elif ALG.lower() == 'svmpoly':
-			parameters = {'kernel': ['poly'], 'C':[0.01, 0.1, 0.5, 1, 10, 50, 100],'degree': [2,3,4], 'gamma': np.logspace(-5,1,7)}
+			parameters = {'kernel': ['poly'], 'C':[0.001,0.01, 0.1, 0.5, 1, 10, 50],'degree': [2,3,4], 'gamma': np.logspace(-5,1,7)}
 
 		elif ALG.lower() == 'svmrbf':
-			parameters = {'kernel': ['rbf'], 'C': [0.01, 0.1, 0.5, 1, 10, 50, 100], 'gamma': np.logspace(-5,1,7)}
+			parameters = {'kernel': ['rbf'], 'C': [0.001, 0.01, 0.1, 0.5, 1, 10, 50], 'gamma': np.logspace(-5,1,7)}
 		
 		elif ALG.lower() == 'logreg':
-			parameters = {'C': [0.01, 0.1, 0.5, 1, 10, 50, 100], 'intercept_scaling': [0.1, 0.5, 1, 2, 5, 10],'penalty': ['l1','l2']}	
+			parameters = {'C': [0.001, 0.01, 0.1, 0.5, 1, 10, 50], 'intercept_scaling': [0.1, 0.5, 1, 2, 5, 10],'penalty': ['l1','l2']}	
 
 		elif ALG.lower() == 'gb':
 			parameters = {'learning_rate': [0.001, 0.01, 0.1, 0.5, 1],'max_depth': [3, 5, 10], 'max_features': [0.1, 0.25, 0.5, 0.75, 'sqrt', 'log2', None],'n_estimators': [100,500,1000]}	

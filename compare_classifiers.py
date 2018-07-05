@@ -12,8 +12,8 @@ INPUT:
   -save        Save name
 
 OPTIONAL INPUT:
-  -pos          String of positive class (Default = 1)
-  -neg          String of negative class (Default = 0)
+  -p            String of positive class (Default = 1)
+  -n            String of negative class (Default = 0)
   -plot         T/F Make venn diagram in python (Default = T)
 
 OUTPUT:
@@ -66,25 +66,31 @@ for scores_file in scores_files:
   c2 = 0
   with open(scores_file) as f:
       name = ids[count]
+      print('Counting TP and FN for %s' % name)
       for l in f:
-          if c2 == 0:
-            print(l)
-            line = l.strip().split('\t')
-            loc_pred = [i for i, s in enumerate(line) if 'Predicted_' in s]
-            print(loc_pred)
-          c2 += 1
           line = l.strip().split('\t')
+          
+          # Find the column with the model calls using the header line
+          if c2 == 0:
+            loc_pred = [i for i, s in enumerate(line) if 'Predicted_' in s]
+            print('Model call is in column #: %s' % str(loc_pred))
 
-          gene, true, pred = line[0], line[1], line[loc_pred[0]]
-          if c2 == 2:
-            print(gene, true, pred)
-          if true == pos:
-            if count == 0:
-              tp_total += 1     # Add to the count of total number of true positives in the dataframe
-            if pred == pos:
-              tp[name].append(gene)
-            else:
-              fn[name].append(gene)
+          else:
+            gene, true, pred = line[0], line[1], line[loc_pred[0]]
+            # Print an example line
+            if c2 == 2:
+              print(gene, true, pred)
+
+            if true == pos: # If gene is a pos gene
+              # Count the total number of TPs in the dataframe (only need to do once!)
+              if count == 0:
+                tp_total += 1     # Add to the count of total number of true positives in the dataframe
+              
+              if pred == pos: # If that pos gene was predicted as pos
+                tp[name].append(gene)
+              else:
+                fn[name].append(gene)
+          c2 += 1
       count += 1
 
 
