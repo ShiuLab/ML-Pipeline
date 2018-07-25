@@ -363,6 +363,7 @@ if __name__ == "__main__":
   ho = ''
   CL_USE = ''
   drop_na = 'f'
+  NA = 'na'
 
   for i in range (1,len(sys.argv),2):
 
