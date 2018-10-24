@@ -15,7 +15,9 @@ INPUT:
                 - Enrichment using Fisher's Exact (for classification with binary feats only)
                     need: -p (default=0.05)
                 - LASSO 
-                    need: -p, -type)
+                    need: -p, -type
+                - Elastic Net (EN)
+                    need: -p (default=0.05, proportion of L1 to L2 penalty)
                 - Relief (https://github.com/EpistasisLab/scikit-rebate) (currently for regression only)
                     need: -n, 
                 - BayesA regression (for regression only)
@@ -28,6 +30,8 @@ OPTIONAL INPUT:
   -ho       File with list of intances to holdout from feature selection
   -save     Save name for list of features selected. Will automatically append _n to the name
               Default: df_F_n or df_f_cvJobNum_n
+  -cl_use   Since only RF works for multi-class problems, use cl_use to give a list of what classes you want to include (Default = 'all')   
+              If binary, first label = positive class.
   -sep      Set seperator for input data (Default = '\t')
   -df2      File with class information. Use only if df contains the features but not the classes 
               * Need to specifiy what column in df2 is y using -y_name 
@@ -136,7 +140,7 @@ def Chi2(df, n, save_name):
   print('This function might not be working right now.... Bug Christina if you need it!')
   X_all = df.drop('Class', axis=1).values  
   Y_all = df.loc[:, 'Class'].values
-  Y_all = Y_all.astype('int')
+  #Y_all = Y_all.astype('int')
   print(Y_all)
   # Set selection to chi2 with n to keep
   for n_size in n:
@@ -219,6 +223,37 @@ def L1(df, PARAMETER, TYPE, save_name):
   
   save_name2 = save_name 
   SaveTopFeats(good, save_name2)
+
+def EN(df, PARAMETER, n, save_name):
+  """Apply Elastic-Net based feature selection. Can tune l1:l2 (penalty:zero) ratio (Default = 0.5)"""
+
+  from sklearn.linear_model import ElasticNet
+
+  X_all = df.drop('Class', axis=1).values  
+  Y_all = df.loc[:, 'Class'].values
+  feature_names = list(df)
+  feature_names.remove('Class')
+  
+  enet = ElasticNet(alpha=0.5, l1_ratio=PARAMETER, fit_intercept=True, positive=False).fit(X_all, Y_all)
+
+  imp = pd.DataFrame(enet.coef_, index = feature_names, columns = ['EN_coef'])
+  imp = imp.abs()
+  imp_top = imp.sort_values(by='EN_coef', ascending=False)
+  
+  # Count the number of coefficients that were not zero
+  non_zero = imp_top[imp_top > 0 ].count() 
+
+  for n_size in n:
+    keep = imp_top.index.values[0:int(n_size)]
+    if int(n_size) > int(non_zero):
+      print("!!!!!!!!!!!WARNING!!!!!!!!!!!! ONLY %i FEATURES HAD A NON-ZERO COEFFICIENT." % non_zero)
+      print('!!!!!!!!!!!WARNING!!!!!!!!!!!! THIS LIST CONTAINS SOME FEATURES THAT HAD A COEF = 0')
+    print("Features selected using Elastic-Net with l1 ratio = %0.6f: %s..." % (PARAMETER, str(keep[:5])))
+    save_name2 = save_name + "_" + str(n_size)
+    SaveTopFeats(keep, save_name2)
+
+  print("Note that using a l1 ratio = %.6f, there were %i non-zero features" % (PARAMETER, non_zero))
+
 
 
 def BayesA(df_use, n, save_name):
@@ -325,8 +360,10 @@ if __name__ == "__main__":
   SAVE, DF2 = 'default', 'None'
   UNKNOWN = 'unk'
   y_name = 'Class'
-  ho = 'None'
+  ho = ''
+  CL_USE = ''
   drop_na = 'f'
+  NA = 'na'
 
   for i in range (1,len(sys.argv),2):
 
@@ -346,6 +383,8 @@ if __name__ == "__main__":
       n_jobs = int(sys.argv[i+1])
     if sys.argv[i].lower() == '-feat':
       FEAT = sys.argv[i+1]
+    if sys.argv[i].lower() == '-cl_use':
+      CL_USE = sys.argv[i+1]
     if sys.argv[i].lower() == '-p':
       PARAMETER = float(sys.argv[i+1])        
     if sys.argv[i].lower() == '-type':
@@ -371,7 +410,7 @@ if __name__ == "__main__":
     exit()
   #Load feature matrix and save feature names 
   df = pd.read_csv(DF, sep=SEP, index_col = 0)
-  
+
   # If features  and class info are in separate files, merge them: 
   if DF2 != 'None':
     start_dim = df.shape
@@ -384,10 +423,6 @@ if __name__ == "__main__":
   if y_name != 'Class':
     df = df.rename(columns = {y_name:'Class'})
 
-  #Recode class as 1 for positive and 0 for negative
-  if TYPE.lower() == 'c':
-    df["Class"] = df["Class"].replace(pos, 1)
-    df["Class"] = df["Class"].replace(neg, 0)
 
   # Check for Nas
   if df.isnull().values.any() == True:
@@ -400,14 +435,33 @@ if __name__ == "__main__":
       print(df.columns[df.isnull().any()].tolist())
       print('There are Na values in your dataframe.\n Impute them or add -drop_na True to remove rows with nas')
       quit()
-
+  print(df.head())
+  
   # Drop instances in hold out set if provided
   if ho !='':
     print('Removing holdout instances...')
     with open(ho) as ho_file:
       ho_instances = ho_file.read().splitlines()
-    df = df.drop(ho_instances)
+    try:
+      df = df.drop(ho_instances)
+    except:
+      print('Trying converting instance names to int')
+      ho_instances = [int(i) for i in ho_instances]
+      df = df.drop(ho_instances)
   
+    # Drop instances that aren't in the listed classes (i.e. make binary matrix)
+  if CL_USE !='':
+    start_dim = df.shape
+    use_classes = CL_USE.strip().split(',')
+    df = df[df['Class'].isin(use_classes)]
+    print('Dropping instances that are not in %s, changed dimensions from %s to %s (instance, features).' 
+      % (str(use_classes), str(start_dim), str(df.shape)))
+   
+  #Recode class as 1 for positive and 0 for negative
+  if TYPE.lower() == 'c':
+    df["Class"] = df["Class"].replace(pos, 1)
+    df["Class"] = df["Class"].replace(neg, 0) 
+
   # If requesting multiple n, convert to list
   try:
     N = N.strip().split(',')
@@ -457,6 +511,11 @@ if __name__ == "__main__":
     if SAVE == 'default':
       save_name = save_name + '_' + str(PARAMETER)
     L1(df_use, PARAMETER, TYPE, save_name)
+
+  elif F.lower() == "en" or F.lower() == "elasticnet":
+    if SAVE == 'default':
+      save_name = save_name + '_' + str(PARAMETER)
+    EN(df_use, PARAMETER, N, save_name)
     
   elif F.lower() == "relief" or F.lower() == "rebate":
     Relief(df_use, N, n_jobs, save_name)

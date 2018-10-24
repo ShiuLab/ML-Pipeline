@@ -60,16 +60,16 @@ class fun(object):
 			parameters = {'max_depth':[3, 5, 10], 'max_features': [0.1, 0.25, 0.5, 0.75, 'sqrt', 'log2', None], 'n_estimators': [100,500,1000]}
 			
 		elif ALG.lower() == "svm":
-			parameters = {'kernel': ['linear'], 'C':[0.01, 0.1, 0.5, 1, 10, 50, 100]}
+			parameters = {'kernel': ['linear'], 'C':[0.001, 0.01, 0.1, 0.5, 1, 10, 50]}
 
 		elif ALG.lower() == 'svmpoly':
-			parameters = {'kernel': ['poly'], 'C':[0.01, 0.1, 0.5, 1, 10, 50, 100],'degree': [2,3,4], 'gamma': np.logspace(-5,1,7)}
+			parameters = {'kernel': ['poly'], 'C':[0.001,0.01, 0.1, 0.5, 1, 10, 50],'degree': [2,3,4], 'gamma': np.logspace(-5,1,7)}
 
 		elif ALG.lower() == 'svmrbf':
-			parameters = {'kernel': ['rbf'], 'C': [0.01, 0.1, 0.5, 1, 10, 50, 100], 'gamma': np.logspace(-5,1,7)}
+			parameters = {'kernel': ['rbf'], 'C': [0.001, 0.01, 0.1, 0.5, 1, 10, 50], 'gamma': np.logspace(-5,1,7)}
 		
 		elif ALG.lower() == 'logreg':
-			parameters = {'C': [0.01, 0.1, 0.5, 1, 10, 50, 100], 'intercept_scaling': [0.1, 0.5, 1, 2, 5, 10],'penalty': ['l1','l2']}	
+			parameters = {'C': [0.001, 0.01, 0.1, 0.5, 1, 10, 50], 'intercept_scaling': [0.1, 0.5, 1, 2, 5, 10],'penalty': ['l1','l2']}	
 
 		elif ALG.lower() == 'gb':
 			parameters = {'learning_rate': [0.001, 0.01, 0.1, 0.5, 1],'max_depth': [3, 5, 10], 'max_features': [0.1, 0.25, 0.5, 0.75, 'sqrt', 'log2', None],'n_estimators': [100,500,1000]}	
@@ -479,20 +479,15 @@ class fun(object):
 		AucPRc = average_precision_score(y1, scores)
 
 		# Try to extract importance scores 
-		if ALG.lower() == "rf" or ALG.lower() == 'gb':
+		try:
 			importances = clf.feature_importances_
-		elif "svm" in ALG.lower() or ALG.lower() == 'logreg':
-			importances = clf.coef_
-		else:
+		except:
 			try:
-				importances = clf.feature_importances_
+				importances = clf.coef_
 			except:
-				try:
-					importances = clf.coef_
-				except:
-					print("Cannot get importance scores")
-					return {'cm':cm, 'threshold':max_f1_thresh,'AucPRc':AucPRc, 'AucRoc':AucRoc, 'MaxF1': max_f1}
-		
+				importances = "na"
+				print("Cannot get importance scores")
+
 		return {'cm':cm, 'threshold':max_f1_thresh,'AucPRc':AucPRc, 'AucRoc':AucRoc, 'MaxF1': max_f1, 'importances':importances}
 	
 
