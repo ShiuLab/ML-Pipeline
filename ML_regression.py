@@ -158,7 +158,7 @@ def main():
 			features = f.read().strip().splitlines()
 			features = ['Y'] + features
 		df = df.loc[:,features]
-	
+
 	# Check for Nas
 	if df.isnull().values.any() == True:
 		if drop_na.lower() == 't' or drop_na.lower() == 'true':
