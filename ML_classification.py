@@ -257,7 +257,6 @@ def main():
 		df_all = df.copy()
 	
 
-
 	# Generate training classes list. If binary, establish POS and NEG classes. 
 	# Set grid search scoring: roc_auc for binary, f1_macro for multiclass
 	if CL_TRAIN == 'all':
@@ -333,8 +332,8 @@ def main():
 			print("Parameters selected: max_depth=%s, max_features=%s, n_estimators=%s" % (str(max_depth), str(max_features), str(n_estimators)))
 	
 		elif ALG.lower() == 'svm':
-			C, kernel = params2use
-			print("Parameters selected: Kernel=%s, C=%s" % (str(kernel), str(C)))
+			C = params2use
+			print("Parameters selected: Kernel=Linear, C=%s" % (str(C)))
 		
 		elif ALG.lower() == "svmpoly":
 			C, degree, gamma, kernel = params2use
@@ -369,6 +368,7 @@ def main():
 	results = []
 	results_ho = []
 	df_proba = pd.DataFrame(data=df_all['Class'], index=df_all.index, columns=['Class'])
+
 	if apply_unk == True:
 		df_proba2 = pd.DataFrame(data=df_unknowns['Class'], index=df_unknowns.index, columns=['Class'])
 		df_proba = pd.concat([df_proba,df_proba2],axis=0)
@@ -389,7 +389,10 @@ def main():
 		if ALG.lower() == "rf":
 			parameters_used = [n_estimators, max_depth, max_features]
 			clf = ML.fun.DefineClf_RandomForest(n_estimators,max_depth,max_features,j,n_jobs)
-		elif ALG.lower() == "svm" or ALG.lower() == 'svmrbf' or ALG.lower() == 'svmpoly':
+		elif ALG.lower() == "svm":
+			parameters_used = [C]
+			clf = ML.fun.DefineClf_LinearSVM(C,j)
+		elif ALG.lower() == 'svmrbf' or ALG.lower() == 'svmpoly':
 			parameters_used = [C, degree, gamma, kernel]
 			clf = ML.fun.DefineClf_SVM(kernel,C,degree,gamma,j)
 		elif ALG.lower() == "logreg":
@@ -407,7 +410,13 @@ def main():
 			result,current_scores = ML.fun.BuildModel_Apply_Performance(df1, clf, cv_num, df_notSel, apply_unk, df_unknowns, ho_df, classes, POS, NEG, j, ALG,THRSHD_test)
 
 		results.append(result)
-		df_proba = pd.concat([df_proba,current_scores], axis = 1)
+		try:
+			df_proba = pd.concat([df_proba,current_scores], axis = 1)
+		except:
+			print('\n\nOpps. Something went wrong merging the probability scores...')
+			print('Check if you have duplicate instance names in your dataframe!')
+			quit()
+		#df_proba = df_proba.merge(current_scores, how='outer', left_index=True, right_index=True)
 
 	print("ML Pipeline time: %f seconds" % (time.time() - start_time))
 

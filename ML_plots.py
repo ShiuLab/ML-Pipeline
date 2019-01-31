@@ -6,7 +6,7 @@ Plots mean score over the balanced runs with stdev error bars.
 
 To run:
 $ export PATH=/mnt/home/azodichr/miniconda3/bin:$PATH
-$ python ML_plots.py [SAVE_NAME] name1 [Path_to_1st_scores_file] name3 [Path_to_2nd_scores_file] etc.
+$ python ML_plots.py [SAVE_NAME] POS_ID NEG_ID name1 [Path_to_1st_scores_file] name3 [Path_to_2nd_scores_file] etc.
 
 
 """
@@ -65,15 +65,13 @@ for i in items:
     precis = []
     name = 'score_' + str(k)
     y = df_proba.ix[balanced_ids[k], 'Class'] 
+    y = y.astype(str)
 
     # Get decision matrix & scores at each threshold between 0 & 1
     for j in np.arange(0, 1, 0.01):
       yhat = df_proba.ix[balanced_ids[k], name].copy()
-      
       yhat[df_proba[name] >= float(j)] = POS
       yhat[df_proba[name] < float(j)] = NEG
-      print(y.head())
-      print(yhat.head())
       matrix = confusion_matrix(y, yhat, labels = [POS,NEG])
       TP, FP, TN, FN = matrix[0,0], matrix[1,0], matrix[1,1], matrix[0,1]
       FPR.append(FP/(FP + TN))

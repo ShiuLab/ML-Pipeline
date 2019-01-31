@@ -64,10 +64,10 @@ def main():
 	drop_na, ho = 'f', ''
 	
 	# Default parameters for Grid search
-	GS, gs_score, GS_REPS, GS_TYPE, gs_full = 'f', 'neg_mean_squared_error', 10, 'full', 'f'
+	GS, gs_score, GS_REPS, GS_TYPE, gs_full = 't', 'neg_mean_squared_error', 10, 'full', 'f'
 	
 	# Default Random Forest and GB parameters
-	n_estimators, max_depth, max_features, learning_rate = 500, 10, "sqrt", 1.0
+	n_estimators, max_depth, max_features, learning_rate = 500, 5, "sqrt", 1.0
 	
 	# Default Linear SVC parameters
 	kernel, C, degree, gamma, loss, max_iter = 'rbf', 0.01, 2, 0.00001, 'hinge', "500"
@@ -124,6 +124,15 @@ def main():
 			TAG = sys.argv[i+1]
 		elif sys.argv[i].lower() == "-out":
 			OUTPUT_LOC = sys.argv[i+1]
+		elif sys.argv[i].lower() == "-max_depth":
+			max_depth = int(sys.argv[i+1])
+		elif sys.argv[i].lower() == "-lr":
+			learning_rate = float(sys.argv[i+1])
+		elif sys.argv[i].lower() == "-max_features":
+			try:
+				max_features = float(sys.argv[i+1])
+			except:
+				max_features = sys.argv[i+1]
 		elif sys.argv[i].lower() == "-n_jobs" or sys.argv[i] == "-p":
 			n_jobs = int(sys.argv[i+1])
 		elif sys.argv[i].lower() == "-short":
@@ -138,7 +147,7 @@ def main():
 	####### Load Dataframe & Pre-process #######
 	
 	df = pd.read_csv(DF, sep=SEP, index_col = 0)
-
+	
 	# If features  and class info are in separate files, merge them: 
 	if DF2 != 'None':
 		start_dim = df.shape
@@ -245,8 +254,8 @@ def main():
 			print("Parameters selected: max_depth=%s, max_features=%s" % (str(max_depth), str(max_features)))
 	
 		elif ALG.lower() == 'svm':
-			C, kernel = params2use
-			print("Parameters selected: Kernel=%s, C=%s" % (str(kernel), str(C)))
+			C = params2use
+			print("Parameters selected: Kernel=Linear, C=%s" % (str(C)))
 		
 		elif ALG.lower() == "svmpoly":
 			C, degree, gamma, kernel = params2use
@@ -289,7 +298,9 @@ def main():
 		# Prime regressor object based on chosen algorithm
 		if ALG.lower() == "rf":
 			reg = ML.fun.DefineReg_RandomForest(n_estimators,max_depth,max_features,n_jobs,j)
-		elif ALG.lower() == "svm" or ALG.lower() == 'svmrbf' or ALG.lower() == 'svmpoly':
+		elif ALG.lower() == "svm":
+			reg =  ML.fun.DefineReg_LinearSVM(C,j)
+		elif ALG.lower() == 'svmrbf' or ALG.lower() == 'svmpoly':
 			reg = ML.fun.DefineReg_SVM(kernel,C,degree,gamma,j)
 		elif ALG.lower() == "gb":
 			reg = ML.fun.DefineReg_GB(learning_rate,max_features,max_depth,n_jobs,j)
