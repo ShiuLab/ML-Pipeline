@@ -1,6 +1,9 @@
 # ML-Pipeline
 Scripts for Shiu Lab Machine Learning
 
+![ML-Pipeline Overview](Tutorial/pipeline_summary.pdf)
+
+
 ## Environment Requirements
 * biopython                 1.68
 * matplotlib                1.5.1
