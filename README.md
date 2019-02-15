@@ -1,5 +1,5 @@
 # ML-Pipeline
-Scripts for Shiu Lab Machine Learning
+Shiu Lab Machine Learning Pipeline
 
 ![ML-Pipeline Overview](Tutorial/pipeline_summary.png)
 
