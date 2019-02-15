@@ -1,7 +1,7 @@
 # ML-Pipeline
 Scripts for Shiu Lab Machine Learning
 
-![ML-Pipeline Overview](Tutorial/pipeline_summary.pdf)
+![ML-Pipeline Overview](Tutorial/pipeline_summary.png)
 
 
 ## Environment Requirements
