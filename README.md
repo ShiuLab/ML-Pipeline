@@ -1,7 +1,7 @@
 # ML-Pipeline
 Shiu Lab Machine Learning Pipeline
 
-![ML-Pipeline Overview](Tutorial/pipeline_summary.png)
+![ML-Pipeline Overview](Tutorial/pipeline_summary.png =150x)
 
 
 ## Environment Requirements
