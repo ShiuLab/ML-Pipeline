@@ -1,8 +1,6 @@
 # ML-Pipeline
 Shiu Lab Machine Learning Pipeline
-
-![ML-Pipeline Overview](Tutorial/pipeline_summary.png =150x)
-
+<img src="Tutorial/pipeline_summary.png" alt="ML-Pipeline Overview" width="200"/>
 
 ## Environment Requirements
 * biopython                 1.68
