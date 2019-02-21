@@ -117,9 +117,9 @@ class fun(object):
 					gs_score = 'average_precision'
 
 				if GS_TYPE.lower() == 'rand' or GS_TYPE.lower() == 'random':
-					grid_search = RandomizedSearchCV(model, parameters, scoring = gs_score, n_iter = 10, cv = cv_num, n_jobs = n_jobs, pre_dispatch=2*n_jobs)
+					grid_search = RandomizedSearchCV(model, parameters, scoring = gs_score, n_iter = 10, cv = cv_num, n_jobs = n_jobs, pre_dispatch=2*n_jobs, return_train_score=True)
 				else:
-					grid_search = GridSearchCV(model, parameters, scoring = gs_score, cv = cv_num, n_jobs = n_jobs, pre_dispatch=2*n_jobs)
+					grid_search = GridSearchCV(model, parameters, scoring = gs_score, cv = cv_num, n_jobs = n_jobs, pre_dispatch=2*n_jobs, return_train_score=True)
 				
 				if len(classes) == 2:
 					y = y.replace(to_replace = [POS, NEG], value = [1,0])
@@ -209,9 +209,9 @@ class fun(object):
 			
 			# Run grid search with 10-fold cross validation and fit
 			if GS_TYPE.lower() == 'rand' or GS_TYPE.lower() == 'random':
-				grid_search = RandomizedSearchCV(model, parameters, scoring = gs_score, n_iter = 10, cv = cv_num, n_jobs = n_jobs, pre_dispatch=2*n_jobs)
+				grid_search = RandomizedSearchCV(model, parameters, scoring = gs_score, n_iter = 10, cv = cv_num, n_jobs = n_jobs, pre_dispatch=2*n_jobs, return_train_score=True)
 			else:
-				grid_search = GridSearchCV(model, parameters, scoring = gs_score, cv = cv_num, n_jobs = n_jobs, pre_dispatch=2*n_jobs)
+				grid_search = GridSearchCV(model, parameters, scoring = gs_score, cv = cv_num, n_jobs = n_jobs, pre_dispatch=2*n_jobs, return_train_score=True)
 			grid_search.fit(x, y)
 			
 			# Add results to dataframe
@@ -331,7 +331,7 @@ class fun(object):
 			from sklearn.calibration import CalibratedClassifierCV
 			clf2 = clf
 			clf2.fit(X,y)
-			clf = CalibratedClassifierCV(clf) # adds the probability output to linearSVC
+			clf = CalibratedClassifierCV(clf, cv=3) # adds the probability output to linearSVC
 		else:
 			clf2 = 'pass'
 
@@ -352,7 +352,7 @@ class fun(object):
 		if not isinstance(ho_df, str):
 			ho_proba = clf.predict_proba(ho_df.drop(['Class'], axis=1))
 			ho_pred = clf.predict(ho_df.drop(['Class'], axis=1))
-		
+
 		# Evaluate performance
 		if len(classes) == 2:
 			i = 0
@@ -592,7 +592,6 @@ class fun(object):
 			Precision_ho = TP_ho/(TP_ho+FP_ho)
 			Accuracy_ho = (TP_ho + TN_ho)/ (TP_ho + TN_ho + FP_ho + FN_ho)
 			F1_ho = (2*TP_ho)/((2*TP_ho) + FP_ho + FN_ho)
-			print(TP,TN,FP,FN,TPR,FPR,FNR,Precision,Accuracy,F1,Precision_ho,Accuracy_ho,F1_ho)
 			return TP,TN,FP,FN,TPR,FPR,FNR,Precision,Accuracy,F1,Precision_ho,Accuracy_ho,F1_ho
 		
 		else:

@@ -19,6 +19,7 @@ INPUTS:
 	-apply    List of non-training class labels that the models should be applied to.
 							Enter 'all' or a list (comma-delimit if >1)
 	-ho       File with list of intances to holdout from feature selection
+	-x_norm   T/F if you want to normalize features. Default T for SVM, SVMrbf, SVMpoly. To force off "force_false"
 	-sep 			Set seperator for input data (Default = '\t')
 	-pos      name of positive class for binary classifier. (Default = 1 or see -cl_train)
 	-drop_na  T/F to drop rows with NAs
@@ -82,7 +83,7 @@ def main():
 	n, FEAT, CL_TRAIN, apply_model, n_jobs =  100, 'all', 'all','none', 1,
 	y_name, CM, POS, plots, cv_num = 'Class', 'False', 1, 'False', 10,
 	TAG, SAVE, MIN_SIZE, short_scores =   '', '', '', False
-	SEP, THRSHD_test, DF2 = '\t','F1', 'None'
+	SEP, THRSHD_test, DF2, x_norm = '\t','F1', 'None', 'false'
 	drop_na, ho = 'False', ''
 
 	# Default parameters for Grid search
@@ -108,10 +109,12 @@ def main():
 			FEAT = sys.argv[i+1]
 		elif sys.argv[i].lower() == "-gs":
 			GS = sys.argv[i+1]
+		elif sys.argv[i].lower() == "-x_norm":
+			x_norm = sys.argv[i+1]
 		elif sys.argv[i].lower() == "-kernel":
 			kernel = sys.argv[i+1]
 		elif sys.argv[i].lower() == "-C":
-			C = sys.argv[i+1]
+			C = float(sys.argv[i+1])
 		elif sys.argv[i].lower() == "-degree":
 			degree = sys.argv[i+1]
 		elif sys.argv[i].lower() == "-gamma":
@@ -220,7 +223,18 @@ def main():
 			print('There are Na values in your dataframe.\n Impute them or add -drop_na True to remove rows with nas' )
 			quit()
 	
-	
+		# Normalize data frame for SVM algorithms
+	if ALG.lower() in ["svm", "svmpoly", "svmrbf"] or x_norm.lower() in ['t','true']:
+		if x_norm.lower != 'force_false':
+			from sklearn import preprocessing
+			y = df['Class']
+			X = df.drop(['Class'], axis=1)
+			min_max_scaler = preprocessing.MinMaxScaler()
+			X_scaled = min_max_scaler.fit_transform(X)
+			df = pd.DataFrame(X_scaled, columns = X.columns, index = X.index)
+			df.insert(loc=0, column = 'Class', value = y)
+
+
 	# Set up dataframe of unknown instances that the final models will be applied to
 	if CL_TRAIN != 'all' and apply_model != 'none':
 		apply_unk = True
@@ -299,19 +313,8 @@ def main():
 		else:
 			SAVE = DF + "_" + ALG + "_" + TAG
 	
-	# Normalize data frame for SVM algorithms
-	if ALG == "SVM" or ALG == "SVMpoly" or ALG == "SVMrbf":
-		from sklearn import preprocessing
-		y = df['Class']
-		X = df.drop(['Class'], axis=1)
-		min_max_scaler = preprocessing.MinMaxScaler()
-		X_scaled = min_max_scaler.fit_transform(X)
-		df = pd.DataFrame(X_scaled, columns = X.columns, index = X.index)
-		df.insert(loc=0, column = 'Class', value = y)
-	
-	
 	print("Snapshot of data being used:")
-	print(df.head())
+	print(df.iloc[:5, :5])
 	print("CLASSES:",classes)
 	print("POS:",POS,type(POS))
 	print("NEG:",NEG,type(NEG))
@@ -425,7 +428,7 @@ def main():
 	####### Unpack ML results #######
 	
 	## Make empty dataframes
-	conf_matrices = pd.DataFrame(columns = np.insert(arr = classes.astype(np.str), obj = 0, values = 'Class'))
+	conf_matrices = pd.DataFrame(columns = np.insert(arr = classes.astype(np.str), obj = 0, values = 'Class'), dtype=float)
 	imp = pd.DataFrame(index = list(df.drop(['Class'], axis=1)))
 	threshold_array = []
 	AucRoc_array = []
@@ -491,6 +494,7 @@ def main():
 			if 'macro_f1' in r_ho:
 				f1_temp_ho_array = np.insert(arr = r_ho['f1_MC'], obj = 0, values = r_ho['macro_f1'])
 				f1_array_ho = np.append(f1_array_ho, [f1_temp_ho_array], axis=0)
+
 		
 
 ###### Multiclass Specific Output ######
@@ -594,6 +598,7 @@ def main():
 				out.write('HO Accuracy\t%05f +/-%05f\nHO F1_macro\t%05f +/-%05f' % (AC_ho, AC_std_ho, MacF1_ho, MacF1_std_ho))
 
 ###### Binary Prediction Output ######
+	
 	else: 
 		# Get AUC for ROC and PR curve (mean, sd, se)
 		ROC = [np.mean(AucRoc_array), np.std(AucRoc_array), np.std(AucRoc_array)/np.sqrt(len(AucRoc_array))]
@@ -617,7 +622,6 @@ def main():
 		Pred_name =  'Predicted_' + str(final_threshold)
 		df_proba.insert(loc=3, column = Pred_name, value = df_proba['Class'])
 		df_proba[Pred_name] = np.where(df_proba['Mean'] >= final_threshold, POS,NEG)
-		
 
 		# Summarize % of each class predicted as POS and NEG		
 		summary_df_proba = df_proba[['Class', Pred_name, 'Mean']].groupby(['Class', Pred_name]).agg('count').unstack(level=1)
@@ -630,7 +634,6 @@ def main():
 			summary_df_proba[str(NEG) + '_perc'] = 0
 			print('Warning: No instances were classified as negative!')	
 		summary_df_proba[str(POS) + '_perc'] = summary_df_proba[POS]/summary_df_proba['n_total']
-		
 		
 
 		scores_file = SAVE + "_scores.txt"
@@ -654,7 +657,7 @@ def main():
 		if plots.lower() == 'true' or plots.lower() == 't':
 			print("\nGenerating ROC & PR curves")
 			pr = ML.fun.Plots(df_proba, balanced_ids, ROC, PRc, POS, NEG, n, SAVE)
-		
+
 		# Export importance scores
 		try:
 			imp['mean_imp'] = imp.mean(axis=1)
