@@ -1,5 +1,6 @@
 # ML-Pipeline
-Scripts for Shiu Lab Machine Learning
+Shiu Lab Machine Learning Pipeline
+<img src="Tutorial/pipeline_summary.png" alt="ML-Pipeline Overview" width="300"/>
 
 ## Environment Requirements
 * biopython                 1.68

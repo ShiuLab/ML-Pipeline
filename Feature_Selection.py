@@ -15,12 +15,18 @@ INPUT:
                 - Enrichment using Fisher's Exact (for classification with binary feats only)
                     need: -p (default=0.05)
                 - LASSO 
-                    need: -p, -type
+                    need: -p, -type, n
+                - Bayesian LASSO (bl) 
+                    need: -n
                 - Elastic Net (EN)
-                    need: -p (default=0.05, proportion of L1 to L2 penalty)
+                    need: -n -p (default=0.5, proportion of L1 to L2 penalty)
                 - Relief (https://github.com/EpistasisLab/scikit-rebate) (currently for regression only)
                     need: -n, 
                 - BayesA regression (for regression only)
+                    need: -n
+                - rrBLUP (i.e. mixed.solve) (for regression only)
+                    need: -n
+                - Random
                     need: -n
 
 OPTIONAL INPUT:
@@ -40,14 +46,16 @@ OPTIONAL INPUT:
   -feat     File containing the features you want to use from the df (one feature per line)
               Default: all (i.e. everything in the dataframe given).
   -type     r = regression, c = classification (required for LASSO and RF)
-  -p        Parameter value for LASSO (L1) or Fisher's Exact Test.
+  -p        Parameter value for LASSO, EN, or Fisher's Exact Test.
             Fishers: pvalue cut off (Default = 0.05)
+            EN: Ratio of L1 to L2 regularization (larger = fewer features selected)
             LASSO: If type = r: need alpha value, try 0.01, 0.001. (larger = fewer features selected)
             LASSO: If type = c: need C which controls the sparcity, try 0.01, 0.1 (smaller = fewer features selected)
   -pos      String for what codes for the positive example (i.e. UUN) Default = 1
   -neg      String for what codes for the negative example (i.e. NNN) Default = 0
   -cvs      To run feat. sel. withing cross-validation scheme provide a CVs matrix and -JobNum
               CVs maxtrix: rows = instances, columns = CV replicates, value are the CV-fold each instance belongs to.
+  -scores   T/F to output scores/coefficients for each feature (Not available for: FET, LASSO, or Chi2)
 
 OUTPUT:
   -df_f.txt    New dataframe with columns only from feature selection
@@ -63,7 +71,9 @@ REVISIONS:   Written 8/16/2016
 import pandas as pd
 import numpy as np
 import sys, os
+import time
 
+start_time = time.time()
 
 def SaveTopFeats(top, save_name):
 
@@ -79,7 +89,7 @@ def SaveTopFeats(top, save_name):
 
 
 
-def DecisionTree(df, n, TYPE, save_name):
+def DecisionTree(df, n, TYPE, save_name, SCORES):
   """Feature selection using DecisionTree on the whole dataframe
   Feature importance from the Random Forest Classifier is the Gini importance
   (i.e. the normalized total reduction of the criterion for the decendent nodes
@@ -112,6 +122,10 @@ def DecisionTree(df, n, TYPE, save_name):
   feat_names = list(df.columns.values)[1:]
   temp_imp = pd.DataFrame(importances, columns = ["imp"], index=feat_names) 
   indices = np.argsort(importances)[::-1]
+
+  if SCORES.lower() != 'f':
+    save_scores = save_name + '_RFScores.txt'
+    temp_imp.to_csv(save_scores)
 
   for n_size in n:
     indices_keep = indices[0:int(n_size)]
@@ -163,7 +177,7 @@ def Chi2(df, n, save_name):
     SaveTopFeats(good, save_name2)
 
 
-def Relief(df, n, n_jobs, save_name):
+def Relief(df, n, n_jobs, save_name, SCORES):
   """Feature selection using Relief on the whole dataframe."""
   from skrebate import ReliefF
 
@@ -180,6 +194,10 @@ def Relief(df, n, n_jobs, save_name):
   fs.fit(X_all, Y_all)
   imp = pd.DataFrame(fs.feature_importances_, index = feature_names, columns = ['relief_imp'])
   imp_top = imp.sort_values(by='relief_imp', ascending=False)
+
+  if SCORES.lower() != 'f':
+    save_scores = save_name + '_ReliefScores.txt'
+    imp_top.to_csv(save_scores)
 
   for n_size in n:
     keep = imp_top.index.values[0:int(n_size)]
@@ -224,7 +242,7 @@ def L1(df, PARAMETER, TYPE, save_name):
   save_name2 = save_name 
   SaveTopFeats(good, save_name2)
 
-def EN(df, PARAMETER, n, save_name):
+def EN(df, PARAMETER, n, save_name, SCORES):
   """Apply Elastic-Net based feature selection. Can tune l1:l2 (penalty:zero) ratio (Default = 0.5)"""
 
   from sklearn.linear_model import ElasticNet
@@ -242,6 +260,10 @@ def EN(df, PARAMETER, n, save_name):
   
   # Count the number of coefficients that were not zero
   non_zero = imp_top[imp_top > 0 ].count() 
+  if SCORES.lower() != 'f':
+    save_scores = save_name + '_ENScores.txt'
+    imp_top.to_csv(save_scores)
+
 
   for n_size in n:
     keep = imp_top.index.values[0:int(n_size)]
@@ -256,18 +278,15 @@ def EN(df, PARAMETER, n, save_name):
 
 
 
-def BayesA(df_use, n, save_name):
+def BayesA(df_use, n, save_name, SCORES):
   """ Use BayesA from BGLR package to select features with largest
   abs(coefficients) """
   
   cwd = os.getcwd()
   temp_name = 'temp_' + save_name
   df_use.to_csv(temp_name)
-  #temp_out = 'temp_' + save_name + 'rout'
-  
-  #os.system('R CMD BATCH --vanilla \'--args df=%s\' /mnt/home/azodichr/GitHub/ML-Pipeline/featureselection_BayesA.R temp.out &' % (save_name))
-  #coefs = pd.read_csv(save_name + '_coef', sep = ',')
-  #print(coefs.head())
+
+  # Write temp Rscript  
   tmpR=open("%s_BayA.R" % temp_name,"w")
   tmpR.write('library(BGLR)\n')
   tmpR.write("setwd('%s')\n" % cwd)
@@ -277,34 +296,113 @@ def BayesA(df_use, n, save_name):
   tmpR.write("X=scale(X)\n")
   tmpR.write("ETA=list(list(X=X,model='BayesA'))\n")
   tmpR.write("fm=BGLR(y=Y,ETA=ETA,verbose=FALSE, nIter=12000,burnIn=2000)\n")
-  tmpR.write("coef <- fm$ETA[[1]]$b\n")
+  tmpR.write("coef <- abs(fm$ETA[[1]]$b)\n")
   tmpR.write("coef_df <- as.data.frame(coef)\n")
-  tmpR.write("write.table(coef_df, file='%s', sep=',', row.names=TRUE, quote=FALSE)\n" % (temp_name + '_coef.txt'))
+  tmpR.write("write.table(coef_df, file='%s', sep=',', row.names=TRUE, quote=FALSE)\n" % (temp_name + '_BayAScores.txt'))
   tmpR.close()
+  
   print('Running bayesA model from BGLR inplemented in R.')
   os.system('export R_LIBS_USER=~/R/library')
   os.system("R CMD BATCH %s_BayA.R" % temp_name)
 
-  coefs = pd.read_csv(temp_name + '_coef.txt', sep = ',')
+  coefs = pd.read_csv(temp_name + '_BayAScores.txt', sep = ',')
   coefs['coef_abs'] = coefs.coef.abs()
   coefs_top = coefs.sort_values(by='coef_abs', ascending=False)
-  os.system("rm %s" % temp_name)
-  os.system("rm %s_coef.txt" % temp_name)
-  os.system("rm %s_BayA.R" % temp_name)
-  os.system("rm %s_BayA.Rout" % temp_name)
-  os.system("rm varE.dat")
-  os.system("rm mu.dat")
-  os.system("rm ETA_1_ScaleBayesA.dat")
 
-
-
+  if SCORES.lower() == 'f':
+  	os.system("rm %s_BayAScores.txt" % temp_name)
+  else:
+    os.system("mv %s_BayAScores.txt %s_BayAScores.txt" % (temp_name, save_name))
+  os.system("rm %s %s_BayA.R %s_BayA.Rout varE.dat mu.dat ETA_1_ScaleBayesA.dat ETA_1_lambda.dat" % (temp_name, temp_name, temp_name))
+  
   for n_size in n:
     keep = coefs_top.index.values[0:int(n_size)]
     print("Top %s features selected using BayesA from BGLR: %s" % (str(n_size), str(keep)))
     save_name2 = save_name + "_" + str(n_size)
     SaveTopFeats(keep, save_name2)
-  
 
+def BLASSO(df_use, n, save_name, SCORES):
+  """ Use BayesA from BGLR package to select features with largest
+  abs(coefficients) """
+  
+  cwd = os.getcwd()
+  temp_name = 'temp_' + save_name
+  df_use.to_csv(temp_name)
+
+  # Write temp Rscript  
+  tmpR=open("%s_BL.R" % temp_name,"w")
+  tmpR.write('library(BGLR)\n')
+  tmpR.write("setwd('%s')\n" % cwd)
+  tmpR.write("df <- read.csv('%s', sep=',', header=TRUE, row.names=1)\n" % temp_name)
+  tmpR.write("Y <- df[, 'Class']\n")
+  tmpR.write("X <- df[, !colnames(df) %in% c('Class')]\n")
+  tmpR.write("ETA=list(list(X=X,model='BL'))\n")
+  tmpR.write("fm=BGLR(y=Y,ETA=ETA,verbose=FALSE, nIter=12000,burnIn=2000)\n")
+  tmpR.write("coef <- abs(fm$ETA[[1]]$b)\n")
+  tmpR.write("coef_df <- as.data.frame(coef)\n")
+  tmpR.write("write.table(coef_df, file='%s', sep=',', row.names=TRUE, quote=FALSE)\n" % (temp_name + '_BLScores.txt'))
+  tmpR.close()
+  
+  print('Running bayesA model from BGLR inplemented in R.')
+  os.system('export R_LIBS_USER=~/R/library')
+  os.system("R CMD BATCH %s_BL.R" % temp_name)
+
+  coefs = pd.read_csv(temp_name + '_BLScores.txt', sep = ',')
+  coefs['coef_abs'] = coefs.coef.abs()
+  coefs_top = coefs.sort_values(by='coef_abs', ascending=False)
+
+  if SCORES.lower() == 'f':
+    os.system("rm %s_BLScores.txt" % temp_name)
+  else:
+    os.system("mv %s_BLScores.txt %s_BLScores.txt" % (temp_name, save_name))
+  os.system("rm %s %s_rrB.R %s_rrB.Rout varE.dat mu.dat ETA_1_ScaleBL.dat ETA_1_lambda.dat" % (temp_name, temp_name, temp_name))
+
+  for n_size in n:
+    keep = coefs_top.index.values[0:int(n_size)]
+    print("Top %s features selected using BL from BGLR: %s" % (str(n_size), str(keep)))
+    save_name2 = save_name + "_" + str(n_size)
+    SaveTopFeats(keep, save_name2)
+  
+def rrBLUP(df_use, n, save_name, SCORES):
+  """ Use BayesA from BGLR package to select features with largest
+  abs(coefficients) """
+  
+  cwd = os.getcwd()
+  temp_name = 'temp_' + save_name
+  df_use.to_csv(temp_name)
+
+  # Write temp Rscript  
+  tmpR=open("%s_rrB.R" % temp_name,"w")
+  tmpR.write("setwd('%s')\n" % cwd)
+  tmpR.write('library(rrBLUP)\n')
+  tmpR.write("df <- read.csv('%s', sep=',', header=TRUE, row.names=1)\n" % temp_name)
+  tmpR.write("Y <- df[, 'Class']\n")
+  tmpR.write("X <- df[, !colnames(df) %in% c('Class')]\n")
+  tmpR.write("mod <- mixed.solve(Y, Z=X, K=NULL, SE=FALSE, return.Hinv=FALSE)\n")
+  tmpR.write("coef <- mod$u\n")
+  tmpR.write("coef_df <- as.data.frame(coef)\n")
+  tmpR.write("write.table(coef_df, file='%s', sep=',', row.names=TRUE, quote=FALSE)\n" % (temp_name + '_rrBScores.txt'))
+  tmpR.close()
+  
+  print('Running rrBLUP using mixed.solve in R.')
+  os.system('export R_LIBS_USER=~/R/library')
+  os.system("R CMD BATCH %s_rrB.R" % temp_name)
+
+  coefs = pd.read_csv(temp_name + '_rrBScores.txt', sep = ',')
+  coefs['coef_abs'] = coefs.coef.abs()
+  coefs_top = coefs.sort_values(by='coef_abs', ascending=False)
+  
+  if SCORES.lower() == 'f':
+	  os.system("rm %s_rrBScores.txt" % temp_name)
+  else:
+    os.system("mv %s_rrBScores.txt %s_rrBScores.txt" % (temp_name, save_name))
+  os.system("rm %s %s_rrB.R %s_rrB.Rout varE.dat mu.dat ETA_1_ScalerrB.dat" % (temp_name, temp_name, temp_name))
+
+  for n_size in n:
+    keep = coefs_top.index.values[0:int(n_size)]
+    print("Top %s features selected using mixed.solve in R (similar to rrBLUP): %s" % (str(n_size), str(keep)))
+    save_name2 = save_name + "_" + str(n_size)
+    SaveTopFeats(keep, save_name2)
 
 def FET(df, PARAMETER, pos, neg, save_name):
   """Use Fisher's Exact Test to look for enriched features"""
@@ -344,6 +442,18 @@ def FET(df, PARAMETER, pos, neg, save_name):
   save_name2 = save_name 
   SaveTopFeats(enriched, save_name2)
 
+
+def Random(df, n, save_name):
+  """Randomly select n features"""
+  from random import sample
+  feat_names = list(df)
+  feat_names.remove('Class')
+
+  for n_size in n:
+    rand_feats = sample(feat_names, int(n_size))
+    save_name2 = save_name + "_" + str(n_size)
+    SaveTopFeats(rand_feats, save_name2)
+
 if __name__ == "__main__":
   
   #Default parameters
@@ -363,6 +473,8 @@ if __name__ == "__main__":
   ho = ''
   CL_USE = ''
   drop_na = 'f'
+  NA = 'na'
+  SCORES = 'f'
 
   for i in range (1,len(sys.argv),2):
 
@@ -376,6 +488,8 @@ if __name__ == "__main__":
       SAVE = sys.argv[i+1]
     if sys.argv[i].lower() == '-f':
       F = sys.argv[i+1]
+      if F.lower() == 'en':
+        PARAMETER = 0.5
     if sys.argv[i].lower() == '-n':
       N = sys.argv[i+1]
     if sys.argv[i].lower() == '-n_jobs':
@@ -402,6 +516,8 @@ if __name__ == "__main__":
       ho = sys.argv[i+1]
     if sys.argv[i].lower() == '-drop_na':
       drop_na = sys.argv[i+1]
+    if sys.argv[i].lower() == '-scores':
+      SCORES = sys.argv[i+1]
 
 
   if len(sys.argv) <= 1:
@@ -434,7 +550,6 @@ if __name__ == "__main__":
       print(df.columns[df.isnull().any()].tolist())
       print('There are Na values in your dataframe.\n Impute them or add -drop_na True to remove rows with nas')
       quit()
-  print(df.head())
   
   # Drop instances in hold out set if provided
   if ho !='':
@@ -501,7 +616,7 @@ if __name__ == "__main__":
 
 
   if F.lower() == "randomforest" or F.lower() == "rf":
-    DecisionTree(df_use, N, TYPE, save_name)
+    DecisionTree(df_use, N, TYPE, save_name, SCORES)
     
   elif F.lower() == "chi2" or F.lower() == "c2":
     Chi2(df_use, N, save_name)
@@ -514,18 +629,29 @@ if __name__ == "__main__":
   elif F.lower() == "en" or F.lower() == "elasticnet":
     if SAVE == 'default':
       save_name = save_name + '_' + str(PARAMETER)
-    EN(df_use, PARAMETER, N, save_name)
+    EN(df_use, PARAMETER, N, save_name, SCORES)
     
-  elif F.lower() == "relief" or F.lower() == "rebate":
-    Relief(df_use, N, n_jobs, save_name)
+  elif F.lower() == "relief" or F.lower() == "rebate" or F.lower() == "rl":
+    Relief(df_use, N, n_jobs, save_name, SCORES)
 
   elif F.lower() == "bayesa" or F.lower() == "ba":
-    BayesA(df_use, N, save_name)
+    BayesA(df_use, N, save_name, SCORES)
     
+  elif F.lower() == "blasso" or F.lower() == "bl":
+    BLASSO(df_use, N, save_name, SCORES)
+
+  elif F.lower() == "rrblup" or F.lower() == "rrb":
+    rrBLUP(df_use, N, save_name, SCORES)
+
   elif F.lower() == "fisher" or F.lower() == "fet" or F.lower() == 'enrich':
     if SAVE == 'default':
       save_name = save_name + '_' + str(PARAMETER)
     FET(df_use, PARAMETER, pos, neg, save_name)
   
+  elif F.lower() == "random" or F.lower() == "rand" or F.lower() == 'ran':
+    Random(df_use, N, save_name)
 
 
+run_time = time.time() - start_time
+print('Run time (sec):' + str(round(run_time,2)))
+print('Done!')

@@ -48,9 +48,7 @@ class fun(object):
 		from sklearn.model_selection import GridSearchCV
 		from sklearn.model_selection import RandomizedSearchCV
 		from sklearn.preprocessing import StandardScaler
-		from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
-		from sklearn.svm import SVC
-		from sklearn.linear_model import LogisticRegression
+
 		
 		start_time = time.time()
 		
@@ -60,16 +58,16 @@ class fun(object):
 			parameters = {'max_depth':[3, 5, 10], 'max_features': [0.1, 0.25, 0.5, 0.75, 'sqrt', 'log2', None], 'n_estimators': [100,500,1000]}
 			
 		elif ALG.lower() == "svm":
-			parameters = {'kernel': ['linear'], 'C':[0.01, 0.1, 0.5, 1, 10, 50, 100]}
-
+			#parameters = {'kernel': ['linear'], 'C':[0.001, 0.01, 0.1, 0.5, 1, 10, 50]}
+			parameters = {'C':[0.001, 0.01, 0.1, 0.5, 1, 10, 50]}
 		elif ALG.lower() == 'svmpoly':
-			parameters = {'kernel': ['poly'], 'C':[0.01, 0.1, 0.5, 1, 10, 50, 100],'degree': [2,3,4], 'gamma': np.logspace(-5,1,7)}
+			parameters = {'kernel': ['poly'], 'C':[0.001,0.01, 0.1, 0.5, 1, 10, 50],'degree': [2,3,4], 'gamma': np.logspace(-5,1,7)}
 
 		elif ALG.lower() == 'svmrbf':
-			parameters = {'kernel': ['rbf'], 'C': [0.01, 0.1, 0.5, 1, 10, 50, 100], 'gamma': np.logspace(-5,1,7)}
+			parameters = {'kernel': ['rbf'], 'C': [0.001, 0.01, 0.1, 0.5, 1, 10, 50], 'gamma': np.logspace(-5,1,7)}
 		
 		elif ALG.lower() == 'logreg':
-			parameters = {'C': [0.01, 0.1, 0.5, 1, 10, 50, 100], 'intercept_scaling': [0.1, 0.5, 1, 2, 5, 10],'penalty': ['l1','l2']}	
+			parameters = {'C': [0.001, 0.01, 0.1, 0.5, 1, 10, 50], 'intercept_scaling': [0.1, 0.5, 1, 2, 5, 10],'penalty': ['l1','l2']}	
 
 		elif ALG.lower() == 'gb':
 			parameters = {'learning_rate': [0.001, 0.01, 0.1, 0.5, 1],'max_depth': [3, 5, 10], 'max_features': [0.1, 0.25, 0.5, 0.75, 'sqrt', 'log2', None],'n_estimators': [100,500,1000]}	
@@ -99,22 +97,29 @@ class fun(object):
 				
 				# Build model, run grid search with 10-fold cross validation and fit
 				if ALG.lower() == 'rf':
+					from sklearn.ensemble import RandomForestClassifier
 					model = RandomForestClassifier()
-				elif ALG.lower() == "svm" or ALG.lower() == 'svmrbf' or ALG.lower() == 'svmpoly':
+				elif ALG.lower() == "svm":
+					from sklearn.svm import LinearSVC
+					model = LinearSVC()
+				elif ALG.lower() == 'svmrbf' or ALG.lower() == 'svmpoly':
+					from sklearn.svm import SVC
 					# x = StandardScaler().fit_transform(x)
 					model = SVC(probability=True)
 				elif ALG.lower() == "logreg":
+					from sklearn.linear_model import LogisticRegression
 					model = LogisticRegression()
 				elif ALG.lower() == "gb":
+					from sklearn.ensemble import GradientBoostingClassifier
 					model = GradientBoostingClassifier()
 				
 				if gs_score.lower() == 'auprc':
 					gs_score = 'average_precision'
 
 				if GS_TYPE.lower() == 'rand' or GS_TYPE.lower() == 'random':
-					grid_search = RandomizedSearchCV(model, parameters, scoring = gs_score, n_iter = 10, cv = cv_num, n_jobs = n_jobs, pre_dispatch=2*n_jobs)
+					grid_search = RandomizedSearchCV(model, parameters, scoring = gs_score, n_iter = 10, cv = cv_num, n_jobs = n_jobs, pre_dispatch=2*n_jobs, return_train_score=True)
 				else:
-					grid_search = GridSearchCV(model, parameters, scoring = gs_score, cv = cv_num, n_jobs = n_jobs, pre_dispatch=2*n_jobs)
+					grid_search = GridSearchCV(model, parameters, scoring = gs_score, cv = cv_num, n_jobs = n_jobs, pre_dispatch=2*n_jobs, return_train_score=True)
 				
 				if len(classes) == 2:
 					y = y.replace(to_replace = [POS, NEG], value = [1,0])
@@ -164,8 +169,8 @@ class fun(object):
 			parameters = {'max_depth':[3, 5, 10], 'max_features': [0.1, 0.5, 'sqrt', 'log2', None]}
 			
 		elif ALG.lower() == "svm":
-			parameters = {'kernel': ['linear'], 'C':[0.01, 0.1, 0.5, 1, 10, 50, 100]}
-
+			#parameters = {'kernel': ['linear'], 'C':[0.01, 0.1, 0.5, 1, 10, 50, 100]}
+			parameters = {'C':[0.01, 0.1, 0.5, 1, 10, 50, 100]}
 		elif ALG.lower() == 'svmpoly':
 			parameters = {'kernel': ['poly'], 'C':[0.01, 0.1, 0.5, 1, 10, 100],'degree': [2,3], 'gamma': np.logspace(-5,1,7)}
 
@@ -192,7 +197,10 @@ class fun(object):
 			if ALG.lower() == 'rf':
 				from sklearn.ensemble import RandomForestRegressor
 				model = RandomForestRegressor()
-			elif ALG.lower() == "svm" or ALG.lower() == 'svmrbf' or ALG.lower() == 'svmpoly':
+			elif ALG.lower() == "svm" :
+				from sklearn.svm import LinearSVR
+				model = LinearSVR()
+			elif ALG.lower() == 'svmrbf' or ALG.lower() == 'svmpoly':
 				from sklearn.svm import SVR
 				model = SVR()
 			elif ALG.lower() == "gb":
@@ -201,9 +209,9 @@ class fun(object):
 			
 			# Run grid search with 10-fold cross validation and fit
 			if GS_TYPE.lower() == 'rand' or GS_TYPE.lower() == 'random':
-				grid_search = RandomizedSearchCV(model, parameters, scoring = gs_score, n_iter = 10, cv = cv_num, n_jobs = n_jobs, pre_dispatch=2*n_jobs)
+				grid_search = RandomizedSearchCV(model, parameters, scoring = gs_score, n_iter = 10, cv = cv_num, n_jobs = n_jobs, pre_dispatch=2*n_jobs, return_train_score=True)
 			else:
-				grid_search = GridSearchCV(model, parameters, scoring = gs_score, cv = cv_num, n_jobs = n_jobs, pre_dispatch=2*n_jobs)
+				grid_search = GridSearchCV(model, parameters, scoring = gs_score, cv = cv_num, n_jobs = n_jobs, pre_dispatch=2*n_jobs, return_train_score=True)
 			grid_search.fit(x, y)
 			
 			# Add results to dataframe
@@ -288,6 +296,16 @@ class fun(object):
 			gamma = gamma)
 		return reg
 	
+	def DefineClf_LinearSVM(C,j):
+		from sklearn.svm import LinearSVC
+		clf = LinearSVC(C=float(C), random_state=j)
+		return clf
+
+	def DefineReg_LinearSVM(C,j):
+		from sklearn.svm import LinearSVR
+		reg = LinearSVR(C=float(C))
+		return reg	
+
 	def DefineClf_LogReg(penalty,C,intercept_scaling):
 		from sklearn.linear_model import LogisticRegression
 		clf = LogisticRegression(penalty=penalty,
@@ -308,6 +326,15 @@ class fun(object):
 		y = df['Class']
 		X = df.drop(['Class'], axis=1) 
 
+		# For LinearSVM need to have calibrated classifier to get probability scores, but not for importance scores
+		if ALG.lower() == 'svm':
+			from sklearn.calibration import CalibratedClassifierCV
+			clf2 = clf
+			clf2.fit(X,y)
+			clf = CalibratedClassifierCV(clf, cv=3) # adds the probability output to linearSVC
+		else:
+			clf2 = 'pass'
+
 		# Obtain the predictions using 10 fold cross validation (uses KFold cv by default):
 		cv_proba = cross_val_predict(estimator=clf, X=X, y=y, cv=cv_num, method='predict_proba')
 		cv_pred = cross_val_predict(estimator=clf, X=X, y=y, cv=cv_num)
@@ -318,13 +345,14 @@ class fun(object):
 		# (3) holdout instances
 
 		clf.fit(X,y)
+
 		notSel_proba = clf.predict_proba(df_notSel.drop(['Class'], axis=1))
 		if apply_unk == True:
 			unk_proba = clf.predict_proba(df_unknowns.drop(['Class'], axis=1))
 		if not isinstance(ho_df, str):
 			ho_proba = clf.predict_proba(ho_df.drop(['Class'], axis=1))
 			ho_pred = clf.predict(ho_df.drop(['Class'], axis=1))
-		
+
 		# Evaluate performance
 		if len(classes) == 2:
 			i = 0
@@ -336,7 +364,7 @@ class fun(object):
 			scores = cv_proba[:,POS_IND]
 
 			# Generate run statistics from balanced dataset scores
-			result = fun.Performance(y, cv_pred, scores, clf, classes, POS, POS_IND, NEG, ALG, THRSHD_test)
+			result = fun.Performance(y, cv_pred, scores, clf, clf2, classes, POS, POS_IND, NEG, ALG, THRSHD_test)
 
 			
 			#Generate data frame with all scores
@@ -351,8 +379,8 @@ class fun(object):
 				df_ho_scores = pd.DataFrame(data=ho_proba[:,POS_IND],index=ho_df.index,columns=score_columns)
 				current_scores =  pd.concat([current_scores,df_ho_scores], axis = 0)
 				scores_ho = ho_proba[:,POS_IND]
-				result_ho = fun.Performance(ho_df['Class'], ho_pred, scores_ho, clf, classes, POS, POS_IND, NEG, ALG, THRSHD_test)
-		
+				result_ho = fun.Performance(ho_df['Class'], ho_pred, scores_ho, clf, clf2, classes, POS, POS_IND, NEG, ALG, THRSHD_test)
+
 		else:
 			# Generate run statistics from balanced dataset scores
 			result = fun.Performance_MC(y, cv_pred, classes)
@@ -380,6 +408,7 @@ class fun(object):
 
 	def Run_Regression_Model(df, reg, cv_num, ALG, df_unknowns, ho_df, cv_sets, j):
 		from sklearn.model_selection import cross_val_predict
+		from sklearn.metrics.scorer import make_scorer
 		from sklearn.metrics import mean_squared_error, r2_score, explained_variance_score
 		# Data from balanced dataframe
 		y = df['Y']
@@ -390,7 +419,6 @@ class fun(object):
 			from sklearn.cross_validation import LeaveOneLabelOut
 			cv_folds = LeaveOneLabelOut(cv_sets.iloc[:,j])
 			cv_pred = cross_val_predict(estimator=reg, X=X, y=y, cv=cv_folds)
-			cv_pred_df = pd.DataFrame(data=cv_pred, index=df.index, columns=['pred'])
 
 		else:
 			cv_pred = cross_val_predict(estimator=reg, X=X, y=y, cv=cv_num)
@@ -425,9 +453,8 @@ class fun(object):
 			r2_ho = r2_score(ho_y, ho_pred)
 			cor_ho = np.corrcoef(np.array(ho_y), ho_pred)
 			result_ho = [mse_ho, evs_ho, r2_ho, cor_ho[0,1]]
-					
+			
 		# Try to extract importance scores 
-
 		try:
 			importances = reg.feature_importances_
 		except:
@@ -442,7 +469,7 @@ class fun(object):
 		else:
 			return result, cv_pred_df, importances
 
-	def Performance(y, cv_pred, scores, clf, classes, POS, POS_IND, NEG, ALG, THRSHD_test):
+	def Performance(y, cv_pred, scores, clf, clf2, classes, POS, POS_IND, NEG, ALG, THRSHD_test):
 		""" For binary predictions: This function calculates the best threshold for defining
 		POS/NEG from the prediction probabilities by maximizing the f1_score. Then calcuates 
 		the area under the ROC and PRc 
@@ -479,6 +506,8 @@ class fun(object):
 		AucPRc = average_precision_score(y1, scores)
 
 		# Try to extract importance scores 
+		if clf2 != 'pass':
+			clf = clf2
 		try:
 			importances = clf.feature_importances_
 		except:
@@ -563,7 +592,6 @@ class fun(object):
 			Precision_ho = TP_ho/(TP_ho+FP_ho)
 			Accuracy_ho = (TP_ho + TN_ho)/ (TP_ho + TN_ho + FP_ho + FN_ho)
 			F1_ho = (2*TP_ho)/((2*TP_ho) + FP_ho + FN_ho)
-			print(TP,TN,FP,FN,TPR,FPR,FNR,Precision,Accuracy,F1,Precision_ho,Accuracy_ho,F1_ho)
 			return TP,TN,FP,FN,TPR,FPR,FNR,Precision,Accuracy,F1,Precision_ho,Accuracy_ho,F1_ho
 		
 		else:
