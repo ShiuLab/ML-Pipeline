@@ -70,8 +70,8 @@ REVISIONS:   Written 8/16/2016
 """
 import pandas as pd
 import numpy as np
-import sys, os
-import time
+import subprocess as sp
+import sys, os, time
 
 start_time = time.time()
 
@@ -302,8 +302,9 @@ def BayesA(df_use, n, save_name, SCORES):
   tmpR.close()
   
   print('Running bayesA model from BGLR inplemented in R.')
-  os.system('export R_LIBS_USER=~/R/library')
-  os.system("R CMD BATCH %s_BayA.R" % temp_name)
+
+  process = sp.Popen('module load R && export R_LIBS_USER=~/R/library && R CMD BATCH %s_BayA.R' % temp_name, shell=True)
+  process.wait()
 
   coefs = pd.read_csv(temp_name + '_BayAScores.txt', sep = ',')
   coefs['coef_abs'] = coefs.coef.abs()
@@ -313,7 +314,7 @@ def BayesA(df_use, n, save_name, SCORES):
   	os.system("rm %s_BayAScores.txt" % temp_name)
   else:
     os.system("mv %s_BayAScores.txt %s_BayAScores.txt" % (temp_name, save_name))
-  os.system("rm %s %s_BayA.R %s_BayA.Rout varE.dat mu.dat ETA_1_ScaleBayesA.dat ETA_1_lambda.dat" % (temp_name, temp_name, temp_name))
+  os.system("rm %s %s_BayA.R varE.dat mu.dat ETA_1_ScaleBayesA.dat ETA_1_lambda.dat" % (temp_name, temp_name))
   
   for n_size in n:
     keep = coefs_top.index.values[0:int(n_size)]
@@ -344,8 +345,8 @@ def BLASSO(df_use, n, save_name, SCORES):
   tmpR.close()
   
   print('Running bayesA model from BGLR inplemented in R.')
-  os.system('export R_LIBS_USER=~/R/library')
-  os.system("R CMD BATCH %s_BL.R" % temp_name)
+  process = sp.Popen('module load R && export R_LIBS_USER=~/R/library && R CMD BATCH %s_BL.R' % temp_name, shell=True)
+  process.wait()
 
   coefs = pd.read_csv(temp_name + '_BLScores.txt', sep = ',')
   coefs['coef_abs'] = coefs.coef.abs()
@@ -355,7 +356,7 @@ def BLASSO(df_use, n, save_name, SCORES):
     os.system("rm %s_BLScores.txt" % temp_name)
   else:
     os.system("mv %s_BLScores.txt %s_BLScores.txt" % (temp_name, save_name))
-  os.system("rm %s %s_rrB.R %s_rrB.Rout varE.dat mu.dat ETA_1_ScaleBL.dat ETA_1_lambda.dat" % (temp_name, temp_name, temp_name))
+  os.system("rm %s %s_rrB.R varE.dat mu.dat ETA_1_ScaleBL.dat ETA_1_lambda.dat" % (temp_name, temp_name, temp_name))
 
   for n_size in n:
     keep = coefs_top.index.values[0:int(n_size)]
@@ -385,8 +386,8 @@ def rrBLUP(df_use, n, save_name, SCORES):
   tmpR.close()
   
   print('Running rrBLUP using mixed.solve in R.')
-  os.system('export R_LIBS_USER=~/R/library')
-  os.system("R CMD BATCH %s_rrB.R" % temp_name)
+  process = sp.Popen('module load R && export R_LIBS_USER=~/R/library && R CMD BATCH %s_rrB.R' % temp_name, shell=True)
+  process.wait()
 
   coefs = pd.read_csv(temp_name + '_rrBScores.txt', sep = ',')
   coefs['coef_abs'] = coefs.coef.abs()
@@ -396,7 +397,7 @@ def rrBLUP(df_use, n, save_name, SCORES):
 	  os.system("rm %s_rrBScores.txt" % temp_name)
   else:
     os.system("mv %s_rrBScores.txt %s_rrBScores.txt" % (temp_name, save_name))
-  os.system("rm %s %s_rrB.R %s_rrB.Rout varE.dat mu.dat ETA_1_ScalerrB.dat" % (temp_name, temp_name, temp_name))
+  os.system("rm %s %s_rrB.R varE.dat mu.dat ETA_1_ScalerrB.dat" % (temp_name, temp_name))
 
   for n_size in n:
     keep = coefs_top.index.values[0:int(n_size)]
