@@ -34,7 +34,7 @@ def main():
 	pipln_group = parser.add_argument_group(title='CONTROL PIPELINE BEHAVIOR')
 	pipln_group.add_argument('-cl_train', help='Classes to include in training. If binary, first listed = pos.', default='all')
 	pipln_group.add_argument('-pos', help='Name of positive class for binary classifier (or from -cl_train)', default=1)
-	pipln_group.add_argument('-apply', help='List of non-training class labels that the models should be applied to (all or comma sep list)', default='')
+	pipln_group.add_argument('-apply', help='all or list of non-training class labels that the models should be applied to', default='')
 	pipln_group.add_argument('-n_jobs', '-p', help='Number of processors for parallel computing (max for HPCC = 14)', type=int, default=1)
 	pipln_group.add_argument('-n', '-b', help='Number of replicates (unique balanced datasets).', type=int, default=100)
 	pipln_group.add_argument('-threshold_test', help='Metric used to define prediction score threshold for classification (F1 or accuracy)).', default='F1')
@@ -142,7 +142,7 @@ def main():
 
 
 	# Set up dataframe of unknown instances that the final models will be applied to
-	if args.cl_train != 'all' and args.apply != 'none':
+	if args.cl_train != 'all' and '' not in args.apply:
 		apply_unk = True
 		# if apply to all, select all instances with a class not in args.cl_train
 		if args.apply == 'all':
