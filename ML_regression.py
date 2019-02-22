@@ -1,176 +1,135 @@
-"""
-PURPOSE:
-Machine learning regression implemented in sci-kit learn. 
-
-To access pandas, numpy, and sklearn packages on MSU HPCC first run:
-export PATH=/mnt/home/azodichr/miniconda3/bin:$PATH
-
-INPUTS:
-	
-	REQUIRED:
-	-df       Feature & class dataframe for ML
-	-alg      Available: RF, SVM (linear), SVMpoly, SVMrbf, GB, and Logistic Regression (LogReg)
-	
-	OPTIONAL:
-	-y_name 	Name of the column to predict (Default = Y)
-	-apply	  String in Y column that indicates unknown values you want to predict. (Default = None)
-	-sep      Set seperator for input data (Default = '\t')
-	-ho       File with list of intances to holdout from feature selection
-	-gs       T/F if grid search over parameter space is desired. (Default = True)
-	-normX		T/F to normalize the features (Default = F (except T for SVM))
-	-drop_na  T/F to drop rows with NAs
-	-cv       # of cross-validation folds. (Default = 10)
-	-cv_set  	File with cv folds defined
-	-n/-b			# of times CV predictions are run (Default = 100)
-	-p        # of processors. (Default = 1, max for HPCC = 14)
-	-tag      String for SAVE name and TAG column in RESULTS.txt output.
-	-feat     Import file with subset of features to use. If invoked,-tag arg is recommended. Default: keep all features.
-	-Y        String for column with what you are trying to predict. Default = Y
-	-save     Adjust save name prefix. Default = [df]_[alg]_[tag (if used)].
-							CAUTION: will overwrite!
-	-short    Set to True to output only the median and std dev of prediction scores, default = full prediction scores
-	-gs_full 	T/F Output full results from the grid search. (Default = F)
-	-gs_reps  Number of replicates of the grid search (Default = 10)
-	-gs_type  Full grid search or randomized search (Default = full, alt = random)
-	-df2      File with class information. Use only if df contains the features but not the Y values 
-							* Need to specifiy what column in df2 is y using -y_name 
-	
-	PLOT OPTIONS:
-	-plots    T/F Output a regression plot showing true vs. predicted Y
-
-
-OUTPUT:
-	-SAVE_imp           Importance scores for each feature
-	-SAVE_GridSearch    Results from parameter sweep sorted by F1
-	-SAVE_scores		    Mean predicted Y value & individual predictions from each -n
-	-SAVE_results		    Detailed results from each model 
-	-RESULTS.txt     		Accumulates results from all ML runs done in a specific folder - use unique save names! XX = RF or SVC
-
-"""
-
-import sys, os
+import sys, os, argparse, time
 import pandas as pd
 import numpy as np
 from datetime import datetime
-import time
 import ML_functions as ML
-
 start_total_time = time.time()
-def main():
-	
-	# Default code parameters
-	n, FEAT, n_jobs, Y_col, plots, cv_num, TAG, SAVE, short_scores, OUTPUT_LOC = 100, 'all', 1, 'Y', 'False', 10, '', '', '', ''
-	y_name, SEP, DF2, df_unknowns, apply_model , normX, normY, cv_reps, cv_sets = 'Y', '\t', 'None', 'none','None', 'F', 'F', 10, 'none'
-	drop_na, ho = 'f', ''
-	
-	# Default parameters for Grid search
-	GS, gs_score, GS_REPS, GS_TYPE, gs_full = 't', 'neg_mean_squared_error', 10, 'full', 'f'
-	
-	# Default Random Forest and GB parameters
-	n_estimators, max_depth, max_features, learning_rate = 500, 5, "sqrt", 1.0
-	
-	# Default Linear SVC parameters
-	kernel, C, degree, gamma, loss, max_iter = 'rbf', 0.01, 2, 0.00001, 'hinge', "500"
-	
-	# Default Logistic Regression paramemter
-	penalty, C, intercept_scaling = 'l2', 1.0, 1.0
-	
-	for i in range (1,len(sys.argv),2):
-		if sys.argv[i].lower() == "-df":
-			DF = sys.argv[i+1]
-		elif sys.argv[i].lower() == "-df2":
-			DF2 = sys.argv[i+1]
-		elif sys.argv[i].lower() == "-y_name":
-			y_name = sys.argv[i+1]
-		elif sys.argv[i].lower() == "-sep":
-			SEP = sys.argv[i+1]
-		elif sys.argv[i].lower() == '-save':
-			SAVE = sys.argv[i+1]
-		elif sys.argv[i].lower() == '-feat':
-			FEAT = sys.argv[i+1]
-		elif sys.argv[i].lower() == "-gs":
-			GS = sys.argv[i+1]
-		elif sys.argv[i].lower() == "-gs_reps":
-			GS_REPS = int(sys.argv[i+1])
-		elif sys.argv[i].lower() == "-gs_type":
-			GS_TYPE = sys.argv[i+1]
-		elif sys.argv[i].lower() == "-gs_full":
-			gs_full = sys.argv[i+1]
-		elif sys.argv[i].lower() == '-normx':
-			normX = sys.argv[i+1]
-		elif sys.argv[i].lower() == "-gs_score":
-			gs_score = sys.argv[i+1]
-		elif sys.argv[i].lower() == "-Y":
-			Y = sys.argv[i+1]
-		elif sys.argv[i].lower() == "-apply":
-			apply_model = sys.argv[i+1]
-		elif sys.argv[i].lower() == "-b" or sys.argv[i].lower() == "-n":
-			cv_reps = int(sys.argv[i+1])
-		elif sys.argv[i].lower() == "-drop_na":
-			drop_na = sys.argv[i+1]
-		if sys.argv[i].lower() == '-ho':
-			ho = sys.argv[i+1]
-		elif sys.argv[i].lower() == "-alg":
-			ALG = sys.argv[i+1]
-		elif sys.argv[i].lower() == "-cv":
-			cv_num = int(sys.argv[i+1])
-		elif sys.argv[i].lower() == "-cv_set":
-			cv_sets = pd.read_csv(sys.argv[i+1], index_col = 0)
-			cv_reps = len(cv_sets.columns)
-			cv_num = len(cv_sets.iloc[:,0].unique())
-		elif sys.argv[i].lower() == "-plots":
-			plots = sys.argv[i+1]
-		elif sys.argv[i].lower() == "-tag":
-			TAG = sys.argv[i+1]
-		elif sys.argv[i].lower() == "-out":
-			OUTPUT_LOC = sys.argv[i+1]
-		elif sys.argv[i].lower() == "-max_depth":
-			max_depth = int(sys.argv[i+1])
-		elif sys.argv[i].lower() == "-lr":
-			learning_rate = float(sys.argv[i+1])
-		elif sys.argv[i].lower() == "-max_features":
-			try:
-				max_features = float(sys.argv[i+1])
-			except:
-				max_features = sys.argv[i+1]
-		elif sys.argv[i].lower() == "-n_jobs" or sys.argv[i] == "-p":
-			n_jobs = int(sys.argv[i+1])
-		elif sys.argv[i].lower() == "-short":
-			scores_len = sys.argv[i+1]
-			if scores_len.lower() == "true" or scores_len.lower() == "t":
-				short_scores = True
 
-	if len(sys.argv) <= 1:
-		print(__doc__)
-		exit()
+def main():
+
+		########################
+	### Parse Input Args ###
+	########################
+	parser = argparse.ArgumentParser(
+		description='Machine learning regression pipeline using tools from Scikit-Learn. \
+			See README.md for more information about the pipeline and preprocessing/post-analysis tools \
+			available. All required packages \
+			are available on MSUs HPCC: "export PATH=/mnt/home/azodichr/miniconda3/bin:$PATH"',
+		epilog='https://github.com/ShiuLab')
+	
+	
+	### Input arguments ###
+	# Required
+	req_group = parser.add_argument_group(title='REQUIRED INPUT')
+	req_group.add_argument('-df', help='Feature & class dataframe for ML, (example: example_binary.txt) ', required=True)
+	req_group.add_argument('-alg', help='ML Algorithm to run (RF, SVM, SVMpoly, SVMrbf, GB, LogReg))', required=True)
+	# Optional
+	inp_group = parser.add_argument_group(title='OPTIONAL INPUT')
+	inp_group.add_argument('-df2', help='Class data (if not in -df). Need to provide -y_name', default='')
+	inp_group.add_argument('-sep', help='Deliminator', default='\t')
+	inp_group.add_argument('-y_name', help='Name of column in Y_file to predict', default='Y')
+	inp_group.add_argument('-ho', help='File with testing (i.e. holdout) lines', default='')
+	inp_group.add_argument('-feat', help='File with list of features (from x) to include', default='all')
+	
+	# Model behavior 
+	pipln_group = parser.add_argument_group(title='CONTROL PIPELINE BEHAVIOR')
+	pipln_group.add_argument('-apply', help='List of non-training class labels that the models should be applied to (all or comma sep list)', default='')
+	pipln_group.add_argument('-n_jobs', '-p', help='Number of processors for parallel computing (max for HPCC = 14)', type=int, default=1)
+	pipln_group.add_argument('-n', '-b', help='Number of replicates (unique balanced datasets).', type=int, default=100)
+	pipln_group.add_argument('-threshold_test', help='Metric used to define prediction score threshold for classification (F1 or accuracy)).', default='F1')
+	pipln_group.add_argument('-norm', help='t/f to normalize Y values', default='f')
+	pipln_group.add_argument('-x_norm', help='t/f to normalize features (default to T for SVM based algs unless "force_false")', default='f')
+	pipln_group.add_argument('-y_norm', help='t/f to normalize Y)', default='f')
+	pipln_group.add_argument('-drop_na', help='t/f to drop rows with NAs', default='f')
+	pipln_group.add_argument('-cv_num', '-cv', help='Cross validation fold #', type=int, default=10)
+	pipln_group.add_argument('-cv_sets', help='File with defined cross validation folds', default='none')
+
+	# Grid Search Method
+	gs_group = parser.add_argument_group(title='CONTROL GRID SEARCH BEHAVIOR')
+	gs_group.add_argument('-gs', help='t/f if grid search over parameter space is desired.', type=str, default='t')
+	gs_group.add_argument('-gs_reps', '-gs_n', help='Number of Grid Search Reps (will append results if SAVE_GridSearch.csv exists)', type=int, default=10)
+	gs_group.add_argument('-gs_score', help='Metric used to select best parameters', type=str, default='neg_mean_squared_error')
+	gs_group.add_argument('-gs_type', help='Full grid search or randomized search (full/random)', type=str, default='full')
+	gs_group.add_argument('-gs_full', help='t/f Output full results from the grid search', type=str, default='f')
+
+	# Output arguments
+	out_group = parser.add_argument_group(title='OUTPUT OPTIONS')
+	out_group.add_argument('-save', help='prefix for output files. CAUTION: will overwrite!', default='')
+	out_group.add_argument('-tag', help='Identifier string to add to RESULTS output line', default='')
+	out_group.add_argument('-out_loc', help='Path to where output files are saved. Default to cwd.', default='')
+	out_group.add_argument('-plots', help='t/f Output ROC and PR curve plots for each model (see ML_plots.py to post-plot', default='f')
+	out_group.add_argument('-short', help='Set to T to output only summary prediction scores', default='f')
+
+	# Default Hyperparameters
+	params_group = parser.add_argument_group(title='DEFINE HYPERPARAMETERS')
+	params_group.add_argument('-n_estimators', help='RF/GB parameter.', type=int, default=500)
+	params_group.add_argument('-max_depth', help='RF/GB parameter. Grid Search [3, 5, 10]', type=int, default=5)
+	params_group.add_argument('-max_features', help='RF/GB parameter. Grid Search [0.1, 0.25, 0.5, 0.75, sqrt, log2, None]', default='sqrt')
+	params_group.add_argument('-lr','-learning_rate', help='GB parameter. Grid Search [0.001, 0.01, 0.1, 0.5, 1]', type=float, default=0.1)
+	params_group.add_argument('-kernel', help='SVM parameter - not in grid search use -alg SVM, SVMrbf, or SVMpoly', default='poly')
+	params_group.add_argument('-C', help='SVM/LogReg parameter. Grid Search [0.001, 0.01, 0.1, 0.5, 1, 10, 50]', type=float, default=0.1)
+	params_group.add_argument('-gamma', help='SVMrbf/SVMpoly parameter. Grid Search [np.logspace(-5,1,7)]', type=float, default=0.1)
+	params_group.add_argument('-degree', help='SVMpoly parameter. Grid Search [2,3,4]', type=int, default=2)
+	params_group.add_argument('-penalty', help='LogReg parameter. Grid Search [2,3,4]', default='l2')
+	params_group.add_argument('-intercept_scaling', help='LogReg parameter. Grid Search [0.1, 0.5, 1, 2, 5, 10]', type=float, default=1.0)
+
+	if len(sys.argv)==1:
+		parser.print_help()
+		sys.exit(0)
+	args = parser.parse_args()
+
+	# Complex transformations of input parameters
+	df_unknowns = 'none'
+	if args.apply != '':
+		if ',' in args.apply:
+			args.apply = args.apply.split(',')
+		else:
+			args.apply = [args.apply]
+
+	if args.cv_sets != 'none':
+			args.cv_sets = pd.read_csv(args.cv_sets, index_col = 0)
+			args.cv_reps = len(args.cv_sets.columns)
+			args.cv_num = len(args.cv_sets.iloc[:,0].unique())
+
+	try:
+		args.max_features = float(args.max_features)
+	except:
+		args.max_features =args.max_features
+
+
 	
 	####### Load Dataframe & Pre-process #######
 	
-	df = pd.read_csv(DF, sep=SEP, index_col = 0)
+	df = pd.read_csv(args.df, sep=args.sep, index_col = 0)
 	
 	# If features  and class info are in separate files, merge them: 
-	if DF2 != 'None':
+	if args.df2 != 'None':
 		start_dim = df.shape
-		df_class = pd.read_csv(DF2, sep=SEP, index_col = 0)
-		df = pd.concat([df_class[y_name], df], axis=1, join='inner')
+		df_class = pd.read_csv(args.df2, sep=args.sep, index_col = 0)
+		df = pd.concat([df_class[args.y_name], df], axis=1, join='inner')
 		print('Merging the feature & class dataframes changed the dimensions from %s to %s (instance, features).' 
 			% (str(start_dim), str(df.shape)))
 
 	# Specify Y column - default = Class
-	if y_name != 'Y':
-		df = df.rename(columns = {y_name:'Y'})
+	if args.y_name != 'Y':
+		df = df.rename(columns = {args.y_name:'Y'})
+	if args.y_norm in ['t', 'true']:
+		print('Normalizing Y...')
+		mean = df['Y'].mean(axis=0)
+		std = df['Y'].std(axis=0)
+		df['Y'] = (df['Y'] - mean) / std
 
 	# Filter out features not in feat file given - default: keep all
-	if FEAT != 'all':
-		print('Using subset of features from: %s' % FEAT)
-		with open(FEAT) as f:
+	if args.feat != 'all':
+		print('Using subset of features from: %s' % args.feat)
+		with open(args.feat) as f:
 			features = f.read().strip().splitlines()
 			features = ['Y'] + features
 		df = df.loc[:,features]
 
 	# Check for Nas
 	if df.isnull().values.any() == True:
-		if drop_na.lower() == 't' or drop_na.lower() == 'true':
+		if args.drop_na.lower() in ['t', 'true']:
 			start_dim = df.shape
 			df = df.dropna(axis=0)
 			print('Dropping rows with NA values changed the dimensions from %s to %s.' 
@@ -180,9 +139,20 @@ def main():
 			print('There are Na values in your dataframe.\n Impute them or add -drop_na True to remove rows with nas')
 			quit()
 
+	# Normalize feature data (x_norm)
+	if args.alg.lower() in ["svm", "svmpoly", "svmrbf"] or args.norm.lower() in ['t','true']:
+		if args.norm.lower != 'force_false':
+			from sklearn import preprocessing
+			y = df['Y']
+			X = df.drop(['Y'], axis=1)
+			min_max_scaler = preprocessing.MinMaxScaler()
+			X_scaled = min_max_scaler.fit_transform(X)
+			df = pd.DataFrame(X_scaled, columns = X.columns, index = X.index)
+			df.insert(loc=0, column = 'Y', value = y)
+
 	# Set up dataframe of unknown instances that the final models will be applied to and drop unknowns from df for model building
-	if apply_model != 'None':
-		df_unknowns = df[(df['Y']==apply_model)]
+	if args.apply != '':
+		df_unknowns = df[(df['Y']==args.apply)]
 		predictions = pd.DataFrame(data=df['Y'], index=df.index, columns=['Y'])
 		df = df.drop(df_unknowns.index.values)
 		print("Model built using %i instances and applied to %i unknown instances (see _scores file for results)" % (len(df.index), len(df_unknowns.index)))
@@ -194,10 +164,10 @@ def main():
 	df['Y'] = pd.to_numeric(df['Y'], errors = 'raise')
 
 	# Set up dataframe of holdout instances that the final models will be applied to
-	if ho !='':
+	if args.ho !='':
 		df_all = df.copy()
 		print('Removing holdout instances to apply model on later...')
-		with open(ho) as ho_file:
+		with open(args.ho) as ho_file:
 			ho_instances = ho_file.read().splitlines()
 		try:
 			ho_df = df.loc[ho_instances, :]
@@ -212,27 +182,19 @@ def main():
 	
 
 
-	if SAVE == "":
-		if TAG == "":
-			if OUTPUT_LOC == "":
-				SAVE = DF + "_" + ALG
+	if args.save == "":
+		if args.tag == "":
+			if args.out_loc == "":
+				args.save = args.df + "_" + args.alg
 			else:
-				SAVE = OUTPUT_LOC + '/' + DF + "_" + ALG
+				args.save = args.out_loc + '/' + args.df + "_" + args.alg
 		else:
-			if OUTPUT_LOC == "":
-				SAVE = DF + "_" + ALG + "_" + TAG
+			if args.out_loc == "":
+				args.save = args.df + "_" + args.alg + "_" + args.tag
 			else:
-				SAVE = OUTPUT_LOC + '/' + DF + "_" + ALG + "_" + TAG
+				args.save = args.out_loc + '/' + args.df + "_" + args.alg + "_" + args.tag
 	
-	# Normalize feature data (normX)
-	if ALG == "SVM" or normX == 't' or normX == 'true':
-		from sklearn import preprocessing
-		y = df['Y']
-		X = df.drop(['Y'], axis=1)
-		min_max_scaler = preprocessing.MinMaxScaler()
-		X_scaled = min_max_scaler.fit_transform(X)
-		df = pd.DataFrame(X_scaled, columns = X.columns, index = X.index)
-		df.insert(loc=0, column = 'Y', value = y)
+
 
 		
 	print("Snapshot of data being used:")
@@ -242,36 +204,36 @@ def main():
 	
 	####### Run parameter sweep using a grid search #######
 	
-	if GS.lower() == 'true' or GS.lower() == 't':
+	if args.gs.lower() in ['true','t']:
 		start_time = time.time()
 		print("\n\n===>  Grid search started  <===") 
 		
-		params2use, param_names = ML.fun.RegGridSearch(df, SAVE, ALG, gs_score, n, cv_num, n_jobs, GS_REPS, GS_TYPE, gs_full)
+		params2use, param_names = ML.fun.RegGridSearch(df, args.save, args.alg, args.gs_score, args.n, args.cv_num, args.n_jobs, args.gs_reps, args.gs_type, args.gs_full)
 		
 		# Print results from grid search
-		if ALG.lower() == 'rf':
-			max_depth, max_features = params2use
-			print("Parameters selected: max_depth=%s, max_features=%s" % (str(max_depth), str(max_features)))
+		if args.alg.lower() == 'rf':
+			args.max_depth, args.max_features = params2use
+			print("Parameters selected: max_depth=%s, max_features=%s" % (str(args.max_depth), str(args.max_features)))
 	
-		elif ALG.lower() == 'svm':
+		elif args.alg.lower() == 'svm':
 			C = params2use
 			print("Parameters selected: Kernel=Linear, C=%s" % (str(C)))
 		
-		elif ALG.lower() == "svmpoly":
+		elif args.alg.lower() == "svmpoly":
 			C, degree, gamma, kernel = params2use
 			print("Parameters selected: Kernel=%s, C=%s, degree=%s, gamma=%s" % (str(kernel), str(C), str(degree), str(gamma)))
 		
-		elif ALG.lower() == "svmrbf":
+		elif args.alg.lower() == "svmrbf":
 			C, gamma, kernel = params2use
 			print("Parameters selected: Kernel=%s, C=%s, gamma=%s" % (str(kernel), str(C), str(gamma)))
 		
-		elif ALG.lower() == "logreg":
+		elif args.alg.lower() == "logreg":
 			C, intercept_scaling, penalty = params2use
 			print("Parameters selected: penalty=%s, C=%s, intercept_scaling=%s" % (str(penalty), str(C), str(intercept_scaling)))
 
-		elif ALG.lower() == "gb":
-			learning_rate, max_depth, max_features = params2use
-			print("Parameters selected: learning rate=%s, max_features=%s, max_depth=%s" % (str(learning_rate), str(max_features), str(max_depth)))
+		elif args.alg.lower() == "gb":
+			args.lr, args.max_depth, args.max_features = params2use
+			print("Parameters selected: learning rate=%s, max_features=%s, max_depth=%s" % (str(args.lr), str(args.max_features), str(args.max_depth)))
 	
 		print("Grid search complete. Time: %f seconds" % (time.time() - start_time))
 	
@@ -291,31 +253,31 @@ def main():
 
 
 		
-	for j in range(0,cv_reps): 
-		print("Running %i of %i" % (j+1, cv_reps))
+	for j in range(0,args.n): 
+		print("Running %i of %i" % (j+1, args.n))
 		rep_name = "rep_" + str(j+1)
 		
 		# Prime regressor object based on chosen algorithm
-		if ALG.lower() == "rf":
-			reg = ML.fun.DefineReg_RandomForest(n_estimators,max_depth,max_features,n_jobs,j)
-		elif ALG.lower() == "svm":
+		if args.alg.lower() == "rf":
+			reg = ML.fun.DefineReg_RandomForest(args.n_estimators,args.max_depth,args.max_features,args.n_jobs,j)
+		elif args.alg.lower() == "svm":
 			reg =  ML.fun.DefineReg_LinearSVM(C,j)
-		elif ALG.lower() == 'svmrbf' or ALG.lower() == 'svmpoly':
+		elif args.alg.lower() in ['svmrbf','svmpoly']:
 			reg = ML.fun.DefineReg_SVM(kernel,C,degree,gamma,j)
-		elif ALG.lower() == "gb":
-			reg = ML.fun.DefineReg_GB(learning_rate,max_features,max_depth,n_jobs,j)
-		elif ALG.lower() == "logreg":
+		elif args.alg.lower() == "gb":
+			reg = ML.fun.DefineReg_GB(args.n_estimators, args.lr,args.max_features,args.max_depth,args.n_jobs,j)
+		elif args.alg.lower() == "logreg":
 			reg = ML.fun.DefineReg_LinReg()
 		else:
 			print('Algorithm not available...')
 			quit()
 
 		# Run ML algorithm.
-		if ho != '':
-			result,cv_pred,importance,result_ho = ML.fun.Run_Regression_Model(df, reg, cv_num, ALG, df_unknowns, ho_df, cv_sets, j)
+		if args.ho != '':
+			result,cv_pred,importance,result_ho = ML.fun.Run_Regression_Model(df, reg, args.cv_num, args.alg, df_unknowns, ho_df, args.cv_sets, j)
 			results_ho.append(result_ho)
 		else:
-			result,cv_pred,importance = ML.fun.Run_Regression_Model(df, reg, cv_num, ALG, df_unknowns, ho_df, cv_sets, j)
+			result,cv_pred,importance = ML.fun.Run_Regression_Model(df, reg, args.cv_num, args.alg, df_unknowns, ho_df, args.cv_sets, j)
 		
 		results.append(result)
 		predictions[rep_name] = cv_pred
@@ -348,7 +310,7 @@ def main():
 	PCC_stats = [np.mean(cors), np.std(cors), np.std(cors)/np.sqrt(len(cors))]
 
 	# Get scores from hold out validation set:
-	if ho != '':
+	if args.ho != '':
 		mses_ho, evss_ho, r2s_ho, cors_ho = [], [], [], []
 		for r in results_ho:
 			mses_ho.append(r[0])
@@ -370,22 +332,22 @@ def main():
 	predictions.insert(loc=1, column = 'Mean', value = predictions[pred_columns].mean(axis=1))
 	predictions.insert(loc=2, column = 'stdev', value = predictions[pred_columns].std(axis=1))
 
-	scores_file = SAVE + "_scores.txt"
-	if short_scores == True:
+	scores_file = args.save + "_scores.txt"
+	if args.short in ['t','true']:
 			predictions.to_csv(scores_file, sep='\t', columns=['Y','Mean','stdev'])
 	else:
 		predictions.to_csv(scores_file, sep='\t')
 
 	# Plot results
-	if plots.lower() == 'true' or plots.lower() == 't':
+	if args.plots.lower() in ['true','t']:
 		print("\nGenerating prediction plot")
-		pr = ML.fun.PlotsReg(predictions, SAVE)
+		pr = ML.fun.PlotsReg(predictions, args.save)
 		
 	# Export importance scores
 	try:
 		imp['mean_imp'] = imp.mean(axis=1)
 		imp = imp.sort_values('mean_imp', 0, ascending = False)
-		imp_out = SAVE + "_imp"
+		imp_out = args.save + "_imp"
 		imp['mean_imp'].to_csv(imp_out, sep = "\t", index=True)
 	except:
 		pass
@@ -402,7 +364,7 @@ def main():
 
 	out2 = open('RESULTS_reg.txt', 'a')
 	out2.write('%s\t%s\t%s\t%s\t%s\t%s\t%i\t%i\t%i\t%i\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' % (
-		timestamp, run_time, SAVE, TAG, y_name, ALG, len(df.index), n_features, cv_num , cv_reps, 
+		timestamp, run_time, args.save, args.tag, args.y_name, args.alg, len(df.index), n_features, args.cv_num , args.n, 
 		'\t'.join(str(x) for x in MSE_stats), '\t'.join(str(x) for x in EVS_stats), 
 		'\t'.join(str(x) for x in r2_stats), '\t'.join(str(x) for x in PCC_stats),
 		'\t'.join(str(x) for x in MSE_ho_stats), '\t'.join(str(x) for x in EVS_ho_stats), 
@@ -410,16 +372,16 @@ def main():
 
 
 	# Save detailed results file 
-	with open(SAVE + "_results.txt", 'w') as out:
+	with open(args.save + "_results.txt", 'w') as out:
 		out.write('%s\nID: %s\nTag: %s\nPredicting: %s\nAlgorithm: %s\nNumber of Instances: %s\nNumber of features: %i\n' % (
-			timestamp, SAVE, TAG, y_name, ALG, len(df.index), n_features))
-		out.write('CV folds: %i\nCV_reps: %i\nParameters used:%s\n' % (cv_num, cv_reps, params2use))
+			timestamp, args.save, args.tag, args.y_name, args.alg, len(df.index), n_features))
+		out.write('CV folds: %i\nCV_reps: %i\nParameters used:%s\n' % (args.cv_num, args.n, params2use))
 		out.write('Metric\tMean\tstd\tSE\n')
 		out.write('MSE\t%s\nEVS\t%s\nR2\t%s\nPCC\t%s\n' % (
 			'\t'.join(str(x) for x in MSE_stats), '\t'.join(str(x) for x in EVS_stats), 
 			'\t'.join(str(x) for x in r2_stats), '\t'.join(str(x) for x in PCC_stats)))
 
-		if ho != '':
+		if args.ho != '':
 			out.write('\n\nResults from the hold out validation set\n')
 			out.write('Metric\tMean\tstd\tSE\n')
 			out.write('HO MSE\t%s\nHO EVS\t%s\nHO R2\t%s\nHO PCC\t%s\n' % (
@@ -433,7 +395,7 @@ def main():
 		'\t'.join(str(x) for x in MSE_stats), '\t'.join(str(x) for x in EVS_stats), 
 		'\t'.join(str(x) for x in r2_stats), '\t'.join(str(x) for x in PCC_stats)))
 
-	if ho !='':
+	if args.ho !='':
 		print('\n\nHold Out Set Scores:\nMetric\tMean\tstd\tSE\n')
 		print('MSE\t%s\nEVS\t%s\nR2\t%s\nPCC\t%s\n' % (
 			'\t'.join(str(x) for x in MSE_ho_stats), '\t'.join(str(x) for x in EVS_ho_stats), 

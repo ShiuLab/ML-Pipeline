@@ -55,11 +55,11 @@ class fun(object):
 		### NOTE: The returned top_params will be in alphabetical order - to be consistent add any additional 
 		###       parameters to test in alphabetical order
 		if ALG.lower() == 'rf':
-			parameters = {'max_depth':[3, 5, 10], 'max_features': [0.1, 0.25, 0.5, 0.75, 'sqrt', 'log2', None], 'n_estimators': [100,500,1000]}
+			parameters = {'max_depth':[3, 5, 10], 'max_features': [0.1, 0.5, 'sqrt', 'log2', None], 'n_estimators': [100,500,1000]}
 			
 		elif ALG.lower() == "svm":
-			#parameters = {'kernel': ['linear'], 'C':[0.001, 0.01, 0.1, 0.5, 1, 10, 50]}
 			parameters = {'C':[0.001, 0.01, 0.1, 0.5, 1, 10, 50]}
+		
 		elif ALG.lower() == 'svmpoly':
 			parameters = {'kernel': ['poly'], 'C':[0.001,0.01, 0.1, 0.5, 1, 10, 50],'degree': [2,3,4], 'gamma': np.logspace(-5,1,7)}
 
@@ -70,7 +70,7 @@ class fun(object):
 			parameters = {'C': [0.001, 0.01, 0.1, 0.5, 1, 10, 50], 'intercept_scaling': [0.1, 0.5, 1, 2, 5, 10],'penalty': ['l1','l2']}	
 
 		elif ALG.lower() == 'gb':
-			parameters = {'learning_rate': [0.001, 0.01, 0.1, 0.5, 1],'max_depth': [3, 5, 10], 'max_features': [0.1, 0.25, 0.5, 0.75, 'sqrt', 'log2', None],'n_estimators': [100,500,1000]}	
+			parameters = {'learning_rate': [0.01, 0.1, 0.5, 1],'max_depth': [3, 5, 10], 'max_features': [0.1, 0.5, 'sqrt', 'log2', None],'n_estimators': [100,500,1000]}	
 
 		else:
 			print('Grid search is not available for the algorithm selected')
@@ -262,19 +262,23 @@ class fun(object):
 			n_jobs=n_jobs)
 		return reg
 
-	def DefineReg_GB(learning_rate,max_features,max_depth,n_jobs,j):
+	def DefineReg_GB(n_estimators,learning_rate,max_features,max_depth,n_jobs,j):
 		from sklearn.ensemble import GradientBoostingRegressor
-		reg = GradientBoostingRegressor(learning_rate=learning_rate,
+		reg = GradientBoostingRegressor(loss='deviance',
+			learning_rate=learning_rate,
 			max_features=max_features,
 			max_depth=max_depth,
+			n_estimators=int(n_estimators),
 			random_state=j)
 		return reg
 
-	def DefineClf_GB(learning_rate,max_features,max_depth,n_jobs,j):
+	def DefineClf_GB(n_estimators, learning_rate,max_features,max_depth,n_jobs,j):
 		from sklearn.ensemble import GradientBoostingClassifier
-		reg = GradientBoostingClassifier(learning_rate=learning_rate,
+		reg = GradientBoostingClassifier(loss='deviance',
+			learning_rate=learning_rate,
 			max_features=max_features,
 			max_depth=max_depth,
+			n_estimators=int(n_estimators),
 			random_state=j)
 		return reg
 
@@ -336,7 +340,7 @@ class fun(object):
 			clf2 = 'pass'
 
 		# Obtain the predictions using 10 fold cross validation (uses KFold cv by default):
-		cv_proba = cross_val_predict(estimator=clf, X=X, y=y, cv=cv_num, method='predict_proba')
+		cv_proba = cross_val_predict(estimator=clf, X=X, y=y, cv=int(cv_num), method='predict_proba')
 		cv_pred = cross_val_predict(estimator=clf, X=X, y=y, cv=cv_num)
 		
 		# Fit a model using all data and apply to 
