@@ -58,7 +58,7 @@ for dir in os.listdir(start_dir):
                     print(typex, "type doesn't have rank")
                 inp.close()
                 
-print(RF_dict, SVM_dict, "rank dictionaries")
+#print(RF_dict, SVM_dict, "rank dictionaries")
 
 def get_output(D, alg):
     for impfile in D:
@@ -75,11 +75,17 @@ def get_output(D, alg):
         #print(Dtmp)
         print(impfile, alg, "writing output")
         output= open(str(impfile)+"_imp_avgrank_"+str(alg)+'.txt', 'w')
+        output2= open(str(impfile)+"_imp_allranks_"+str(alg)+'.txt', 'w')
         output.write('pCRE\taverage_rank\n')
+        output2.write('pCRE\taverage_rank\tranks\n')
         for cre in Dtmp:
             ranklist= Dtmp[cre]
             avgrank= numpy.average(ranklist)
             output.write('%s\t%s\n' %(cre, avgrank))
+            output2.write('%s\t%s\t' %(cre, avgrank))
+            for r in ranklist:
+                output2.write('%s\t' %(r))
+            output2.write('\n')
         output.close()
 
 get_output(RF_dict, 'RF')
