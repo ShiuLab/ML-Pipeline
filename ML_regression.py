@@ -103,7 +103,7 @@ def main():
 	df = pd.read_csv(args.df, sep=args.sep, index_col = 0)
 	
 	# If features  and class info are in separate files, merge them: 
-	if args.df2 != 'None':
+	if args.df2 != '':
 		start_dim = df.shape
 		df_class = pd.read_csv(args.df2, sep=args.sep, index_col = 0)
 		df = pd.concat([df_class[args.y_name], df], axis=1, join='inner')
