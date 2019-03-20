@@ -5,6 +5,11 @@ from datetime import datetime
 import ML_functions as ML
 start_total_time = time.time()
 
+def warn(*args, **kwargs):
+    pass
+import warnings
+warnings.warn = warn
+
 def main():
 
 		########################
