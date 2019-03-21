@@ -587,10 +587,10 @@ def main():
 		
 		if not os.path.isfile('RESULTS.txt'):
 			out2 = open('RESULTS.txt', 'a')
-			out2.write('DateTime\tRunTime\tID\tTag\tAlg\tClasses\tFeatureNum\tBalancedSize\tCVfold\tBalancedRuns\tAUCROC\tAUCROC_sd\tAUCROC_se\t')
-			out2.write('AUCPRc\tAUCPRc_sd\tAUCPRc_se\tAc\tAc_sd\tAc_se\tF1\tF1_sd\tF1_se\tPr\tPr_sd\tPr_se\tTPR\tTPR_sd\tTPR_se\t')
-			out2.write('FPR\tFPR_sd\tFPR_se\tFNR\tFNR_sd\tFNR_se\tTP\tTP_sd\tTP_se\tTN\tTN_sd\tTN_se\tFP\tFP_sd\tFP_se\t')
-			out2.write('FN\tFN_sd\tFN_se\tPr_test\tAc_test\tF1_test\tAUCROC_test\tAUCROC_test_sd\tAUCROC_test_se\tAUCPRc_test\tAUCPRc_test_sd\tAUCPRc_test_se')
+			out2.write('DateTime\tRunTime\tID\tTag\tAlg\tClasses\tFeatureNum\tBalancedSize\tCVfold\tBalancedRuns\tAUCROC_val\tAUCROC_val_sd\tAUCROC_val_se\t')
+			out2.write('AUCPRc_val\tAUCPRc_val_sd\tAUCPRc_val_se\tAc_val\tAc_val_sd\tAc_val_se\tF1_val\tF1_val_sd\tF1_val_se\tPr_val\tPr_val_sd\tPr_val_se\tTPR_val\tTPR_val_sd\tTPR_val_se\t')
+			out2.write('FPR_val\tFPR_val_sd\tFPR_val_se\tFNR_val\tFNR_val_sd\tFNR_val_se\tTP_val\tTP_val_sd\tTP_val_se\tTN_val\tTN_val_sd\tTN_val_se\tFP_val\tFP_val_sd\tFP_val_se\t')
+			out2.write('FN_val\tFN_val_sd\tFN_val_se\tPr_test\tAc_test\tF1_test\tAUCROC_test\tAUCROC_test_sd\tAUCROC_test_se\tAUCPRc_test\tAUCPRc_test_sd\tAUCPRc_test_se')
 			out2.close()
 		out2 = open('RESULTS.txt', 'a')
 		out2.write('\n%s\t%s\t%s\t%s\t%s\t%s\t%i\t%i\t%i\t%i\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%05f\t%05f\t%05f\t%s\t%s' % (
@@ -609,8 +609,8 @@ def main():
 				timestamp, args.save, args.tag, args.alg, classes, args.apply, n_features))
 			out.write('Min class size: %i\nCV folds: %i\nNumber of balanced datasets: %i\nGrid Search Used: %s\nParameters used:%s\n' % (
 				min_size, args.cv_num, args.n, args.gs, parameters_used))
-			
 			out.write('\nPrediction threshold: %s\n'%final_threshold)
+			out.write('\n\nResults from the validation set')
 			out.write('\nMetric\tMean\tSD\tSE\n')
 			out.write('AucROC\t%s\nAucPRc\t%s\nAccuracy\t%s\nF1\t%s\nPrecision\t%s\nTPR\t%s\nFPR\t%s\nFNR\t%s\n' % (
 				'\t'.join(str(x) for x in ROC),'\t'.join(str(x) for x in PRc), '\t'.join(str(x) for x in Ac), '\t'.join(str(x) for x in F1),
@@ -621,15 +621,16 @@ def main():
 			cm_mean.to_csv(out, mode='a', sep='\t')
 			out.write('\n\nCount and percent of instances of each class (row) predicted as a class (col):\n')
 			summary_df_proba.to_csv(out, mode='a', header=True, sep='\t')
+			
 			if args.test!='':
-				out.write('\n\nResults from the the test set validation set\n')
-				out.write('test Precision\t%05f\ntest Accuracy\t%05f\ntest F1\t%05f\n' % (Pr_test, Ac_test, F1_test))
+				out.write('\n\nResults from the test set\n')
+				out.write('test precision\t%05f\ntest accuracy\t%05f\ntest F1\t%05f\n' % (Pr_test, Ac_test, F1_test))
 				out.write('test AucROC\t%s\ntest AucPRc\t%s\n' % ('\t'.join(str(x) for x in ROC_test), '\t'.join(str(x) for x in PRc_test)))
 
 
 
 		print("\n\n===>  ML Results  <===")
-		print("Testing Set Scores\nAccuracy: %03f (+/- stdev %03f)\nF1: %03f (+/- stdev %03f)\nAUC-ROC: %03f (+/- stdev %03f)\nAUC-PRC: %03f (+/- stdev %03f)" % (
+		print("\nValidation Set Scores\nAccuracy: %03f (+/- stdev %03f)\nF1: %03f (+/- stdev %03f)\nAUC-ROC: %03f (+/- stdev %03f)\nAUC-PRC: %03f (+/- stdev %03f)" % (
 			Ac[0], Ac[1], F1[0], F1[1], ROC[0], ROC[1], PRc[0], PRc[1]))
 		if args.test!='':
 			print('\n\nTest Set Scores:\nPrecision: %03f\nAccuracy: %03f\nF1: %03f\nAUC-ROC: %03f (+/- stdev %03f)\nAUC-PRC: %03f (+/- stdev %03f)' % (
