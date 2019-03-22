@@ -19,7 +19,10 @@ from collections import OrderedDict
 from cycler import cycler
 plt.switch_backend('agg')
 from sklearn.metrics import roc_curve, auc, confusion_matrix
-
+def warn(*args, **kwargs):
+    pass
+import warnings
+warnings.warn = warn
 # 
 if len(sys.argv) <= 1:
   print(__doc__)
