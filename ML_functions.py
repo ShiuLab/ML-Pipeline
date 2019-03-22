@@ -323,7 +323,7 @@ class fun(object):
 		return reg
 
 	
-	def BuildModel_Apply_Performance(df, clf, cv_num, df_notSel, apply_unk, df_unknowns, ho_df, classes, POS, NEG, j, ALG, THRSHD_test):
+	def BuildModel_Apply_Performance(df, clf, cv_num, df_notSel, apply_unk, df_unknowns, test_df, classes, POS, NEG, j, ALG, THRSHD_test):
 		from sklearn.model_selection import cross_val_predict
 		
 		# Data from balanced dataframe
@@ -346,16 +346,16 @@ class fun(object):
 		# Fit a model using all data and apply to 
 		# (1) instances that were not selected using cl_train
 		# (2) instances with unknown class
-		# (3) holdout instances
+		# (3) test instances
 
 		clf.fit(X,y)
 
 		notSel_proba = clf.predict_proba(df_notSel.drop(['Class'], axis=1))
 		if apply_unk == True:
 			unk_proba = clf.predict_proba(df_unknowns.drop(['Class'], axis=1))
-		if not isinstance(ho_df, str):
-			ho_proba = clf.predict_proba(ho_df.drop(['Class'], axis=1))
-			ho_pred = clf.predict(ho_df.drop(['Class'], axis=1))
+		if not isinstance(test_df, str):
+			test_proba = clf.predict_proba(test_df.drop(['Class'], axis=1))
+			test_pred = clf.predict(test_df.drop(['Class'], axis=1))
 
 		# Evaluate performance
 		if len(classes) == 2:
@@ -379,11 +379,11 @@ class fun(object):
 			if apply_unk == True:
 				df_unk_scores = pd.DataFrame(data=unk_proba[:,POS_IND],index=df_unknowns.index,columns=score_columns)
 				current_scores =  pd.concat([current_scores,df_unk_scores], axis = 0)
-			if not isinstance(ho_df, str):
-				df_ho_scores = pd.DataFrame(data=ho_proba[:,POS_IND],index=ho_df.index,columns=score_columns)
-				current_scores =  pd.concat([current_scores,df_ho_scores], axis = 0)
-				scores_ho = ho_proba[:,POS_IND]
-				result_ho = fun.Performance(ho_df['Class'], ho_pred, scores_ho, clf, clf2, classes, POS, POS_IND, NEG, ALG, THRSHD_test)
+			if not isinstance(test_df, str):
+				df_test_scores = pd.DataFrame(data=test_proba[:,POS_IND],index=test_df.index,columns=score_columns)
+				current_scores =  pd.concat([current_scores,df_test_scores], axis = 0)
+				scores_test = test_proba[:,POS_IND]
+				result_test = fun.Performance(test_df['Class'], test_pred, scores_test, clf, clf2, classes, POS, POS_IND, NEG, ALG, THRSHD_test)
 
 		else:
 			# Generate run statistics from balanced dataset scores
@@ -400,17 +400,17 @@ class fun(object):
 			if apply_unk == True:
 				df_unk_scores = pd.DataFrame(data=unk_proba,index=df_unknowns.index,columns=score_columns)
 				current_scores =  pd.concat([current_scores,df_unk_scores], axis = 0)
-			if not isinstance(ho_df, str):
-				df_ho_scores = pd.DataFrame(data=ho_proba,index=ho_df.index,columns=score_columns)
-				current_scores =  pd.concat([current_scores,df_ho_scores], axis = 0)
-				result_ho = fun.Performance_MC(ho_df['Class'], ho_pred, classes)
+			if not isinstance(test_df, str):
+				df_test_scores = pd.DataFrame(data=test_proba,index=test_df.index,columns=score_columns)
+				current_scores =  pd.concat([current_scores,df_test_scores], axis = 0)
+				result_test = fun.Performance_MC(test_df['Class'], test_pred, classes)
 		
-		if not isinstance(ho_df, str):
-			return result,current_scores,result_ho
+		if not isinstance(test_df, str):
+			return result,current_scores,result_test
 		else:
 			return result,current_scores
 
-	def Run_Regression_Model(df, reg, cv_num, ALG, df_unknowns, ho_df, cv_sets, j):
+	def Run_Regression_Model(df, reg, cv_num, ALG, df_unknowns, test_df, cv_sets, j):
 		from sklearn.model_selection import cross_val_predict
 		from sklearn.metrics.scorer import make_scorer
 		from sklearn.metrics import mean_squared_error, r2_score, explained_variance_score
@@ -445,18 +445,18 @@ class fun(object):
 			unk_pred_df = pd.DataFrame(data=unk_pred, index=df_unknowns.index, columns=['pred'])
 			cv_pred_df = cv_pred_df.append(unk_pred_df)
 
-		if not isinstance(ho_df, str):
-			ho_y = ho_df['Y']
-			ho_pred = reg.predict(ho_df.drop(['Y'], axis=1))
-			ho_pred_df = pd.DataFrame(data=ho_pred, index=ho_df.index, columns=['pred'])
-			cv_pred_df = cv_pred_df.append(ho_pred_df)
+		if not isinstance(test_df, str):
+			test_y = test_df['Y']
+			test_pred = reg.predict(test_df.drop(['Y'], axis=1))
+			test_pred_df = pd.DataFrame(data=test_pred, index=test_df.index, columns=['pred'])
+			cv_pred_df = cv_pred_df.append(test_pred_df)
 
 			# Get performance stats
-			mse_ho = mean_squared_error(ho_y, ho_pred)
-			evs_ho = explained_variance_score(ho_y, ho_pred)
-			r2_ho = r2_score(ho_y, ho_pred)
-			cor_ho = np.corrcoef(np.array(ho_y), ho_pred)
-			result_ho = [mse_ho, evs_ho, r2_ho, cor_ho[0,1]]
+			mse_test = mean_squared_error(test_y, test_pred)
+			evs_test = explained_variance_score(test_y, test_pred)
+			r2_test = r2_score(test_y, test_pred)
+			cor_test = np.corrcoef(np.array(test_y), test_pred)
+			result_test = [mse_test, evs_test, r2_test, cor_test[0,1]]
 			
 		# Try to extract importance scores 
 		try:
@@ -468,8 +468,8 @@ class fun(object):
 				importances = "na"
 				print("Cannot get importance scores")
 		
-		if not isinstance(ho_df, str):
-			return result, cv_pred_df, importances, result_ho
+		if not isinstance(test_df, str):
+			return result, cv_pred_df, importances, result_test
 		else:
 			return result, cv_pred_df, importances
 
@@ -536,7 +536,7 @@ class fun(object):
 		return {'cm':cm, 'accuracy':accuracy,'macro_f1':macro_f1,'f1_MC':f1}
 
 
-	def Model_Performance_Thresh(df_proba, final_threshold, balanced_ids, POS, NEG, ho_instances):
+	def Model_Performance_Thresh(df_proba, final_threshold, balanced_ids, POS, NEG, test_instances):
 		
 		from sklearn.metrics import f1_score, confusion_matrix
 		
@@ -549,9 +549,9 @@ class fun(object):
 			df_proba_thresh[proba_column] = np.where(df_proba_thresh[proba_column] > final_threshold, POS,NEG)
 		balanced_count = 0
 
-		if ho_instances != 'None':
-			df_proba_thresh_ho = df_proba_thresh.loc[ho_instances, :]
-			df_proba_thresh = df_proba_thresh.drop(ho_instances)
+		if test_instances != 'None':
+			df_proba_thresh_test = df_proba_thresh.loc[test_instances, :]
+			df_proba_thresh = df_proba_thresh.drop(test_instances)
 
 
 		# Get predictions scores from the balanced runs using the final threshold
@@ -588,15 +588,15 @@ class fun(object):
 		Accuracy = [np.mean(Accuracy), np.std(Accuracy), np.std(Accuracy)/denominator]
 		F1 = [np.mean(F1), np.std(F1), np.std(F1)/denominator]
 
-		if ho_instances != 'None':
-			y_ho = df_proba_thresh_ho['Class']
-			yhat_ho = df_proba_thresh_ho.filter(regex='Predicted_')
-			matrix_ho = confusion_matrix(y_ho, yhat_ho, labels = [POS,NEG])
-			TP_ho, FP_ho, TN_ho, FN_ho = matrix[0,0], matrix[1,0], matrix[1,1], matrix[0,1]
-			Precision_ho = TP_ho/(TP_ho+FP_ho)
-			Accuracy_ho = (TP_ho + TN_ho)/ (TP_ho + TN_ho + FP_ho + FN_ho)
-			F1_ho = (2*TP_ho)/((2*TP_ho) + FP_ho + FN_ho)
-			return TP,TN,FP,FN,TPR,FPR,FNR,Precision,Accuracy,F1,Precision_ho,Accuracy_ho,F1_ho
+		if test_instances != 'None':
+			y_test = df_proba_thresh_test['Class']
+			yhat_test = df_proba_thresh_test.filter(regex='Predicted_')
+			matrix_test = confusion_matrix(y_test, yhat_test, labels = [POS,NEG])
+			TP_test, FP_test, TN_test, FN_test = matrix[0,0], matrix[1,0], matrix[1,1], matrix[0,1]
+			Precision_test = TP_test/(TP_test+FP_test)
+			Accuracy_test = (TP_test + TN_test)/ (TP_test + TN_test + FP_test + FN_test)
+			F1_test = (2*TP_test)/((2*TP_test) + FP_test + FN_test)
+			return TP,TN,FP,FN,TPR,FPR,FNR,Precision,Accuracy,F1,Precision_test,Accuracy_test,F1_test
 		
 		else:
 			return TP,TN,FP,FN,TPR,FPR,FNR,Precision,Accuracy,F1
