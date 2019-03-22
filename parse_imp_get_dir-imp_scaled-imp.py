@@ -212,12 +212,37 @@ def normalize_values(lista):
         #print(newlist)
         return(newlist)
 
+def get_percentrank(lista):
+    newlist=[]
+    data= lista
+    datafl=[]
+    datafl = data[np.logical_not(pd.isnull(data))] # remove NA's to get floats and min/max
+    if len(datafl) > 0: #check list is not empty
+        l= len(datafl)
+        datafl=np.array(datafl, dtype=np.float32) #convert to float in numpy
+        for i in data: #have to go back to original data because have removed NAs which can be placeholders
+                    if i != np.nan:
+                        percent= (float(i))/(float(l))
+                        newlist.append(float(percent))
+                    else:
+                        newlist.append(np.nan)
+            #print(newlist)
+        return(newlist)
+
+    else: #replace with NAs if all NAs
+        for i in data:
+            newlist.append(np.nan)
+        #print(newlist)
+        return(newlist)
+
 def get_scale(df, alg):
     # get importance score
     df2= df.loc[:,'imp_score']
     #take absolute value
     df2= pd.DataFrame(df2.abs())
-    #print(df2)
+    #get rank
+    dfrank= df2.rank(axis=0,method='average')
+    print("ranking importance scores")
     #get row names in list
     rows_to_norm = df2.index[1:].values.tolist()
     #print(df2, rows_to_norm)
@@ -226,48 +251,46 @@ def get_scale(df, alg):
     df3= df2.loc[rows_to_norm,:].apply(normalize_values, axis=0, result_type= 'expand')
     #rename columns
     df3= df3.rename(index=str, columns={"imp_score": "imp_score_scaled"})
+    #get percentile
+    print("getting percentile rank")
+    dfr= dfrank.loc[rows_to_norm,:].apply(get_percentrank, axis=0, result_type= 'expand')
+    #rename columns
+    dfr= dfr.rename(index=str, columns={"imp_score": "imp_score_rank"})
     #join dataframes
-    df4= pd.DataFrame(pd.concat([df, df3], axis=1, join='inner'))
-    #print(df4)
+    df4= pd.DataFrame(pd.concat([df, df3, dfr], axis=1, join='inner'))
+    print(df4)
     #get enrichment score
-    if alg == 'RF':
+    if alg == 'RF' or 'GB':
         print('scaling importance score based on enrichment')
         df5 = df4.loc[df['enrichment'] == '-']
         df5= df5[df5.imp_score != float(0)]
         #print(df5.loc[:,'imp_score_scaled'])
         x= df5.loc[:,'imp_score_scaled'].multiply(float(-1))
+        z= df5.loc[:,'imp_score_rank'].multiply(float(-1))
         #print(x)
         df6 = df4.loc[df['enrichment'] == '+']
         df6= df6[df2.imp_score != float(0)]
         y= df6.loc[:,'imp_score_scaled']
+        a= df6.loc[:,'imp_score_rank']
         #print(y)
         xy= pd.DataFrame(pd.concat([x, y], axis=0, join='inner'))
-        #print(xy)
-        newdf= xy.rename(index=str, columns={"imp_score": "imp_score_scaled"})
-    elif alg == 'GB':
-        print('scaling importance score based on enrichment')
-        df5 = df4.loc[df['enrichment'] == '-']
-        df5= df5[df5.imp_score != float(0)]
-        #print(df5.loc[:,'imp_score_scaled'])
-        x= df5.loc[:,'imp_score_scaled'].multiply(float(-1))
-        #print(x)
-        df6 = df4.loc[df['enrichment'] == '+']
-        df6= df6[df2.imp_score != float(0)]
-        y= df6.loc[:,'imp_score_scaled']
-        #print(y)
-        xy= pd.DataFrame(pd.concat([x, y], axis=0, join='inner'))
-        #print(xy)
-        newdf= xy.rename(index=str, columns={"imp_score": "imp_score_scaled"})
+        za= pd.DataFrame(pd.concat([z, a], axis=0, join='inner'))
+        #print(za)
+        xy= xy.rename(index=str, columns={"imp_score": "imp_score_scaled"})
+        newdf= pd.DataFrame(pd.concat([xy, za], axis=1, join='inner'))
+        
     else:
         print('scaling importance score based on model sign')
         df5 = df4.loc[:,'imp_score']
         sign_array= np.sign(df5)
         #print(sign_array)
         result = df4.loc[:,'imp_score_scaled'].mul(sign_array, axis=0)
+        result2= dfr.loc[:,'imp_score_rank'].mul(sign_array, axis=0)
         #print (result)
         df4['imp_score_scaled']= result
+        df4['imp_score_rank']=result2
         #print(df4)
-        df4= pd.DataFrame(df4.loc[:,'imp_score_scaled'])
+        df4= pd.DataFrame(df4.loc[:,'imp_score_scaled':'imp_score_rank'])
         #print(df4)
         newdf= pd.DataFrame(df4[df4.loc[:,'imp_score_scaled'] != float(0)])
     return(newdf)
