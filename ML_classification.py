@@ -5,6 +5,12 @@ from datetime import datetime
 import ML_functions as ML
 start_total_time = time.time()
 
+def warn(*args, **kwargs):
+    pass
+import warnings
+warnings.warn = warn
+
+
 def main():
 	
 	########################
@@ -27,7 +33,7 @@ def main():
 	inp_group.add_argument('-df2', help='Class data (if not in -df). Need to provide -y_name', default='')
 	inp_group.add_argument('-sep', help='Deliminator', default='\t')
 	inp_group.add_argument('-y_name', help='Name of column in Y_file to predict', default='Class')
-	inp_group.add_argument('-ho', help='File with testing (i.e. holdout) lines', default='')
+	inp_group.add_argument('-test', help='File with testing lines', default='')
 	inp_group.add_argument('-feat', help='File with list of features (from x) to include', default='all')
 	
 	# Model behavior 
@@ -158,23 +164,23 @@ def main():
 	if args.cl_train != 'all':
 		df = df[(df['Class'].isin(args.cl_train))]
 
-	# Set up dataframe of holdout instances that the final models will be applied to
-	if args.ho !='':
+	# Set up dataframe of test instances that the final models will be applied to
+	if args.test !='':
 		df_all = df.copy()
-		print('Removing holdout instances to apply model on later...')
-		with open(args.ho) as ho_file:
-			ho_instances = ho_file.read().splitlines()
+		print('Removing test instances to apply model on later...')
+		with open(args.test) as test_file:
+			test_instances = test_file.read().splitlines()
 		try:
-			ho_df = df.loc[ho_instances, :]
-			df = df.drop(ho_instances)
+			test_df = df.loc[test_instances, :]
+			df = df.drop(test_instances)
 		except:
-			ho_instances = [int(x) for x in ho_instances]
-			ho_df = df.loc[ho_instances, :]
-			df = df.drop(ho_instances)
+			test_instances = [int(x) for x in test_instances]
+			test_df = df.loc[test_instances, :]
+			df = df.drop(test_instances)
 
 	else:
-		ho_df = 'None'
-		ho_instances = 'None'
+		test_df = 'None'
+		test_instances = 'None'
 		df_all = df.copy()
 	
 
@@ -221,7 +227,7 @@ def main():
 			args.save = args.df + "_" + args.alg + "_" + args.tag
 	
 	print("Snapshot of data being used:")
-	print(df.iloc[:5, :5])
+	print(df.ix[:5, :5])
 	print("CLASSES:",classes)
 	print("POS:",args.pos,type(args.pos))
 	print("NEG:",NEG,type(NEG))
@@ -267,7 +273,13 @@ def main():
 	
 	else:
 		print('Not running grid search. Using default or given parameters instead')
-		balanced_ids = ML.fun.EstablishBalanced(df,classes,int(min_size),args.n)
+
+		try:
+			balanced_ids = ML.fun.EstablishBalanced(df,classes,int(min_size),args.n)
+		except:
+			classes = list(map(int, classes))
+			balanced_ids = ML.fun.EstablishBalanced(df,classes,int(min_size),args.n)
+
 	
 	bal_id = pd.DataFrame(balanced_ids)
 	bal_id.to_csv(args.save + '_BalancedIDs', index=False, header=False,sep="\t")
@@ -281,7 +293,7 @@ def main():
 	print("\n\n===>  ML Pipeline started  <===")
 
 	results = []
-	results_ho = []
+	results_test = []
 	df_proba = pd.DataFrame(data=df_all['Class'], index=df_all.index, columns=['Class'])
 
 	if apply_unk == True:
@@ -318,11 +330,11 @@ def main():
 			clf = ML.fun.DefineClf_GB(args.n_estimators, args.lr, args.max_features, args.max_depth, args.n_jobs, j)
 		
 		# Run ML algorithm on balanced datasets.
-		if args.ho!='':
-			result,current_scores,result_ho = ML.fun.BuildModel_Apply_Performance(df1, clf, args.cv_num, df_notSel, apply_unk, df_unknowns, ho_df, classes, args.pos, NEG, j, args.alg,args.threshold_test)
-			results_ho.append(result_ho)	
+		if args.test!='':
+			result,current_scores,result_test = ML.fun.BuildModel_Apply_Performance(df1, clf, args.cv_num, df_notSel, apply_unk, df_unknowns, test_df, classes, args.pos, NEG, j, args.alg,args.threshold_test)
+			results_test.append(result_test)	
 		else:
-			result,current_scores = ML.fun.BuildModel_Apply_Performance(df1, clf, args.cv_num, df_notSel, apply_unk, df_unknowns, ho_df, classes, args.pos, NEG, j, args.alg,args.threshold_test)
+			result,current_scores = ML.fun.BuildModel_Apply_Performance(df1, clf, args.cv_num, df_notSel, apply_unk, df_unknowns, test_df, classes, args.pos, NEG, j, args.alg,args.threshold_test)
 
 		results.append(result)
 		try:
@@ -388,26 +400,26 @@ def main():
 		cm_mean.to_csv(args.save + "_cm.csv",sep="\t")
 		done = ML.fun.Plot_ConMatrix(cm_mean, args.save)
 
-	# Unpack results from hold out
-	if args.ho!='':
-		AucRoc_ho_array = []
-		AucPRc_ho_array = []
-		accuracies_ho = []
-		f1_array_ho = np.array([np.insert(arr = classes.astype(np.str), obj = 0, values = 'M')])
+	# Unpack results from the test set
+	if args.test!='':
+		AucRoc_test_array = []
+		AucPRc_test_array = []
+		accuracies_test = []
+		f1_array_test = np.array([np.insert(arr = classes.astype(np.str), obj = 0, values = 'M')])
 		
-		for r_ho in results_ho:			
+		for r_test in results_test:			
 			# For binary predictions
-			if 'AucRoc' in r_ho:
-				AucRoc_ho_array.append(r_ho['AucRoc'])
-			if 'AucPRc' in r_ho:
-				AucPRc_ho_array.append(r_ho['AucPRc'])
+			if 'AucRoc' in r_test:
+				AucRoc_test_array.append(r_test['AucRoc'])
+			if 'AucPRc' in r_test:
+				AucPRc_test_array.append(r_test['AucPRc'])
 
 			# For Multi-class predictions
-			if 'accuracy' in r_ho:
-				accuracies_ho.append(r['accuracy'])
-			if 'macro_f1' in r_ho:
-				f1_temp_ho_array = np.insert(arr = r_ho['f1_MC'], obj = 0, values = r_ho['macro_f1'])
-				f1_array_ho = np.append(f1_array_ho, [f1_temp_ho_array], axis=0)
+			if 'accuracy' in r_test:
+				accuracies_test.append(r['accuracy'])
+			if 'macro_f1' in r_test:
+				f1_temp_test_array = np.insert(arr = r_test['f1_MC'], obj = 0, values = r_test['macro_f1'])
+				f1_array_test = np.append(f1_array_test, [f1_temp_test_array], axis=0)
 
 		
 
@@ -475,19 +487,19 @@ def main():
 		print("\nML Results: \nAccuracy: %03f (+/- stdev %03f)\nF1 (macro): %03f (+/- stdev %03f)\n" % (
 		AC, AC_std, MacF1, MacF1_std))
 
-		# Unpack results from hold out
-		if args.ho!='':
-			f1_ho = pd.DataFrame(f1_array_ho)
-			f1_ho.columns = f1_ho.iloc[0]
-			f1_ho = f1_ho[1:]
-			f1_ho.columns = [str(col) + '_F1' for col in f1_ho.columns]
-			f1_ho = f1_ho.astype(float)	
-			AC_ho = np.mean(accuracies_ho)
-			AC_std_ho = np.std(accuracies_ho)
-			MacF1_ho = f1_ho['M_F1'].mean()
-			MacF1_std_ho = f1_ho['M_F1'].std()
-			print("\nML Results from Hold Out Validation: \nAccuracy: %03f (+/- stdev %03f)\nF1 (macro): %03f (+/- stdev %03f)\n" % (
-				AC_ho, AC_std_ho, MacF1_ho, MacF1_std_ho))
+		# Unpack results from the test set
+		if args.test!='':
+			f1_test = pd.DataFrame(f1_array_test)
+			f1_test.columns = f1_test.iloc[0]
+			f1_test = f1_test[1:]
+			f1_test.columns = [str(col) + '_F1' for col in f1_test.columns]
+			f1_test = f1_test.astype(float)	
+			AC_test = np.mean(accuracies_test)
+			AC_std_test = np.std(accuracies_test)
+			MacF1_test = f1_test['M_F1'].mean()
+			MacF1_std_test = f1_test['M_F1'].std()
+			print("\nML Results from the test set : \nAccuracy: %03f (+/- stdev %03f)\nF1 (macro): %03f (+/- stdev %03f)\n" % (
+				AC_test, AC_std_test, MacF1_test, MacF1_std_test))
 
 		# Save detailed results file 
 		with open(args.save + "_results.txt", 'w') as out:
@@ -506,10 +518,10 @@ def main():
 			out.write('\n\nCount and percent of instances of each class (row) predicted as a class (col):\n')
 			summary_df_proba.to_csv(out, mode='a', header=True, sep='\t')
 			
-			# Add results from hold out
-			if args.ho!='':
-				out.write('\n\nResults from the hold out validation set\n')
-				out.write('HO Accuracy\t%05f +/-%05f\nHO F1_macro\t%05f +/-%05f' % (AC_ho, AC_std_ho, MacF1_ho, MacF1_std_ho))
+			# Add results from the test set
+			if args.test!='':
+				out.write('\n\nResults from the the test set validation set\n')
+				out.write('test Accuracy\t%05f +/-%05f\ntest F1_macro\t%05f +/-%05f' % (AC_test, AC_std_test, MacF1_test, MacF1_std_test))
 
 ###### Binary Prediction Output ######
 	
@@ -517,12 +529,12 @@ def main():
 		# Get AUC for ROC and PR curve (mean, sd, se)
 		ROC = [np.mean(AucRoc_array), np.std(AucRoc_array), np.std(AucRoc_array)/np.sqrt(len(AucRoc_array))]
 		PRc = [np.mean(AucPRc_array), np.std(AucPRc_array), np.std(AucPRc_array)/np.sqrt(len(AucPRc_array))]
-		if args.ho!='':
-			ROC_ho = [np.mean(AucRoc_ho_array), np.std(AucRoc_ho_array), np.std(AucRoc_ho_array)/np.sqrt(len(AucRoc_ho_array))]
-			PRc_ho = [np.mean(AucPRc_ho_array), np.std(AucPRc_ho_array), np.std(AucPRc_ho_array)/np.sqrt(len(AucPRc_ho_array))]
+		if args.test!='':
+			ROC_test = [np.mean(AucRoc_test_array), np.std(AucRoc_test_array), np.std(AucRoc_test_array)/np.sqrt(len(AucRoc_test_array))]
+			PRc_test = [np.mean(AucPRc_test_array), np.std(AucPRc_test_array), np.std(AucPRc_test_array)/np.sqrt(len(AucPRc_test_array))]
 		else:
-			ROC_ho = ['na', 'na', 'na']
-			PRc_ho = ['na', 'na', 'na']
+			ROC_test = ['na', 'na', 'na']
+			PRc_test = ['na', 'na', 'na']
 
 		# Find mean threshold
 		final_threshold = round(np.mean(threshold_array),2)
@@ -561,11 +573,11 @@ def main():
 		
 		
 		# Get model preformance scores using final_threshold
-		if args.ho!='':
-			TP,TN,FP,FN,TPR,FPR,FNR,Pr,Ac,F1,Pr_ho,Ac_ho,F1_ho = ML.fun.Model_Performance_Thresh(df_proba, final_threshold, balanced_ids, args.pos, NEG, ho_instances)
+		if args.test!='':
+			TP,TN,FP,FN,TPR,FPR,FNR,Pr,Ac,F1,Pr_test,Ac_test,F1_test = ML.fun.Model_Performance_Thresh(df_proba, final_threshold, balanced_ids, args.pos, NEG, test_instances)
 		else:
-			TP,TN,FP,FN,TPR,FPR,FNR,Pr,Ac,F1 = ML.fun.Model_Performance_Thresh(df_proba, final_threshold, balanced_ids, args.pos, NEG, ho_instances)
-			Pr_ho, Ac_ho, F1_ho = 0, 0, 0
+			TP,TN,FP,FN,TPR,FPR,FNR,Pr,Ac,F1 = ML.fun.Model_Performance_Thresh(df_proba, final_threshold, balanced_ids, args.pos, NEG, test_instances)
+			Pr_test, Ac_test, F1_test = 0, 0, 0
 
 		# Plot ROC & PR curves
 		if args.plots.lower() in['true','t']:
@@ -588,10 +600,10 @@ def main():
 		
 		if not os.path.isfile('RESULTS.txt'):
 			out2 = open('RESULTS.txt', 'a')
-			out2.write('DateTime\tRunTime\tID\tTag\tAlg\tClasses\tFeatureNum\tBalancedSize\tCVfold\tBalancedRuns\tAUCROC\tAUCROC_sd\tAUCROC_se\t')
-			out2.write('AUCPRc\tAUCPRc_sd\tAUCPRc_se\tAc\tAc_sd\tAc_se\tF1\tF1_sd\tF1_se\tPr\tPr_sd\tPr_se\tTPR\tTPR_sd\tTPR_se\t')
-			out2.write('FPR\tFPR_sd\tFPR_se\tFNR\tFNR_sd\tFNR_se\tTP\tTP_sd\tTP_se\tTN\tTN_sd\tTN_se\tFP\tFP_sd\tFP_se\t')
-			out2.write('FN\tFN_sd\tFN_se\tPr_ho\tAc_ho\tF1_ho\tAUCROC_ho\tAUCROC_ho_sd\tAUCROC_ho_se\tAUCPRc_ho\tAUCPRc_ho_sd\tAUCPRc_ho_se')
+			out2.write('DateTime\tRunTime\tID\tTag\tAlg\tClasses\tFeatureNum\tBalancedSize\tCVfold\tBalancedRuns\tAUCROC_val\tAUCROC_val_sd\tAUCROC_val_se\t')
+			out2.write('AUCPRc_val\tAUCPRc_val_sd\tAUCPRc_val_se\tAc_val\tAc_val_sd\tAc_val_se\tF1_val\tF1_val_sd\tF1_val_se\tPr_val\tPr_val_sd\tPr_val_se\tTPR_val\tTPR_val_sd\tTPR_val_se\t')
+			out2.write('FPR_val\tFPR_val_sd\tFPR_val_se\tFNR_val\tFNR_val_sd\tFNR_val_se\tTP_val\tTP_val_sd\tTP_val_se\tTN_val\tTN_val_sd\tTN_val_se\tFP_val\tFP_val_sd\tFP_val_se\t')
+			out2.write('FN_val\tFN_val_sd\tFN_val_se\tPr_test\tAc_test\tF1_test\tAUCROC_test\tAUCROC_test_sd\tAUCROC_test_se\tAUCPRc_test\tAUCPRc_test_sd\tAUCPRc_test_se')
 			out2.close()
 		out2 = open('RESULTS.txt', 'a')
 		out2.write('\n%s\t%s\t%s\t%s\t%s\t%s\t%i\t%i\t%i\t%i\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%05f\t%05f\t%05f\t%s\t%s' % (
@@ -599,8 +611,8 @@ def main():
 			'\t'.join(str(x) for x in ROC), '\t'.join(str(x) for x in PRc), '\t'.join(str(x) for x in Ac), '\t'.join(str(x) for x in F1),
 			'\t'.join(str(x) for x in Pr), '\t'.join(str(x) for x in TPR), '\t'.join(str(x) for x in FPR),
 			'\t'.join(str(x) for x in FNR), '\t'.join(str(x) for x in TP), '\t'.join(str(x) for x in TN),
-			'\t'.join(str(x) for x in FP), '\t'.join(str(x) for x in FN), Pr_ho, Ac_ho, F1_ho,
-			'\t'.join(str(x) for x in ROC_ho),'\t'.join(str(x) for x in PRc_ho)))
+			'\t'.join(str(x) for x in FP), '\t'.join(str(x) for x in FN), Pr_test, Ac_test, F1_test,
+			'\t'.join(str(x) for x in ROC_test),'\t'.join(str(x) for x in PRc_test)))
 			 
 			
 
@@ -610,8 +622,8 @@ def main():
 				timestamp, args.save, args.tag, args.alg, classes, args.apply, n_features))
 			out.write('Min class size: %i\nCV folds: %i\nNumber of balanced datasets: %i\nGrid Search Used: %s\nParameters used:%s\n' % (
 				min_size, args.cv_num, args.n, args.gs, parameters_used))
-			
 			out.write('\nPrediction threshold: %s\n'%final_threshold)
+			out.write('\n\nResults from the validation set')
 			out.write('\nMetric\tMean\tSD\tSE\n')
 			out.write('AucROC\t%s\nAucPRc\t%s\nAccuracy\t%s\nF1\t%s\nPrecision\t%s\nTPR\t%s\nFPR\t%s\nFNR\t%s\n' % (
 				'\t'.join(str(x) for x in ROC),'\t'.join(str(x) for x in PRc), '\t'.join(str(x) for x in Ac), '\t'.join(str(x) for x in F1),
@@ -622,19 +634,20 @@ def main():
 			cm_mean.to_csv(out, mode='a', sep='\t')
 			out.write('\n\nCount and percent of instances of each class (row) predicted as a class (col):\n')
 			summary_df_proba.to_csv(out, mode='a', header=True, sep='\t')
-			if args.ho!='':
-				out.write('\n\nResults from the hold out validation set\n')
-				out.write('HO Precision\t%05f\nHO Accuracy\t%05f\nHO F1\t%05f\n' % (Pr_ho, Ac_ho, F1_ho))
-				out.write('HO AucROC\t%s\nHO AucPRc\t%s\n' % ('\t'.join(str(x) for x in ROC_ho), '\t'.join(str(x) for x in PRc_ho)))
+			
+			if args.test!='':
+				out.write('\n\nResults from the test set\n')
+				out.write('test precision\t%05f\ntest accuracy\t%05f\ntest F1\t%05f\n' % (Pr_test, Ac_test, F1_test))
+				out.write('test AucROC\t%s\ntest AucPRc\t%s\n' % ('\t'.join(str(x) for x in ROC_test), '\t'.join(str(x) for x in PRc_test)))
 
 
 
 		print("\n\n===>  ML Results  <===")
-		print("Testing Set Scores\nAccuracy: %03f (+/- stdev %03f)\nF1: %03f (+/- stdev %03f)\nAUC-ROC: %03f (+/- stdev %03f)\nAUC-PRC: %03f (+/- stdev %03f)" % (
+		print("\nValidation Set Scores\nAccuracy: %03f (+/- stdev %03f)\nF1: %03f (+/- stdev %03f)\nAUC-ROC: %03f (+/- stdev %03f)\nAUC-PRC: %03f (+/- stdev %03f)" % (
 			Ac[0], Ac[1], F1[0], F1[1], ROC[0], ROC[1], PRc[0], PRc[1]))
-		if args.ho!='':
-			print('\n\nHold Out Set Scores:\nPrecision: %03f\nAccuracy: %03f\nF1: %03f\nAUC-ROC: %03f (+/- stdev %03f)\nAUC-PRC: %03f (+/- stdev %03f)' % (
-				Pr_ho, Ac_ho, F1_ho, ROC_ho[0], ROC_ho[1], PRc_ho[0], PRc_ho[1]))
+		if args.test!='':
+			print('\n\nTest Set Scores:\nPrecision: %03f\nAccuracy: %03f\nF1: %03f\nAUC-ROC: %03f (+/- stdev %03f)\nAUC-PRC: %03f (+/- stdev %03f)' % (
+				Pr_test, Ac_test, F1_test, ROC_test[0], ROC_test[1], PRc_test[0], PRc_test[1]))
 		print('finished!')	
 	
 

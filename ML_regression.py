@@ -33,12 +33,12 @@ def main():
 	inp_group.add_argument('-df2', help='Class data (if not in -df). Need to provide -y_name', default='')
 	inp_group.add_argument('-sep', help='Deliminator', default='\t')
 	inp_group.add_argument('-y_name', help='Name of column in Y_file to predict', default='Y')
-	inp_group.add_argument('-ho', help='File with testing (i.e. holdout) lines', default='')
+	inp_group.add_argument('-test', help='File with testing lines', default='')
 	inp_group.add_argument('-feat', help='File with list of features (from x) to include', default='all')
 	
 	# Model behavior 
 	pipln_group = parser.add_argument_group(title='CONTROL PIPELINE BEHAVIOR')
-	pipln_group.add_argument('-apply', help='List of non-training class labels that the models should be applied to (all or comma sep list)', default='')
+	pipln_group.add_argument('-apply', help='Non-training Y labels that the models should be applied to (e.g. unknown)', default='')
 	pipln_group.add_argument('-n_jobs', '-p', help='Number of processors for parallel computing (max for HPCC = 14)', type=int, default=1)
 	pipln_group.add_argument('-n', '-b', help='Number of replicates (unique balanced datasets).', type=int, default=100)
 	pipln_group.add_argument('-threshold_test', help='Metric used to define prediction score threshold for classification (F1 or accuracy)).', default='F1')
@@ -85,11 +85,6 @@ def main():
 
 	# Complex transformations of input parameters
 	df_unknowns = 'none'
-	if args.apply != '':
-		if ',' in args.apply:
-			args.apply = args.apply.split(',')
-		else:
-			args.apply = [args.apply]
 
 	if args.cv_sets != 'none':
 			args.cv_sets = pd.read_csv(args.cv_sets, index_col = 0)
@@ -118,11 +113,7 @@ def main():
 	# Specify Y column - default = Class
 	if args.y_name != 'Y':
 		df = df.rename(columns = {args.y_name:'Y'})
-	if args.y_norm in ['t', 'true']:
-		print('Normalizing Y...')
-		mean = df['Y'].mean(axis=0)
-		std = df['Y'].std(axis=0)
-		df['Y'] = (df['Y'] - mean) / std
+
 
 	# Filter out features not in feat file given - default: keep all
 	if args.feat != 'all':
@@ -157,7 +148,7 @@ def main():
 
 	# Set up dataframe of unknown instances that the final models will be applied to and drop unknowns from df for model building
 	if args.apply != '':
-		df_unknowns = df[(df['Y']==args.apply)]
+		df_unknowns = df[df['Y'].str.match(args.apply)]
 		predictions = pd.DataFrame(data=df['Y'], index=df.index, columns=['Y'])
 		df = df.drop(df_unknowns.index.values)
 		print("Model built using %i instances and applied to %i unknown instances (see _scores file for results)" % (len(df.index), len(df_unknowns.index)))
@@ -167,23 +158,28 @@ def main():
 	
 	# Make sure Y is datatype numeric
 	df['Y'] = pd.to_numeric(df['Y'], errors = 'raise')
+	if args.y_norm in ['t', 'true']:
+		print('Normalizing Y...')
+		mean = df['Y'].mean(axis=0)
+		std = df['Y'].std(axis=0)
+		df['Y'] = (df['Y'] - mean) / std
 
-	# Set up dataframe of holdout instances that the final models will be applied to
-	if args.ho !='':
+	# Set up dataframe of test instances that the final models will be applied to
+	if args.test !='':
 		df_all = df.copy()
-		print('Removing holdout instances to apply model on later...')
-		with open(args.ho) as ho_file:
-			ho_instances = ho_file.read().splitlines()
+		print('Removing test instances to apply model on later...')
+		with open(args.test) as test_file:
+			test_instances = test_file.read().splitlines()
 		try:
-			ho_df = df.loc[ho_instances, :]
-			df = df.drop(ho_instances)
+			test_df = df.loc[test_instances, :]
+			df = df.drop(test_instances)
 		except:
-			ho_instances = [int(x) for x in ho_instances]
-			ho_df = df.loc[ho_instances, :]
-			df = df.drop(ho_instances)
+			test_instances = [int(x) for x in test_instances]
+			test_df = df.loc[test_instances, :]
+			df = df.drop(test_instances)
 	else:
-		ho_df = 'None'
-		ho_instances = 'None'
+		test_df = 'None'
+		test_instances = 'None'
 	
 
 
@@ -203,7 +199,7 @@ def main():
 
 		
 	print("Snapshot of data being used:")
-	print(df.head())
+	print(df.ix[:5, :5])
 
 	n_features = len(list(df)) - 1
 	
@@ -252,7 +248,7 @@ def main():
 	print("\n\n===>  ML Pipeline started  <===")
 	
 	results = []
-	results_ho = []
+	results_test = []
 	imp = pd.DataFrame(index = list(df.drop(['Y'], axis=1)))
 
 
@@ -278,11 +274,11 @@ def main():
 			quit()
 
 		# Run ML algorithm.
-		if args.ho != '':
-			result,cv_pred,importance,result_ho = ML.fun.Run_Regression_Model(df, reg, args.cv_num, args.alg, df_unknowns, ho_df, args.cv_sets, j)
-			results_ho.append(result_ho)
+		if args.test != '':
+			result,cv_pred,importance,result_test = ML.fun.Run_Regression_Model(df, reg, args.cv_num, args.alg, df_unknowns, test_df, args.cv_sets, j)
+			results_test.append(result_test)
 		else:
-			result,cv_pred,importance = ML.fun.Run_Regression_Model(df, reg, args.cv_num, args.alg, df_unknowns, ho_df, args.cv_sets, j)
+			result,cv_pred,importance = ML.fun.Run_Regression_Model(df, reg, args.cv_num, args.alg, df_unknowns, test_df, args.cv_sets, j)
 		
 		results.append(result)
 		predictions[rep_name] = cv_pred
@@ -314,22 +310,22 @@ def main():
 	r2_stats = [np.mean(r2s), np.std(r2s), np.std(r2s)/np.sqrt(len(r2s))]
 	PCC_stats = [np.mean(cors), np.std(cors), np.std(cors)/np.sqrt(len(cors))]
 
-	# Get scores from hold out validation set:
-	if args.ho != '':
-		mses_ho, evss_ho, r2s_ho, cors_ho = [], [], [], []
-		for r in results_ho:
-			mses_ho.append(r[0])
-			evss_ho.append(r[1])
-			r2s_ho.append(r[2])
-			cors_ho.append(r[3])
+	# Get scores from test set:
+	if args.test != '':
+		mses_test, evss_test, r2s_test, cors_test = [], [], [], []
+		for r in results_test:
+			mses_test.append(r[0])
+			evss_test.append(r[1])
+			r2s_test.append(r[2])
+			cors_test.append(r[3])
 
-		MSE_ho_stats = [np.mean(mses_ho), np.std(mses_ho), np.std(mses_ho)/np.sqrt(len(mses_ho))]
-		EVS_ho_stats = [np.mean(evss_ho), np.std(evss_ho), np.std(evss_ho)/np.sqrt(len(evss_ho))]
-		r2_ho_stats = [np.mean(r2s_ho), np.std(r2s_ho), np.std(r2s_ho)/np.sqrt(len(r2s_ho))]
-		PCC_ho_stats = [np.mean(cors_ho), np.std(cors_ho), np.std(cors_ho)/np.sqrt(len(cors_ho))]
+		MSE_test_stats = [np.mean(mses_test), np.std(mses_test), np.std(mses_test)/np.sqrt(len(mses_test))]
+		EVS_test_stats = [np.mean(evss_test), np.std(evss_test), np.std(evss_test)/np.sqrt(len(evss_test))]
+		r2_test_stats = [np.mean(r2s_test), np.std(r2s_test), np.std(r2s_test)/np.sqrt(len(r2s_test))]
+		PCC_test_stats = [np.mean(cors_test), np.std(cors_test), np.std(cors_test)/np.sqrt(len(cors_test))]
 	
 	else:
-		MSE_ho_stats, EVS_ho_stats, r2_ho_stats, PCC_ho_stats = ['na', 'na', 'na'],['na', 'na', 'na'],['na', 'na', 'na'],['na', 'na', 'na']
+		MSE_test_stats, EVS_test_stats, r2_test_stats, PCC_test_stats = ['na', 'na', 'na'],['na', 'na', 'na'],['na', 'na', 'na'],['na', 'na', 'na']
 
 
 	# Get average predicted value
@@ -363,8 +359,8 @@ def main():
 	if not os.path.isfile('RESULTS_reg.txt'):
 		out2 = open('RESULTS_reg.txt', 'a')
 		out2.write('DateTime\tRunTime\tID\tTag\tY\tAlg\tNumInstances\tFeatureNum\tCVfold\tCV_rep\t')
-		out2.write('MSE\tMSE_sd\tMSE_se\tEVS\tEVS_sd\tEVS_se\tr2\tr2_sd\tr2_se\tPCC\tPCC_sd\tPCC_se\t')
-		out2.write('MSE_ho\tMSE_ho_sd\tMSE_ho_se\tEVS_ho\tEVS_ho_sd\tEVS_ho_se\tr2_ho\tr2_ho_sd\tr2_ho_se\tPCC_ho\tPCC_ho_sd\tPCC_ho_se\n')
+		out2.write('MSE_val\tMSE_val_sd\tMSE_val_se\tEVS_val\tEVS_val_sd\tEVS_val_se\tr2_val\tr2_val_sd\tr2_val_se\tPCC_val\tPCC_val_sd\tPCC_val_se\t')
+		out2.write('MSE_test\tMSE_test_sd\tMSE_test_se\tEVS_test\tEVS_test_sd\tEVS_test_se\tr2_test\tr2_test_sd\tr2_test_se\tPCC_test\tPCC_test_sd\tPCC_test_se\n')
 		out2.close()
 
 	out2 = open('RESULTS_reg.txt', 'a')
@@ -372,8 +368,8 @@ def main():
 		timestamp, run_time, args.save, args.tag, args.y_name, args.alg, len(df.index), n_features, args.cv_num , args.n, 
 		'\t'.join(str(x) for x in MSE_stats), '\t'.join(str(x) for x in EVS_stats), 
 		'\t'.join(str(x) for x in r2_stats), '\t'.join(str(x) for x in PCC_stats),
-		'\t'.join(str(x) for x in MSE_ho_stats), '\t'.join(str(x) for x in EVS_ho_stats), 
-		'\t'.join(str(x) for x in r2_ho_stats), '\t'.join(str(x) for x in PCC_ho_stats),  ))
+		'\t'.join(str(x) for x in MSE_test_stats), '\t'.join(str(x) for x in EVS_test_stats), 
+		'\t'.join(str(x) for x in r2_test_stats), '\t'.join(str(x) for x in PCC_test_stats),  ))
 
 
 	# Save detailed results file 
@@ -381,30 +377,33 @@ def main():
 		out.write('%s\nID: %s\nTag: %s\nPredicting: %s\nAlgorithm: %s\nNumber of Instances: %s\nNumber of features: %i\n' % (
 			timestamp, args.save, args.tag, args.y_name, args.alg, len(df.index), n_features))
 		out.write('CV folds: %i\nCV_reps: %i\nParameters used:%s\n' % (args.cv_num, args.n, params2use))
+		out.write('\n\nResults from the validation set\n')
 		out.write('Metric\tMean\tstd\tSE\n')
 		out.write('MSE\t%s\nEVS\t%s\nR2\t%s\nPCC\t%s\n' % (
 			'\t'.join(str(x) for x in MSE_stats), '\t'.join(str(x) for x in EVS_stats), 
 			'\t'.join(str(x) for x in r2_stats), '\t'.join(str(x) for x in PCC_stats)))
 
-		if args.ho != '':
-			out.write('\n\nResults from the hold out validation set\n')
+		if args.test != '':
+			out.write('\n\nResults from the test set\n')
 			out.write('Metric\tMean\tstd\tSE\n')
-			out.write('HO MSE\t%s\nHO EVS\t%s\nHO R2\t%s\nHO PCC\t%s\n' % (
-			'\t'.join(str(x) for x in MSE_ho_stats), '\t'.join(str(x) for x in EVS_ho_stats), 
-			'\t'.join(str(x) for x in r2_ho_stats), '\t'.join(str(x) for x in PCC_ho_stats)))
+			out.write('test MSE\t%s\ntest EVS\t%s\ntest R2\t%s\ntest PCC\t%s\n' % (
+			'\t'.join(str(x) for x in MSE_test_stats), '\t'.join(str(x) for x in EVS_test_stats), 
+			'\t'.join(str(x) for x in r2_test_stats), '\t'.join(str(x) for x in PCC_test_stats)))
 
 
 	print("\n\n===>  ML Results  <===")
+
+	print('\nValidation Set Scores:\nMetric\tMean\tstd\tSE\n')
 	print('Metric\tMean\tstd\tSE')
 	print('MSE\t%s\nEVS\t%s\nR2\t%s\nPCC\t%s\n' % (
 		'\t'.join(str(x) for x in MSE_stats), '\t'.join(str(x) for x in EVS_stats), 
 		'\t'.join(str(x) for x in r2_stats), '\t'.join(str(x) for x in PCC_stats)))
 
-	if args.ho !='':
-		print('\n\nHold Out Set Scores:\nMetric\tMean\tstd\tSE\n')
+	if args.test !='':
+		print('\n\nTest Set Scores:\nMetric\tMean\tstd\tSE\n')
 		print('MSE\t%s\nEVS\t%s\nR2\t%s\nPCC\t%s\n' % (
-			'\t'.join(str(x) for x in MSE_ho_stats), '\t'.join(str(x) for x in EVS_ho_stats), 
-			'\t'.join(str(x) for x in r2_ho_stats), '\t'.join(str(x) for x in PCC_ho_stats)))
+			'\t'.join(str(x) for x in MSE_test_stats), '\t'.join(str(x) for x in EVS_test_stats), 
+			'\t'.join(str(x) for x in r2_test_stats), '\t'.join(str(x) for x in PCC_test_stats)))
 
 	print('\nfinished!')
 
