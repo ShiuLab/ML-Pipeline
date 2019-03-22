@@ -125,8 +125,9 @@ def main():
 			print('Dropping rows with NA values changed the dimensions from %s to %s.' 
 				% (str(start_dim), str(df.shape)))
 		else:
-			print(df.columns[df.isna().any()].tolist())
+			
 			print('There are Na values in your dataframe.\n Impute them or add -drop_na True to remove rows with nas' )
+			print(df.columns[df.isnull().any()])
 			quit()
 	
 		# Normalize data frame for SVM algorithms
