@@ -226,7 +226,7 @@ def main():
 			args.save = args.df + "_" + args.alg + "_" + args.tag
 	
 	print("Snapshot of data being used:")
-	print(df.iloc[:5, :5])
+	print(df.ix[:5, :5])
 	print("CLASSES:",classes)
 	print("POS:",args.pos,type(args.pos))
 	print("NEG:",NEG,type(NEG))
@@ -272,7 +272,13 @@ def main():
 	
 	else:
 		print('Not running grid search. Using default or given parameters instead')
-		balanced_ids = ML.fun.EstablishBalanced(df,classes,int(min_size),args.n)
+
+		try:
+			balanced_ids = ML.fun.EstablishBalanced(df,classes,int(min_size),args.n)
+		except:
+			classes = list(map(int, classes))
+			balanced_ids = ML.fun.EstablishBalanced(df,classes,int(min_size),args.n)
+
 	
 	bal_id = pd.DataFrame(balanced_ids)
 	bal_id.to_csv(args.save + '_BalancedIDs', index=False, header=False,sep="\t")

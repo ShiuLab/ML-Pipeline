@@ -38,7 +38,7 @@ def main():
 	
 	# Model behavior 
 	pipln_group = parser.add_argument_group(title='CONTROL PIPELINE BEHAVIOR')
-	pipln_group.add_argument('-apply', help='List of non-training class labels that the models stestuld be applied to (all or comma sep list)', default='')
+	pipln_group.add_argument('-apply', help='Non-training Y labels that the models should be applied to (e.g. unknown)', default='')
 	pipln_group.add_argument('-n_jobs', '-p', help='Number of processors for parallel computing (max for HPCC = 14)', type=int, default=1)
 	pipln_group.add_argument('-n', '-b', help='Number of replicates (unique balanced datasets).', type=int, default=100)
 	pipln_group.add_argument('-threshold_test', help='Metric used to define prediction score threshold for classification (F1 or accuracy)).', default='F1')
@@ -85,11 +85,6 @@ def main():
 
 	# Complex transformations of input parameters
 	df_unknowns = 'none'
-	if args.apply != '':
-		if ',' in args.apply:
-			args.apply = args.apply.split(',')
-		else:
-			args.apply = [args.apply]
 
 	if args.cv_sets != 'none':
 			args.cv_sets = pd.read_csv(args.cv_sets, index_col = 0)
@@ -118,11 +113,7 @@ def main():
 	# Specify Y column - default = Class
 	if args.y_name != 'Y':
 		df = df.rename(columns = {args.y_name:'Y'})
-	if args.y_norm in ['t', 'true']:
-		print('Normalizing Y...')
-		mean = df['Y'].mean(axis=0)
-		std = df['Y'].std(axis=0)
-		df['Y'] = (df['Y'] - mean) / std
+
 
 	# Filter out features not in feat file given - default: keep all
 	if args.feat != 'all':
@@ -157,7 +148,7 @@ def main():
 
 	# Set up dataframe of unknown instances that the final models will be applied to and drop unknowns from df for model building
 	if args.apply != '':
-		df_unknowns = df[(df['Y']==args.apply)]
+		df_unknowns = df[df['Y'].str.match(args.apply)]
 		predictions = pd.DataFrame(data=df['Y'], index=df.index, columns=['Y'])
 		df = df.drop(df_unknowns.index.values)
 		print("Model built using %i instances and applied to %i unknown instances (see _scores file for results)" % (len(df.index), len(df_unknowns.index)))
@@ -167,6 +158,11 @@ def main():
 	
 	# Make sure Y is datatype numeric
 	df['Y'] = pd.to_numeric(df['Y'], errors = 'raise')
+	if args.y_norm in ['t', 'true']:
+		print('Normalizing Y...')
+		mean = df['Y'].mean(axis=0)
+		std = df['Y'].std(axis=0)
+		df['Y'] = (df['Y'] - mean) / std
 
 	# Set up dataframe of test instances that the final models will be applied to
 	if args.test !='':
@@ -203,7 +199,7 @@ def main():
 
 		
 	print("Snapshot of data being used:")
-	print(df.head())
+	print(df.ix[:5, :5])
 
 	n_features = len(list(df)) - 1
 	
@@ -363,7 +359,7 @@ def main():
 	if not os.path.isfile('RESULTS_reg.txt'):
 		out2 = open('RESULTS_reg.txt', 'a')
 		out2.write('DateTime\tRunTime\tID\tTag\tY\tAlg\tNumInstances\tFeatureNum\tCVfold\tCV_rep\t')
-		out2.write('MSE\tMSE_sd\tMSE_se\tEVS\tEVS_sd\tEVS_se\tr2\tr2_sd\tr2_se\tPCC\tPCC_sd\tPCC_se\t')
+		out2.write('MSE_val\tMSE_val_sd\tMSE_val_se\tEVS_val\tEVS_val_sd\tEVS_val_se\tr2_val\tr2_val_sd\tr2_val_se\tPCC_val\tPCC_val_sd\tPCC_val_se\t')
 		out2.write('MSE_test\tMSE_test_sd\tMSE_test_se\tEVS_test\tEVS_test_sd\tEVS_test_se\tr2_test\tr2_test_sd\tr2_test_se\tPCC_test\tPCC_test_sd\tPCC_test_se\n')
 		out2.close()
 
@@ -381,6 +377,7 @@ def main():
 		out.write('%s\nID: %s\nTag: %s\nPredicting: %s\nAlgorithm: %s\nNumber of Instances: %s\nNumber of features: %i\n' % (
 			timestamp, args.save, args.tag, args.y_name, args.alg, len(df.index), n_features))
 		out.write('CV folds: %i\nCV_reps: %i\nParameters used:%s\n' % (args.cv_num, args.n, params2use))
+		out.write('\n\nResults from the validation set\n')
 		out.write('Metric\tMean\tstd\tSE\n')
 		out.write('MSE\t%s\nEVS\t%s\nR2\t%s\nPCC\t%s\n' % (
 			'\t'.join(str(x) for x in MSE_stats), '\t'.join(str(x) for x in EVS_stats), 
@@ -395,6 +392,8 @@ def main():
 
 
 	print("\n\n===>  ML Results  <===")
+
+	print('\nValidation Set Scores:\nMetric\tMean\tstd\tSE\n')
 	print('Metric\tMean\tstd\tSE')
 	print('MSE\t%s\nEVS\t%s\nR2\t%s\nPCC\t%s\n' % (
 		'\t'.join(str(x) for x in MSE_stats), '\t'.join(str(x) for x in EVS_stats), 

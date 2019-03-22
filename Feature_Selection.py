@@ -7,7 +7,7 @@ Must set path to Miniconda in HPC:  export PATH=/mnt/home/azodichr/miniconda3/bi
 
 INPUT:
   -df       Feature file for ML. If class/Y values are in a separate file use -df for features and -df2 for class/Y
-  -f        Feature selection method to use 
+  -alg        Feature selection method to use 
                 - Chi2 
                     need: -n
                 - RandomForest 
@@ -58,7 +58,7 @@ OPTIONAL INPUT:
   -scores   T/F to output scores/coefficients for each feature (Not available for: FET, LASSO, or Chi2)
 
 OUTPUT:
-  -df_f.txt    New dataframe with columns only from feature selection
+  -df_alg.txt    New dataframe with columns only from feature selection
 
 
 AUTHOR: Christina Azodi
@@ -487,9 +487,9 @@ if __name__ == "__main__":
       SEP = sys.argv[i+1]
     if sys.argv[i].lower() == '-save':
       SAVE = sys.argv[i+1]
-    if sys.argv[i].lower() == '-f':
-      F = sys.argv[i+1]
-      if F.lower() == 'en':
+    if sys.argv[i].lower() == '-alg':
+      alg = sys.argv[i+1]
+      if alg.lower() == 'en':
         PARAMETER = 0.5
     if sys.argv[i].lower() == '-n':
       N = sys.argv[i+1]
@@ -611,45 +611,45 @@ if __name__ == "__main__":
     save_name = SAVE
   else:
     try:
-      save_name = DF.split("/")[-1] + "_" + y_name + '_'+ F + '_cv' + str(jobNum)
+      save_name = DF.split("/")[-1] + "_" + y_name + '_'+ alg + '_cv' + str(jobNum)
     except:
-      save_name = DF.split("/")[-1] + "_" + F
+      save_name = DF.split("/")[-1] + "_" + alg
 
 
-  if F.lower() == "randomforest" or F.lower() == "rf":
+  if alg.lower() == "randomforest" or alg.lower() == "rf":
     DecisionTree(df_use, N, TYPE, save_name, SCORES)
     
-  elif F.lower() == "chi2" or F.lower() == "c2":
+  elif alg.lower() == "chi2" or alg.lower() == "c2":
     Chi2(df_use, N, save_name)
     
-  elif F.lower() == "l1" or F.lower() == "lasso":
+  elif alg.lower() == "l1" or alg.lower() == "lasso":
     if SAVE == 'default':
       save_name = save_name + '_' + str(PARAMETER)
     L1(df_use, PARAMETER, TYPE, save_name)
 
-  elif F.lower() == "en" or F.lower() == "elasticnet":
+  elif alg.lower() == "en" or alg.lower() == "elasticnet":
     if SAVE == 'default':
       save_name = save_name + '_' + str(PARAMETER)
     EN(df_use, PARAMETER, N, save_name, SCORES)
     
-  elif F.lower() == "relief" or F.lower() == "rebate" or F.lower() == "rl":
+  elif alg.lower() == "relief" or alg.lower() == "rebate" or alg.lower() == "rl":
     Relief(df_use, N, n_jobs, save_name, SCORES)
 
-  elif F.lower() == "bayesa" or F.lower() == "ba":
+  elif alg.lower() == "bayesa" or alg.lower() == "ba":
     BayesA(df_use, N, save_name, SCORES)
     
-  elif F.lower() == "blasso" or F.lower() == "bl":
+  elif alg.lower() == "blasso" or alg.lower() == "bl":
     BLASSO(df_use, N, save_name, SCORES)
 
-  elif F.lower() == "rrblup" or F.lower() == "rrb":
+  elif alg.lower() == "rrblup" or alg.lower() == "rrb":
     rrBLUP(df_use, N, save_name, SCORES)
 
-  elif F.lower() == "fisher" or F.lower() == "fet" or F.lower() == 'enrich':
+  elif alg.lower() == "fisher" or alg.lower() == "fet" or alg.lower() == 'enrich':
     if SAVE == 'default':
       save_name = save_name + '_' + str(PARAMETER)
     FET(df_use, PARAMETER, pos, neg, save_name)
   
-  elif F.lower() == "random" or F.lower() == "rand" or F.lower() == 'ran':
+  elif alg.lower() == "random" or alg.lower() == "rand" or alg.lower() == 'ran':
     Random(df_use, N, save_name)
 
 
