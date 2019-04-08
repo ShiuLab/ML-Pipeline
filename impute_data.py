@@ -46,6 +46,7 @@ def main():
         df = df.replace("?",np.nan)
         df = df.replace("NA",np.nan)
         df = df.replace("",np.nan)
+        df = df.replace("NaN",np.nan)
         return (df)
 	
     # find the percent of missing feature, if greater than 50%, then drop!
