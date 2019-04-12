@@ -565,9 +565,9 @@ def main():
 		scores_file = args.save + "_scores.txt"
 		out_scores = open(scores_file,"w")
 		if args.short.lower() in ['t','true']:
-			out_scores.write("#ID\t"+pd.DataFrame.to_csv(df_proba[["Class","Mean","Median","stdev",Pred_name]],sep="\t").strip()+"\n")
+			out_scores.write("ID\t"+pd.DataFrame.to_csv(df_proba[["Class","Mean","Median","stdev",Pred_name]],sep="\t").strip()+"\n")
 		else:
-			out_scores.write("#ID\t"+pd.DataFrame.to_csv(df_proba,sep="\t").strip()+"\n")
+			out_scores.write("ID\t"+pd.DataFrame.to_csv(df_proba,sep="\t").strip()+"\n")
 		out_scores.close()
 		# df_proba.to_csv(args.save + "_scores.txt", sep="\t")
 		

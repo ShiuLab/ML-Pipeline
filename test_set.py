@@ -1,99 +1,72 @@
-"""
-PURPOSE:
-
-Define a validation set to hold out during feature selection/model training.
-For regression models will hold out a random X percent.
-For classification models, will hold out X percent or number of each class
-
-
-INPUTS:
-	
-	REQUIRED:
-	-df       Feature & class dataframe for ML
-	-type     c/r (classification vs. regression)
-	-p or -n	-p: Percent of instances to hold out (0.1 = 10%)
-			-n: Number of instances to hold out
-	
-	OPTIONAL:
-	-y_name   Name of the column to predict (Default = Class)
-	-apply	  A list of what classes you want to include in the hold out (Default = all)
-	-skip     A list of what classes you don't want in the hold out (i.e. unknown classes) (Default = none)
-	-sep      Set seperator for input data (Default = '\t')
-	-drop_na  T/F to drop rows with NAs
-	-save     Adjust save name prefix. Default = [df]_holdout.
-	-df2      File with class information. Use only if df contains the features but not the Y values 
-							* Need to specifiy what column in df2 is y using -y_name 
-
-OUTPUT:
-	-df_holdout  List of instances to hold out. 
-				 Use for input into feature selection and ML_classification/ML_regression (-ho)
-
-
-"""
-import sys, os
+import sys, os, argparse
 import pandas as pd
 
-DF2, SAVE, SEP, y_name = 'None','', '\t', 'Class'
-apply_ho, drop_na, SKIP =  'all', 'f', 'None'
-p = n = ''
 
-for i in range (1,len(sys.argv),2):
-	if sys.argv[i].lower() == "-df":
-		DF = sys.argv[i+1]
-	elif sys.argv[i].lower() == "-df2":
-		DF2 = sys.argv[i+1]
-	elif sys.argv[i].lower() == "-y_name":
-		y_name = sys.argv[i+1]
-	elif sys.argv[i].lower() == "-sep":
-		SEP = sys.argv[i+1]
-	elif sys.argv[i].lower() == '-save':
-		SAVE = sys.argv[i+1]
-	elif sys.argv[i].lower() == '-skip':
-		SKIP = sys.argv[i+1]
-		if SKIP != "None":
-			SKIP = sys.argv[i+1].split(',')
-	elif sys.argv[i].lower() == "-apply":
-		apply_ho = sys.argv[i+1]
-	elif sys.argv[i].lower() == "-drop_na":
-		drop_na = sys.argv[i+1]
-	elif sys.argv[i].lower() == "-type":
-		model_type = sys.argv[i+1]
-	elif sys.argv[i].lower() == "-p":
-		p = sys.argv[i+1]
-	elif sys.argv[i].lower() == "-n":
-		n = sys.argv[i+1]
+########################
+### Parse Input Args ###
+########################
 
-if len(sys.argv) <= 1:
-	print(__doc__)
-	exit()
+parser = argparse.ArgumentParser(
+	description='Define a test set that will be held out during feature selection \
+	and model training. For regression models (-type r), test will be a random X percent or n.\
+	For classification models (-type c), test will be X percent or number from each class',
+	epilog='https://github.com/ShiuLab')
+
+### Input arguments ###
+# Required
+req_group = parser.add_argument_group(title='REQUIRED INPUT')
+req_group.add_argument('-df', help='Feature & class dataframe for ML, (example: example_binary.txt) ', required=True)
+req_group.add_argument('-type', help='c/r (classification vs. regression)', required=True)
+req_group.add_argument('-p', '-percent', help='Percent of instances to hold out (0.1 = 10%), can also use -n', required=False, type=float, default=0)
+req_group.add_argument('-n', '-num', help='Number of instances to hold out, can also use -p', required=False, type=int, default=0)
+
+# Optional
+inp_group = parser.add_argument_group(title='OPTIONAL INPUT')
+inp_group.add_argument('-y_name', help='Name of column to predict', default='Class')
+inp_group.add_argument('-df2', help='Class data (if not in -df). Need to provide -a.y_name', default='')
+inp_group.add_argument('-sep', help='Deliminator', default='\t')
+inp_group.add_argument('-use', help='List of classes to include in test set', default='all')
+inp_group.add_argument('-skip', help='List of classes to not include in test set (i.e. unknown)', default='')
+inp_group.add_argument('-drop_na', help='T/F to drop rows with NAs', default='f')
+inp_group.add_argument('-save', help='Adjust save name prefix. Default = [df]_test.', default='default')
+
+a = parser.parse_args()
+if a.skip != "":
+	skip = a.skip.split(',')
+if a.save == 'default':
+	a.save = a.df + "_test.txt"
 
 
-df = pd.read_csv(DF, sep=SEP, index_col = 0)
+#########################
+### Read in dataframe ###
+#########################
+
+df = pd.read_csv(a.df, sep=a.sep, index_col = 0)
 
 # If features  and class info are in separate files, merge them: 
-if DF2 != 'None':
-	start_dim = df.shape
-	df_class = pd.read_csv(DF2, sep=SEP, index_col = 0)
-	df = pd.concat([df_class[y_name], df], axis=1, join='inner')
+if a.df2 != '':
+	start_dim = a.df.shape
+	df_class = pd.read_csv(a.df2, sep=a.sep, index_col = 0)
+	df = pd.concat([df_class[a.y_name], df], axis=1, join='inner')
 	print('Merging the feature & class dataframes changed the dimensions from %s to %s (instance, features).' 
 		% (str(start_dim), str(df.shape)))
 
 # Specify Y column - default = Class
-if model_type.lower() == 'c' or model_type.lower() == 'classificaton':
-	if y_name != 'Class':
-		df = df.rename(columns = {y_name:'Class'})
-elif model_type.lower() == 'r' or model_type.lower() == 'regression':
-	if y_name != 'Y':
-		df = df.rename(columns = {y_name:'Y'})
+if a.type.lower() == 'c' or a.type.lower() == 'classificaton':
+	if a.y_name != 'Class':
+		df = df.rename(columns = {a.y_name:'Class'})
+elif a.type.lower() == 'r' or a.type.lower() == 'regression':
+	if a.y_name != 'Y':
+		df = df.rename(columns = {a.y_name:'Y'})
 else:
-	print('Model type not recognized, define as c or r')
+	print('Model type not recognized, define as classification (c) or rregression (r)')
 	exit()
 
-if SKIP != 'None':
+if a.skip != '':
 	try:
-		df = df[~(df['Class'].isin(SKIP))]
+		df = df[~(df['Class'].isin(a.skip))]
 	except:
-		df = df[~(df['Y'].isin(SKIP))]
+		df = df[~(df['Y'].isin(a.skip))]
 
 # Check for Nas
 if df.isnull().values.any() == True:
@@ -107,73 +80,59 @@ if df.isnull().values.any() == True:
 		print('There are Na values in your dataframe.\n Impute them or add -drop_na True to remove rows with nas')
 		quit()
 
-# Set Save Name
-if SAVE == "":
-	save_name = DF + "_holdout.txt"
+if a.p != 0.0:
+	print('Holding out %.1f percent' % (a.p*100))
+elif a.n != 0:
+	print('Holding out %i instances per class' % (a.n))
 else:
-	save_name = SAVE
-
-
-if p != '':
-	per_ho = float(p)
-	print('Holding out %.1f percent' % (per_ho*100))
-elif n != '':
-	per_ho = int(n)
-	print('Holding out %i instances per class' % (per_ho))
-else:
-	print('Arg for -p or -n required!')
-	print('  p:',p)
-	print('  n:',n)
-	print('  Quitting!')
+	print('Either -p or -n is required!')
 	quit()
 
+
+
+#######################
+### Define test set ###
+#######################
+
 def pull_sample(temp, p, n):
-	if p != '':
-		temp_sample = temp.sample(frac = per_ho)
-	elif n != '':
-		temp_sample = temp.sample(n = per_ho)
+	if p != 0.0:
+		temp_sample = temp.sample(frac = p)
+	elif n != 0:
+		temp_sample = temp.sample(n = n)
 	return temp_sample
 
-# Define hold out for regression
-holdout = []
-if model_type.lower() == 'c' or model_type.lower() == 'classificaton':
-	if apply_ho == 'all':
-		classes = df.Class.unique()
-		print('Pulling holdout set from classes: %s' % str(classes))
-		for cl in classes:
-			temp = df[(df['Class']==cl)] 
-			temp_sample = pull_sample(temp, p, n)
-			#if p != '':
-			#	temp_sample = temp.sample(frac = per_ho)
-			#elif n != '':
-			#	temp_sample = temp.sample(n = per_ho)
-			keep_ho = list(temp_sample.index)
-			holdout.extend(keep_ho)
-			print(holdout)
+test = []
+
+if a.type.lower() == 'c' or a.type.lower() == 'classificaton':
+	if a.use == 'all':
+		use_list = df.Class.unique()
 	else:
-		apply_to = apply_ho.strip().split(',')
-		for cl in apply_to:
-			temp = df[(df['Class']==cl)] 
-			temp_sample = pull_sample(temp, p, n)
-			temp_sample = temp.sample(frac = per_ho)
-			keep_ho = list(temp_sample.index)
-			holdout.extend(keep_ho)
-			print(holdout)
+		use_list = a.use.strip().split(',')
 
+	print('Pulling test set from classes: %s' % str(use_list))
+	for cl in use_list:
+		temp = df[(df['Class']==cl)] 
+		temp_sample = pull_sample(temp, a.p, a.n)
+		keep_test = list(temp_sample.index)
+		test.extend(keep_test)
 
-elif model_type.lower() == 'r' or model_type.lower() == 'regression':
-			temp_sample = df.sample(frac = per_ho)
-			keep_ho = list(temp_sample.index)
-			holdout.extend(keep_ho)
+elif a.type.lower() == 'r' or a.type.lower() == 'regression':
+	if a.p != 0:
+		temp_sample = df.sample(frac = a.p)
+	elif a.n != 0:
+		temp_sample = df.sample(n = a.n)
+	
+	keep_test = list(temp_sample.index)
+	test.extend(keep_test)
 
 else:
 	print('Model type not recognized, define as c or r')
 	exit()	
 
-print('%i instances in holdout' % len(holdout))
+print('%i instances in test set' % len(test))
 
-out = open(save_name, 'w')
-for ho in holdout:
+out = open(a.save, 'w')
+for ho in test:
 	out.write('%s\n' % ho)
 
 print('finished!')
