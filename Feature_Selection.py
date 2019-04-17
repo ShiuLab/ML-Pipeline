@@ -136,7 +136,7 @@ def DecisionTree(df, n, TYPE, save_name, SCORES):
       fixed_index.append(new_i)
     fixed_index = [0] + fixed_index
     good = [df.columns[i] for i in fixed_index]
-    print("Features selected using DecisionTree feature selection: %s" % str(good))
+    print("Features selected using DecisionTree feature selection: %s" % str(good.remove('Class')))
 
     save_name2 = save_name + "_" + str(n_size)
     SaveTopFeats(good, save_name2)
