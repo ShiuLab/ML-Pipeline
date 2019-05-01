@@ -1,15 +1,36 @@
+"""
+PURPOSE: impute missing data
+Must set path to Miniconda in HPC:  export PATH=/mnt/home/azodichr/miniconda3/bin:$PATH or have scipy and sklearn installed
+
+INPUT:
+    -df       ML Dataframe with gene|Class|feature data
+    -dtype1   Data type in matrix: n=numeric,c=categorical,b=binary
+    -mv       type of missing value calculation: 0 = drop all NAs, 1 = get feature distribution then choose random value from
+              this distribution, 2 = value for numeric is the median, value for binary or categorical is the mode
+
+Optional INPUT:
+    -df2      A second dataframe in same format as first
+    -dtype2   Data type of second matrix
+    -df3      A third data frame in same format as first
+    -dtype3   Data type of third matrix
+    -drop     percent NA data to drop, default is 50%, enter in decimal format (ie. 50% = 0.5)
+    
+OUTPUT:
+      -df.NAimputed.txt    A new dataframe with values imputed     
+
+"""
+
 #DF= dataframe, dtype= datatype(n=numeric,c=categorical,b=binary) mv= type of missing value calculation
 import sys, os
 import pandas as pd
 import numpy as np
 from scipy import stats
 from sklearn.preprocessing import OneHotEncoder
-#from statistics import mode
 
 def main():
     
     # Default code parameters
-    mv, DF2, dtype2, DF3, dtype3 = 0, 'NA', 'NA', 'NA', 'NA'
+    mv, DF2, dtype2, DF3, dtype3, drop = 0, 'NA', 'NA', 'NA', 'NA', 0.5
 	
     for i in range (1,len(sys.argv),2):
             if sys.argv[i] == "-df":
@@ -26,6 +47,8 @@ def main():
                 DF3 = sys.argv[i+1]
             if sys.argv[i] == "-dtype3":
                 dtype3 = sys.argv[i+1]
+            if sys.argv[i] == "-drop":
+                drop = sys.argv[i+1]
 
     if len(sys.argv) <= 1:
 	    print(__doc__)
@@ -50,17 +73,16 @@ def main():
         return (df)
 	
     # find the percent of missing feature, if greater than 50%, then drop!
-    #col_list1= list(df.columns.values)
-    def drop_missing50 (df):
+    def drop_missing50 (df, drop):
         col_length=len(df.columns)-3
         print (col_length)
         drop_list = []
         for i in range(1,col_length):
-            print (i)
+            #print (i)
             missing=  df.iloc[:,[i]].isnull().sum()
             miss_pct = missing/len(df)
-            print (missing, miss_pct, df.columns[i])
-            if  miss_pct.iloc[0] > float(0.5):
+            if  miss_pct.iloc[0] > float(drop):
+                print (missing, miss_pct, df.columns[i])
                 print ("dropping",df.columns[i])
                 drop_list.append(df.columns[i])
         for i in range(1,len(drop_list)):
@@ -78,11 +100,10 @@ def main():
             if float(counts.sum()) == 0.0:
                 L.append(float(0))
             else:
-                #print(counts[j], counts.sum())
                 p =counts[j] / float(counts.sum())
-                #print(p)
                 L.append(p)
         return (L)
+        
     def get_percent1(counts):#function to get proportion
         L=[]
         z = len(counts)+1
@@ -91,9 +112,8 @@ def main():
             if float(counts.sum()) == 0.0:
                 L.append(float(0))
             else:
-                #print(counts[j], counts.sum())
                 p =counts[j] / float(counts.sum())
-                #print(p)
+               
                 L.append(p)
         return (L)
         
@@ -106,23 +126,23 @@ def main():
             cats= x1[x].unique() #get unique categories 
             
             counts= x1[x].value_counts() #get counts of each category
-            #print(float(counts.sum()))
-            print (counts)
+            
+            #print (counts)
             if 0 in cats:
                 pcts = get_percent(counts) #get proportion of each category
             else:
                 pcts= get_percent1(counts)
                 
-            print (pcts)
+            #print (pcts)
             df1.loc[:,[x]] = df.loc[:,[x]].fillna(value=np.random.choice(cats, p=pcts),axis=1)
             #randomly choose from unique categories\
             #based on their proportion in the dataset, replace NAs with this category
-            #print (df1.loc[:,[x]])
+    
         return df1
         
     def get_num1(df, y):
         df2= df[df.columns[1:y]]#get numeric
-        #print(df2)
+        
         col_list= list(df2.columns.values)
         for i in range(0,len(df2.columns)):
              x= col_list[i]
@@ -135,7 +155,7 @@ def main():
     
     def get_cat2(df, y):
         dfx = df[df.columns[1:y]]
-        #df1= dfx.select_dtypes(include=['object'])#categorical
+        
         col_list= list(dfx.columns.values)
         for i in range(0,len(dfx.columns)):
             x= col_list[i] #column name
@@ -145,20 +165,18 @@ def main():
             p= p[0]
             p= p[0]
             p = ''.join(str(p))
-            #p= mode(x1)
-            #p = pd.Series(m[0]) #put in series
             dfx.loc[:,[x]] = dfx.loc[:,[x]].fillna(value=p,axis=1) #replace NAs with mode
         return dfx
         
     def get_num2(df, y):
         dfx = df[df.columns[1:y]]#get numeric
-        #print (df3)
         col_list= list(dfx.columns.values)
         for i in range(0,len(dfx.columns)):
-	        x= col_list[i]
-	        x1 = dfx.iloc[:,[i]].dropna(axis=0)
-	        med= np.median(x1)
-	        dfx.loc[:,[x]] = df.loc[:,[x]].fillna(value=med) #replace NAs with median
+            x= col_list[i]
+            x1 = dfx.iloc[:,[i]].dropna(axis=0)
+            med= np.median(x1)
+            dfx.loc[:,[x]] = df.loc[:,[x]].fillna(value=med) #replace NAs with median
+        return (dfx)
     
     def convert_cat2bin(df):
         dfx = df[df.columns[1:y]]
@@ -169,30 +187,27 @@ def main():
     df0 = df.iloc[:,[0]]
     df=replaceNAs(df)
     
-    if mv == 0:
+    if mv == 0: #choice to drop NAs
         if DF2 and DF3 == 'NA':
             df= df.dropna(axis=0)
         elif DF2 != 'NA' and DF3 == 'NA':
             df2=replaceNAs(df2)
-            df2=drop_missing50(df2)
+            df2=drop_missing50(df2, drop)
             frames  = [df, df2]
             df= pd.concat(frames, axis=1)
             df= df.dropna(axis=0)
         else:
             df2=replaceNAs(df2)
-            df2=drop_missing50(df2)
+            df2=drop_missing50(df2, drop)
             df3=replaceNAs(df3)
-            df3=drop_missing50(df3)
+            df3=drop_missing50(df3, drop)
             frames  = [df, df2, df3]
             df= pd.concat(frames, axis=1)
             df= df.dropna(axis=0)
     
     elif mv == 1: #choice 1, impute missing values with random choice from a distribution
-        df=drop_missing50(df) #drop column if over 50% is missing
-        #print (mv)
-        #df1= df.select_dtypes(include=['object'])#get categorical
+        df=drop_missing50(df, drop) #drop column if over 50% is missing
         col_list= list(df.columns.values)
-        #print(col_list)
         y= len(col_list)
         print("Replacing NA's for ", y, " columns")
         if dtype1 == 'c':
@@ -209,7 +224,7 @@ def main():
         df= pd.concat(frames, axis=1)
     
     elif mv == 2: #this option imputes median or mode for either numeric or categorical data respectively
-        df=drop_missing50(df) #drop column if over 50% is missing
+        df=drop_missing50(df, drop) #drop column if over 50% is missing
         col_list= list(df.columns.values)
         y= len(col_list)
         print("Replacing NA's for ", y, " columns")
@@ -226,25 +241,14 @@ def main():
         frames  = [df0, df1] #put all frames back together
         df= pd.concat(frames, axis=1)
         
-    
-        # if dtype1 == 'c':
-        #     df1= convert_cat2bin(df)
-        #     df= df1.dropna(axis=0)
-        # else:
-        #     df = df.dropna(axis=0)   #third option, also default, remove all rows with NA, thereby leaving out missing values
-    
-    #df.to_csv(path_or_buf=str(DF1)+".NAimputed1.txt", sep="\t", header=True)
     if DF2 == 'NA':
         pass
     else:
         df0 = df2.iloc[:,[0]]
         df2=replaceNAs(df2)
-        df2=drop_missing50(df2)
+        df2=drop_missing50(df2, drop)
         if mv == 1: #choice 1, impute missing values with random choice from a distribution
-            #print (mv)
-            #df1= df.select_dtypes(include=['object'])#get categorical
             col_list= list(df2.columns.values)
-            #print(col_list)
             y= len(col_list)
             print("Replacing NA's for ", y, " columns")
             if dtype2 == 'c':
@@ -255,10 +259,6 @@ def main():
                 df2= get_num1(df2, y)
             else:
                 print ("need -dtype2 : n=numeric, c=categorical, b=binary")
-    
-            #frames  = [df0, df1] #put all frames back together ##need to add back class
-            #df2= pd.concat(frames, axis=1)
-            #df2=df1
     
         elif mv == 2: #this option imputes median or mode for either numeric or categorical data respectively
             col_list= list(df.columns.values)
@@ -273,24 +273,14 @@ def main():
             else:
                 print ("need -dtype2 : n=numeric, c=categorical, b=binary")
 	            
-            #frames  = [df0, df1] #put all frames back together
-            #df2= pd.concat(frames, axis=1)
-            #df2=df1
-        
-    #     elif mv == 0:
-    #         df2 = df2.dropna(axis=0)   #third option, also default, remove all rows with NA, thereby leaving out missing values
-    # 
-        #df.agg(df2)
-        #df2.to_csv(path_or_buf=str(DF2)+".NAimputed.txt", sep="\t", header=True)
+
     if DF3 == 'NA':
         pass
     else:
         df0 = df3.iloc[:,[0]]
         df3=replaceNAs(df3)
-        df3=drop_missing50(df3)
+        df3=drop_missing50(df3, drop)
         if mv == 1: #choice 1, impute missing values with random choice from a distribution
-            #print (mv)
-            #df1= df.select_dtypes(include=['object'])#get categorical
             col_list= list(df3.columns.values)
             #print(col_list)
             y= len(col_list)
@@ -303,10 +293,6 @@ def main():
                 df3= get_num1(df3, y)
             else:
                 print ("need -dtype2 : n=numeric, c=categorical, b=binary")
-    
-            # frames  = [df0, df1] #put all frames back together ##need to add back class
-            # df3= pd.concat(frames, axis=1)
-            #df3=df1
     
         elif mv == 2: #this option imputes median or mode for either numeric or categorical data respectively
             col_list= list(df3.columns.values)
@@ -321,15 +307,8 @@ def main():
             else:
                 print ("need -dtype2 : n=numeric, c=categorical, b=binary")
 	            
-            # frames  = [df0, df1] #put all frames back together
-            # df3= pd.concat(frames, axis=1)
-            #df3=df1
-        # elif mv == 0:
-        #     df3 = df3.dropna(axis=0)   #third option, also default, remove all rows with NA, thereby leaving out missing values
-        
-        #df3.to_csv(path_or_buf=str(DF3)+".NAimputed.txt", sep="\t", header=True)
-    #frames2 = [df, df2, df3]
-    if mv == 0:
+
+    if mv == 0: 
         df.to_csv(path_or_buf=str(DF1)+".NAimputed.txt", sep="\t", header=True)
     elif DF2 and DF3 == 'NA':
         if mv != 0:
