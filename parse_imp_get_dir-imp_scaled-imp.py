@@ -244,8 +244,8 @@ def get_scale(df, alg):
     dfrank= df2.rank(axis=0,method='average')
     print("ranking importance scores")
     #get row names in list
-    rows_to_norm = df2.index[1:].values.tolist()
-    #print(df2, rows_to_norm)
+    rows_to_norm = df2.index[0:].values.tolist()
+    print(df2, rows_to_norm)
     #normalize values
     print('normalizing importance scores')
     df3= df2.loc[rows_to_norm,:].apply(normalize_values, axis=0, result_type= 'expand')
@@ -338,8 +338,8 @@ def main():
     #print(dirdf)
     
     # add direction to importance score
-    impdf = pd.read_csv(imp, sep='\t', index_col = 0, names = ['feature', 'imp_score'])
-    #print(impdf)
+    impdf = pd.read_csv(imp, sep='\t', index_col = 0, header=None, names = ['feature', 'imp_score'])
+    print(impdf)
     #impdf= impdf.set_index('feature')
     
     dfx= pd.concat([impdf, dirdf], axis=1, join_axes=[impdf.index]) # exact join from first dataframe
