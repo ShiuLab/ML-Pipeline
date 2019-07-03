@@ -20,10 +20,10 @@ conda activate ML_Pipeline
 ## Install Git and clone ML-Pipeline
 1. Create a [GitHub Account](https://github.com/join)
 2. Download [Git](https://git-scm.com/book/en/v2/Getting-Started-Installing-Git)
-3. [Configure](https://git-scm.com/book/en/v2/Getting-Started-First-Time-Git-Setup) Git in your terminal
+3. [Configure](https://git-scm.com/book/en/v2/Getting-Started-First-Time-Git-Setup) Git in your terminal: set up user name and email.
 4. Clone the [ML-Pipeline](https://github.com/ShiuLab/ML-Pipeline):
 ```
-git clone git@github.com:ShiuLab/ML-Pipeline.git
+git clone https://github.com/ShiuLab/ML-Pipeline.git
 ```
 
 ## Navigate to ML-Pipeline tutorial 
