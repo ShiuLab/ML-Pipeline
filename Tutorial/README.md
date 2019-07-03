@@ -2,10 +2,13 @@
 
 ## Install Anaconda and ML-Pipeline dependence packages
 1. Download the newest version of [Anaconda](https://www.anaconda.com/distribution/) (python 3).
-2. Install Anaconda using the instructions on their webpage.
-3. Install conda extension for jupyter (this gives you the conda tab in the Jupyter Notebook page):
+2. Install Anaconda using the instructions on their webpage. If it is already installed, in the terminal, update conda:
 ```
-conda install nb_conda
+conda update --all
+```
+3. Install packages, including conda extension for jupyter (this gives you the conda tab in the Jupyter Notebook page):
+```
+conda install numpy pandas scikit-learn scipy matplotlib biopython nb_conda
 ```
 4. Open terminal and make a conda environment with all of the packages you will need for the ML pipeline using the following commands:
 ```
