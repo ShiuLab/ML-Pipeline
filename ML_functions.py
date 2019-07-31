@@ -465,7 +465,7 @@ class fun(object):
 			try:
 				importances = reg.coef_
 			except:
-				importances = "na"
+				importances = ["na"]
 				print("Cannot get importance scores")
 		
 		if not isinstance(test_df, str):

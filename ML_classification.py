@@ -228,10 +228,10 @@ def main():
 	
 	print("Snapshot of data being used:")
 	print(df.ix[:5, :5])
-	print("CLASSES:",classes)
+	print("\n\nCLASSES:",classes)
 	print("POS:",args.pos,type(args.pos))
 	print("NEG:",NEG,type(NEG))
-	print('Balanced dataset will include %i instances of each class' % min_size)
+	print('\nBalanced dataset will include %i instances of each class' % min_size)
 	n_features = len(list(df)) - 1
 	
 	###################################
@@ -372,7 +372,7 @@ def main():
 		
 		# For binary predictions
 		if 'importances' in r:
-			if r['importances'] != 'na':
+			if r['importances'][0] != 'na':
 				if args.alg.lower() == 'rf' or args.alg.lower() == 'gb':
 					imp[count] = r['importances']
 				else:
