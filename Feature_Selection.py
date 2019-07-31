@@ -1,13 +1,13 @@
 """
 PURPOSE:
-Run feature selection method available from sci-kit learn on a given dataframe
+Run feature selection mettestd available from sci-kit learn on a given dataframe
 
-Must set path to Miniconda in HPC:  export PATH=/mnt/home/azodichr/miniconda3/bin:$PATH
+Must set path to Miniconda in HPC:  export PATH=/mnt/testme/azodichr/miniconda3/bin:$PATH
 
 
 INPUT:
   -df       Feature file for ML. If class/Y values are in a separate file use -df for features and -df2 for class/Y
-  -alg        Feature selection method to use 
+  -alg        Feature selection mettestd to use 
                 - Chi2 
                     need: -n
                 - RandomForest 
@@ -33,7 +33,7 @@ OPTIONAL INPUT:
 
   -n        Number(s) of features you would like to keep (required for chi2, RF, relief, bayesA)
               Example: -n 10 or -n 10,50,100
-  -ho       File with list of intances to holdout from feature selection
+  -test       File with list of intances to testldout from feature selection
   -save     Save name for list of features selected. Will automatically append _n to the name
               Default: df_F_n or df_f_cvJobNum_n
   -cl_use   Since only RF works for multi-class problems, use cl_use to give a list of what classes you want to include (Default = 'all')   
@@ -61,7 +61,7 @@ OUTPUT:
   -df_alg.txt    New dataframe with columns only from feature selection
 
 
-AUTHOR: Christina Azodi
+AUTtestR: Christina Azodi
 
 REVISIONS:   Written 8/16/2016
              Added relief algorithm 10/22/2017
@@ -90,7 +90,7 @@ def SaveTopFeats(top, save_name):
 
 
 def DecisionTree(df, n, TYPE, save_name, SCORES):
-  """Feature selection using DecisionTree on the whole dataframe
+  """Feature selection using DecisionTree on the wtestle dataframe
   Feature importance from the Random Forest Classifier is the Gini importance
   (i.e. the normalized total reduction of the criterion for the decendent nodes
     compared to the parent node brought by that feature across all trees.)
@@ -144,8 +144,8 @@ def DecisionTree(df, n, TYPE, save_name, SCORES):
   
   
 def Chi2(df, n, save_name):
-  """Feature selection using Chi2 on the whole dataframe. 
-  Chi2 measures the dependence between stochastic variables, this method 
+  """Feature selection using Chi2 on the wtestle dataframe. 
+  Chi2 measures the dependence between stochastic variables, this mettestd 
   weeds out features that are most likely to be independent of class"""
   from sklearn.feature_selection import SelectKBest
   from sklearn.feature_selection import chi2
@@ -178,7 +178,7 @@ def Chi2(df, n, save_name):
 
 
 def Relief(df, n, n_jobs, save_name, SCORES):
-  """Feature selection using Relief on the whole dataframe."""
+  """Feature selection using Relief on the wtestle dataframe."""
   from skrebate import ReliefF
 
   X_all = df.drop('Class', axis=1).values  
@@ -208,8 +208,8 @@ def Relief(df, n, n_jobs, save_name, SCORES):
 
 
 def L1(df, PARAMETER, TYPE, save_name):
-  """Apply a linear model with a L1 penalty and select features who's coefficients aren't 
-  shrunk to zero. Unlike Chi2, this method accounts for the effect of all of the
+  """Apply a linear model with a L1 penalty and select features wtest's coefficients aren't 
+  shrunk to zero. Unlike Chi2, this mettestd accounts for the effect of all of the
   other features when determining if a feature is a good predictor.
   For a regression problem, it uses linear_model.Lasso
   For a classification problem, it uses svm.LinearSVC """
@@ -471,7 +471,7 @@ if __name__ == "__main__":
   SAVE, DF2 = 'default', 'None'
   UNKNOWN = 'unk'
   y_name = 'Class'
-  ho = ''
+  test = ''
   CL_USE = ''
   drop_na = 'f'
   NA = 'na'
@@ -513,8 +513,8 @@ if __name__ == "__main__":
       CVs = sys.argv[i+1]
     if sys.argv[i].lower() == '-jobnum':
       jobNum = sys.argv[i+1]
-    if sys.argv[i].lower() == '-ho':
-      ho = sys.argv[i+1]
+    if sys.argv[i].lower() == '-test':
+      test = sys.argv[i+1]
     if sys.argv[i].lower() == '-drop_na':
       drop_na = sys.argv[i+1]
     if sys.argv[i].lower() == '-scores':
@@ -552,17 +552,17 @@ if __name__ == "__main__":
       print('There are Na values in your dataframe.\n Impute them or add -drop_na True to remove rows with nas')
       quit()
   
-  # Drop instances in hold out set if provided
-  if ho !='':
-    print('Removing holdout instances...')
-    with open(ho) as ho_file:
-      ho_instances = ho_file.read().splitlines()
+  # Drop instances in testld out set if provided
+  if test !='':
+    print('Removing testldout instances...')
+    with open(test) as test_file:
+      test_instances = test_file.read().splitlines()
     try:
-      df = df.drop(ho_instances)
+      df = df.drop(test_instances)
     except:
       print('Trying converting instance names to int')
-      ho_instances = [int(i) for i in ho_instances]
-      df = df.drop(ho_instances)
+      test_instances = [int(i) for i in test_instances]
+      df = df.drop(test_instances)
   
     # Drop instances that aren't in the listed classes (i.e. make binary matrix)
   if CL_USE !='':
