@@ -372,7 +372,7 @@ def main():
 		
 		# For binary predictions
 		if 'importances' in r:
-			if r['importances'][0] != 'na':
+			if str(r['importances']) != 'na':
 				if args.alg.lower() == 'rf' or args.alg.lower() == 'gb':
 					imp[count] = r['importances']
 				else:

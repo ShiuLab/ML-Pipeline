@@ -36,7 +36,7 @@ OPTIONAL INPUT:
   -test       File with list of intances to testldout from feature selection
   -save     Save name for list of features selected. Will automatically append _n to the name
               Default: df_F_n or df_f_cvJobNum_n
-  -cl_use   Since only RF works for multi-class problems, use cl_use to give a list of what classes you want to include (Default = 'all')   
+  -cl_train   Since only RF works for multi-class problems, use cl_train to give a list of what classes you want to include (Default = 'all')   
               If binary, first label = positive class.
   -sep      Set seperator for input data (Default = '\t')
   -df2      File with class information. Use only if df contains the features but not the classes 
@@ -236,8 +236,8 @@ def L1(df, PARAMETER, TYPE, save_name):
   feat_names = np.array(list(df)[1:])
   good = feat_names[keep]
   
-  print("Features selected using l2: %s" % str(good))
-  print('Number of features selected using l2 (parameter = %s): %i' % (str(PARAMETER), X_new.shape[1]))
+  print("Features selected using LASSO: %s" % str(good))
+  print('\nNumber of features selected using LASSO (sparcity parameter = %s): %i' % (str(PARAMETER), X_new.shape[1]))
   
   save_name2 = save_name 
   SaveTopFeats(good, save_name2)
@@ -472,10 +472,11 @@ if __name__ == "__main__":
   UNKNOWN = 'unk'
   y_name = 'Class'
   test = ''
-  CL_USE = ''
+  cl_train = ''
   drop_na = 'f'
   NA = 'na'
   SCORES = 'f'
+  N = 10
 
   for i in range (1,len(sys.argv),2):
 
@@ -497,8 +498,8 @@ if __name__ == "__main__":
       n_jobs = int(sys.argv[i+1])
     if sys.argv[i].lower() == '-feat':
       FEAT = sys.argv[i+1]
-    if sys.argv[i].lower() == '-cl_use':
-      CL_USE = sys.argv[i+1]
+    if sys.argv[i].lower() == '-cl_train':
+      cl_train = sys.argv[i+1]
     if sys.argv[i].lower() == '-p':
       PARAMETER = float(sys.argv[i+1])        
     if sys.argv[i].lower() == '-type':
@@ -565,15 +566,20 @@ if __name__ == "__main__":
       df = df.drop(test_instances)
   
     # Drop instances that aren't in the listed classes (i.e. make binary matrix)
-  if CL_USE !='':
+  if cl_train !='':
     start_dim = df.shape
-    use_classes = CL_USE.strip().split(',')
+    use_classes = cl_train.strip().split(',')
     df = df[df['Class'].isin(use_classes)]
     print('Dropping instances that are not in %s, changed dimensions from %s to %s (instance, features).' 
       % (str(use_classes), str(start_dim), str(df.shape)))
-   
+  
+  df = df[df['Class'] != UNKNOWN]
   #Recode class as 1 for positive and 0 for negative
   if TYPE.lower() == 'c':
+    if cl_train != '':
+      use_classes = cl_train.strip().split(',')
+      pos = use_classes[0]
+      neg = use_classes[1]
     df["Class"] = df["Class"].replace(pos, 1)
     df["Class"] = df["Class"].replace(neg, 0) 
 
@@ -602,10 +608,6 @@ if __name__ == "__main__":
     cv = cv_folds['cv_' + str(jobNum)]
     df_use['Class'][cv==5] = 'unk'
 
-
-  # Remove any unknown class values from the data frame
-  if UNKNOWN in df_use.loc[:, 'Class'].values:
-    df_use = df_use[df_use.Class != UNKNOWN]
 
   if SAVE != 'default':
     save_name = SAVE
