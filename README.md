@@ -5,7 +5,7 @@ Shiu Lab Machine Learning Pipeline
 **Please see our [workshop material](https://github.com/azodichr/ML-Pipeline/blob/master/Workshop/ML_workshop.ipynb) for an introduction to the ML_Pipeline workflow and an example of how this pipeline can be used to ask questions.**
 
 
-<img src="Tutorial/pipeline_summary.png" alt="ML-Pipeline Overview" width="300"/>
+<img src="_img/pipeline_summary.png" alt="ML-Pipeline Overview" width="300"/>
 
 ## Environment Requirements
 * biopython                 1.68
