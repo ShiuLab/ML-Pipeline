@@ -59,26 +59,38 @@ If you want to classify instances by class (in the above example 1 vs. 0), use M
 
 ### 1. Clean your data
 
-```python ML_preprocess.py -df data.txt -na_method median -onehot t -```
+```
+python ML_preprocess.py -df data.txt -na_method median -onehot t -
+```
 
 ### 2. Define a testing set (test_set.py)
 
-```python test_set.py -df data_mod.txt -use 1,0 -type c -p 0.1 -save test_instances.txt```
+```
+python test_set.py -df data_mod.txt -use 1,0 -type c -p 0.1 -save test_instances.txt
+```
 
 ### 3. Select the best subset of features to use as predictors (Feature_Selection.py)
 
-```python Feature_Selection.py -df data_mod.txt -cl_train 1,0 -type c -alg lasso -p 0.01 -save top_feat_lasso.txt```
+```
+python Feature_Selection.py -df data_mod.txt -cl_train 1,0 -type c -alg lasso -p 0.01 -save top_feat_lasso.txt
+```
 
 ### 4. Train and apply a classification (ML_classification.py) or regression (ML_regression.py) machine learning model
 
 Example using the data shown above:
-```python ML_classification.py -df data_mod.txt -test test_instances.txt -cl_train 1,0 -alg SVM -apply unknown```
+```
+python ML_classification.py -df data_mod.txt -test test_instances.txt -cl_train 1,0 -alg SVM -apply unknown
+```
 
 Example of a multiclass prediction where classes are A, B, and C:
-```python ML_classification.py -df data_mod.txt -test test_instances.txt -cl_train A,B,C -alg SVM -apply unknown```
+```
+python ML_classification.py -df data_mod.txt -test test_instances.txt -cl_train A,B,C -alg SVM -apply unknown
+```
 
 Example of a regression prediction (e.g. predicting plant height in meters):
-```python ML_regression.py -df data_mod.txt -test test_instances.txt -y_name height -alg SVM -apply unknown```
+```
+python ML_regression.py -df data_mod.txt -test test_instances.txt -y_name height -alg SVM -apply unknown
+```
 
 **For more options, run either ML_classification.py or ML_regression.py with no parameters or with -h**
 
