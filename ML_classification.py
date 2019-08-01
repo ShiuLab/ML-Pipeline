@@ -225,42 +225,41 @@ def main():
 			args.save = args.df + "_" + args.alg
 		else:
 			args.save = args.df + "_" + args.alg + "_" + args.tag
-	
+
 	print("Snapshot of data being used:")
-	print(df.ix[:5, :5])
+	print(df.iloc[:5, :5])
 	print("\n\nCLASSES:",classes)
-	print("POS:",args.pos,type(args.pos))
-	print("NEG:",NEG,type(NEG))
+	print("POS:", args.pos, 'type: ', type(args.pos))
+	print("NEG:", NEG, 'type: ', type(NEG))
 	print('\nBalanced dataset will include %i instances of each class' % min_size)
 	n_features = len(list(df)) - 1
-	
+
 	###################################
 	### Parameter Sweep/Grid Search ###
 	###################################
-	
-	if args.gs.lower() in ['t','true']:
+
+	if args.gs.lower() in ['t', 'true']:
 		start_time = time.time()
-		print("\n\n===>  Grid search started  <===") 
-		
+		print("\n\n===>  Grid search started  <===")
+
 		params2use, balanced_ids, param_names = ML.fun.GridSearch(df, args.save, args.alg, classes, min_size, args.gs_score, args.n, args.cv_num, args.n_jobs, args.gs_reps, args.gs_type, args.pos, NEG, args.gs_full)
-		
+
 		# Print results from grid search
 		if args.alg.lower() == 'rf':
 			args.max_depth, args.max_features, args.n_estimators = params2use
 			print("Parameters selected: max_depth=%s, max_features=%s, n_estimators=%s" % (str(args.max_depth), str(args.max_features), str(args.n_estimators)))
-	
 		elif args.alg.lower() == 'svm':
 			args.C = params2use
 			print("Parameters selected: Kernel=Linear, C=%s" % (str(args.C)))
-		
+
 		elif args.alg.lower() == "svmpoly":
 			args.C, args.degree, args.gamma, kernel = params2use
 			print("Parameters selected: Kernel=%s, C=%s, degree=%s, gamma=%s" % (str(kernel), str(args.C), str(args.degree), str(args.gamma)))
-		
+
 		elif args.alg.lower() == "svmrbf":
 			args.C, args.gamma, kernel = params2use
 			print("Parameters selected: Kernel=%s, C=%s, gamma=%s" % (str(kernel), str(args.C), str(args.gamma)))
-		
+
 		elif args.alg.lower() == "logreg":
 			args.C, args.intercept_scaling, args.penalty = params2use
 			print("Parameters selected: penalty=%s, C=%s, intercept_scaling=%s" % (str(args.penalty), str(args.C), str(args.intercept_scaling)))
@@ -268,21 +267,21 @@ def main():
 		elif args.alg.lower() == "gb":
 			args.lr, args.max_depth, args.max_features, args.n_estimators = params2use
 			print("Parameters selected: learning rate=%s, max_features=%s, max_depth=%s, n_estimators=%s" % (str(args.lr), str(args.max_features), str(args.max_depth), str(args.n_estimators)))
-	
+
 		print("Grid search complete. Time: %f seconds" % (time.time() - start_time))
-	
+
 	else:
 		print('Not running grid search. Using default or given parameters instead')
 
 		try:
-			balanced_ids = ML.fun.EstablishBalanced(df,classes,int(min_size),args.n)
+			balanced_ids = ML.fun.EstablishBalanced(df, classes, int(min_size), args.n)
 		except:
 			classes = list(map(int, classes))
-			balanced_ids = ML.fun.EstablishBalanced(df,classes,int(min_size),args.n)
+			balanced_ids = ML.fun.EstablishBalanced(df, classes, int(min_size), args.n)
 
-	
+
 	bal_id = pd.DataFrame(balanced_ids)
-	bal_id.to_csv(args.save + '_BalancedIDs', index=False, header=False,sep="\t")
+	bal_id.to_csv(args.save + '_BalancedIDs', index=False, header=False, sep="\t")
 
 	 
 	###############################
@@ -298,47 +297,47 @@ def main():
 
 	if apply_unk == True:
 		df_proba2 = pd.DataFrame(data=df_unknowns['Class'], index=df_unknowns.index, columns=['Class'])
-		df_proba = pd.concat([df_proba,df_proba2],axis=0)
-	
+		df_proba = pd.concat([df_proba,df_proba2], axis=0)
+
 	for j in range(len(balanced_ids)):
-		
-		print("  Round %s of %s"%(j+1,len(balanced_ids)))
-		
+
+		print("  Round %s of %s" % (j + 1, len(balanced_ids)))
+
 		#Make balanced datasets
 		df1 = df[df.index.isin(balanced_ids[j])]
 		df_notSel = df[~df.index.isin(balanced_ids[j])]
-		
+
 		# Remove non-training classes from not-selected dataframe
 		if args.cl_train != 'all':
 			df_notSel = df_notSel[(df_notSel['Class'].isin(args.cl_train))]
-		
+
 		# Prime classifier object based on chosen algorithm
 		if args.alg.lower() == "rf":
 			parameters_used = [args.n_estimators, args.max_depth, args.max_features]
-			clf = ML.fun.DefineClf_RandomForest(args.n_estimators,args.max_depth,args.max_features,j,args.n_jobs)
+			clf = ML.fun.DefineClf_RandomForest(args.n_estimators, args.max_depth, args.max_features, j, args.n_jobs)
 		elif args.alg.lower() == "svm":
 			parameters_used = [args.C]
-			clf = ML.fun.DefineClf_LinearSVM(args.C,j)
+			clf = ML.fun.DefineClf_LinearSVM(args.C, j)
 		elif args.alg.lower() == 'svmrbf' or args.alg.lower() == 'svmpoly':
 			parameters_used = [args.C, args.degree, args.gamma, kernel]
-			clf = ML.fun.DefineClf_SVM(kernel,args.C,args.degree,args.gamma,j)
+			clf = ML.fun.DefineClf_SVM(kernel, args.C, args.degree, args.gamma, j)
 		elif args.alg.lower() == "logreg":
 			parameters_used = [args.C, args.intercept_scaling, args.penalty]
 			clf = ML.fun.DefineClf_LogReg(args.penalty, args.C, args.intercept_scaling)
 		elif args.alg.lower() == "gb":
 			parameters_used = [args.lr, args.max_features, args.max_depth]
 			clf = ML.fun.DefineClf_GB(args.n_estimators, args.lr, args.max_features, args.max_depth, args.n_jobs, j)
-		
+
 		# Run ML algorithm on balanced datasets.
-		if args.test!='':
-			result,current_scores,result_test = ML.fun.BuildModel_Apply_Performance(df1, clf, args.cv_num, df_notSel, apply_unk, df_unknowns, test_df, classes, args.pos, NEG, j, args.alg,args.threshold_test)
-			results_test.append(result_test)	
+		if args.test != '':
+			result, current_scores,result_test = ML.fun.BuildModel_Apply_Performance(df1, clf, args.cv_num, df_notSel, apply_unk, df_unknowns, test_df, classes, args.pos, NEG, j, args.alg,args.threshold_test)
+			results_test.append(result_test)
 		else:
-			result,current_scores = ML.fun.BuildModel_Apply_Performance(df1, clf, args.cv_num, df_notSel, apply_unk, df_unknowns, test_df, classes, args.pos, NEG, j, args.alg,args.threshold_test)
+			result, current_scores = ML.fun.BuildModel_Apply_Performance(df1, clf, args.cv_num, df_notSel, apply_unk, df_unknowns, test_df, classes, args.pos, NEG, j, args.alg,args.threshold_test)
 
 		results.append(result)
 		try:
-			df_proba = pd.concat([df_proba,current_scores], axis = 1)
+			df_proba = pd.concat([df_proba, current_scores], axis=1)
 		except:
 			print('\n\nOpps. Something went wrong merging the probability scores...')
 			print('Check if you have duplicate instance names in your dataframe!')
@@ -348,11 +347,10 @@ def main():
 	print("ML Pipeline time: %f seconds" % (time.time() - start_time))
 
 
-	
 	################################
 	### Unpack & Save ML Results ###
 	################################
-	
+
 	## Make empty dataframes
 	conf_matrices = pd.DataFrame(columns = np.insert(arr = classes.astype(np.str), obj = 0, values = 'Class'), dtype=float)
 	imp = pd.DataFrame(index = list(df.drop(['Class'], axis=1)))
@@ -361,7 +359,7 @@ def main():
 	AucPRc_array = []
 	accuracies = []
 	f1_array = np.array([np.insert(arr = classes.astype(np.str), obj = 0, values = 'M')])
-	
+
 	count = 0
 	for r in results:
 		count += 1

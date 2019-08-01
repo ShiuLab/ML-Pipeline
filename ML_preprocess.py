@@ -41,7 +41,7 @@ df = pd.read_csv(args.df, sep=args.sep, index_col=0)
 df = df.replace(['?', 'NA', 'na', 'n/a', '', '.'], np.nan)
 
 print('Snapshot of input data...')
-print(df.head())
+print(df.iloc[:5, :5])
 
 df_classes = df[args.y_name]
 df = df.drop(args.y_name, 1)
@@ -64,7 +64,7 @@ if len(cols_with_na) > 0:
 				dropped.append(col)
 
 if len(dropped) > 0:
-	print('Features dropped because missing > %.2f%% of data: %s' % (args.drop_percent, dropped))
+	print('Features dropped because missing > %.2f%% of data: %s' % (args.drop_percent * 100, dropped))
 	df.drop(dropped, 1, inplace=True)
 
 cols_to_impute = [x for x in cols_with_na if x not in dropped]
@@ -99,7 +99,7 @@ if args.onehot.lower() == 't':
 		with open(args.onehot_list) as f:
 			cols_cat = f.read().splitlines()
 
-	print('\n\nFeatures to one-hot-encode: %s' % cols_cat)
+	print('\nFeatures to one-hot-encode: %s' % cols_cat)
 	start_shape = df.shape
 
 	for col in cols_cat:
@@ -112,7 +112,7 @@ if args.onehot.lower() == 't':
 ###### Remove duplicate rows #######
 
 if args.remove_dups.lower() in ['t', 'true']:
-	dups_count = len(df.index.drop_duplicates())
+	dups_count = df.index.size - df.index.nunique()
 	print('\nNumber of duplicate row names to delete: %i' % dups_count)
 
 	df = df[~df.index.duplicated(keep='first')]
@@ -135,8 +135,8 @@ if args.drop.lower() != 'na':
 ###### Add class column back in and save ######
 
 df = pd.concat([df_classes, df], axis=1)
-print('\n\nSnapshot of imputed data...')
-print(df.head())
+print('\nSnapshot of imputed data...')
+print(df.iloc[:5, :5])
 
 save_name = args.df.replace('.txt','') + '_mod.txt'
 df.to_csv(save_name, sep=args.sep, header=True)
