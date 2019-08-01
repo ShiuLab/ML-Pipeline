@@ -40,7 +40,7 @@ Code provided to:
 
 ## Example workflow (see Workshop or Tutorial ipython notebook for more details!)
 
-0. Format data
+### 0. Format data
 
 Your data should look something like this:
 
@@ -57,19 +57,19 @@ Where the first column contains the instance IDs, one column contains the value 
 If you want to classify instances by class (in the above example 1 vs. 0), use ML_classification.py. You can specify what classes you want to include in your model using -cl_train. This is useful if your dataset also contains instances with other values in the Class column, such as "unknown", that you want to apply your trained model to. If you want to predict the value in the y_name column, use ML_regression.py. 
 
 
-1. Clean your data
+### 1. Clean your data
 
 ```python ML_preprocess.py -df data.txt -na_method median -onehot t -```
 
-2. Define a testing set (test_set.py)
+### 2. Define a testing set (test_set.py)
 
 ```python test_set.py -df data_mod.txt -use 1,0 -type c -p 0.1 -save test_instances.txt```
 
-3. Select the best subset of features to use as predictors (Feature_Selection.py)
+### 3. Select the best subset of features to use as predictors (Feature_Selection.py)
 
 ```python Feature_Selection.py -df data_mod.txt -cl_train 1,0 -type c -alg lasso -p 0.01 -save top_feat_lasso.txt```
 
-4. Train and apply a classification (ML_classification.py) or regression (ML_regression.py) machine learning model
+### 4. Train and apply a classification (ML_classification.py) or regression (ML_regression.py) machine learning model
 
 Example using the data shown above:
 ```python ML_classification.py -df data_mod.txt -test test_instances.txt -cl_train 1,0 -alg SVM -apply unknown```
@@ -82,7 +82,7 @@ Example of a regression prediction (e.g. predicting plant height in meters):
 
 **For more options, run either ML_classification.py or ML_regression.py with no parameters or with -h**
 
-5. Assess the results of your model (output from the ML_classification/ML_regression scripts with additional options in scripts_PostAnalysis
+### 5. Assess the results of your model (output from the ML_classification/ML_regression scripts with additional options in scripts_PostAnalysis
 
 **See scripts_PostAnalysis/README.md for more information on additional post-modeling analysis and figure making.**
 
