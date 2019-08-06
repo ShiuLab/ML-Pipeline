@@ -1,15 +1,3 @@
-"""
-Generate AUC-PR and AUC-ROC curves for multiple ML runs in the same figure. 
-Plots mean score over the balanced runs with stdev error bars.
-
-*** Need _BalancedIDs.csv file in the same directory as the _scores.txt files.
-
-To run:
-$ export PATH=/mnt/home/azodichr/miniconda3/bin:$PATH
-$ python ML_plots.py [args.save_NAME] POS_ID NEG_ID name1 [Path_to_1st_scores_file] name3 [Path_to_2nd_scores_file] etc.
-
-
-"""
 import sys, os, argparse
 import pandas as pd
 import numpy as np
@@ -26,7 +14,8 @@ warnings.filterwarnings("ignore")
 ###### Parse input parameters #######
 
 parser = argparse.ArgumentParser(
-	description='Code to make ROC and PR plots from multiple ML runs (need _scores.txt files).',
+	description='Code to make ROC and PR plots from multiple ML runs (need _scores.txt files). \
+	Plots mean score over the balanced runs with stdev error bars.',
 	epilog='https://github.com/ShiuLab/ML_Pipeline/')
 
 # Info about input data
