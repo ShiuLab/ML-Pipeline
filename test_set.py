@@ -134,6 +134,6 @@ print('%i instances in test set' % len(test))
 out = open(a.save, 'w')
 for ho in test:
 	out.write('%s\n' % ho)
-
+out.close()
 print('finished!')
 
