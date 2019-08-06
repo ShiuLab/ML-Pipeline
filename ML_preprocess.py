@@ -1,208 +1,145 @@
-"""
-PURPOSE:
-Pre-process feature-instance matrix for machine learning. 
-Options include:
-    Imput NAs: Drops features with >50% NAs
-               Then impute from a random distribution (-m 1) or 
-                    from the median or mode (-m2 -dtype n/c/b)
-
-To access pandas, numpy, and sklearn packages on MSU HPCC first run:
-$ export PATH=/mnt/home/azodichr/miniconda3/bin:$PATH
-
-INPUTS:
-    
-    REQUIRED:
-    -df       Feature & class dataframe for ML
-    -f        Function (imp, 1hot)
-    
-    OPTIONAL:
-    -m        Mode for inputation (1=from random distribution; 2=for median or mode)
-    -dtype    Data type: n=numeric, c=categorical, b=binary
-     
-OUTPUT:
-    -df_f     Modified dataframe 
-
-AUTHOR: Beth Moore
-
-REVISIONS:   Add one-hot encoding (CA)
-"""
-
-
-#DF= dataframe, dtype= datatype(n=numeric,c=categorical,b=binary) mv= type of missing value calculation
-import sys, os
+import sys, os, argparse
 import pandas as pd
 import numpy as np
 from scipy import stats
-#from statistics import mode
+from sklearn.preprocessing import Imputer
 
-def main():
-    
-    # Default code parameters
-    mv = 0
-	
-    for i in range (1,len(sys.argv),2):
-            if sys.argv[i] == "-df":
-                DF = sys.argv[i+1]
-            if sys.argv[i] == "-dtype":
-                dtype = sys.argv[i+1]
-            if sys.argv[i] == "-f":
-                f = sys.argv[i+1]
-            if sys.argv[i] == "-mv":
-                mv = int(sys.argv[i+1])
 
-    if len(sys.argv) <= 1:
-	    print(__doc__)
-	    exit()
-	    
-    df = pd.read_csv(DF, sep='\t', index_col = 0)
-        
-    #missing values
-    # turn all NAs or ? to NaN (NA recognized by numpy)
-    df = df.replace("?",np.nan)
-    df = df.replace("NA",np.nan)
-    df = df.replace("",np.nan)
-	
-    # find the percent of missing feature, if greater than 50%, then drop!
-    #col_list1= list(df.columns.values)
-    col_length=len(df.columns)-3
-    print (col_length)
-    for i in range(1,col_length):
-        print (i)
-        missing=  df.iloc[:,[i]].isnull().sum()
-        miss_pct = missing/len(df)
-        print (missing, miss_pct, df.columns[i])
-        if  miss_pct.iloc[0] > float(0.5):
-            df = df.drop(df.columns[i], 1) 
-            #print (df.columns[i], 1)
-	
-    df0 = df.iloc[:,[0]]
-    #print(df0)
-    def get_percent(counts):#function to get proportion
-        L=[]
-        z = len(counts)
-        print(z)
-        for j in range(0,z):
-            if float(counts.sum()) == 0.0:
-                L.append(float(0))
-            else:
-                #print(counts[j], counts.sum())
-                p =counts[j] / float(counts.sum())
-                #print(p)
-                L.append(p)
-        return (L)
-    def get_percent1(counts):#function to get proportion
-        L=[]
-        z = len(counts)+1
-        print(z)
-        for j in range(1,z):
-            if float(counts.sum()) == 0.0:
-                L.append(float(0))
-            else:
-                #print(counts[j], counts.sum())
-                p =counts[j] / float(counts.sum())
-                #print(p)
-                L.append(p)
-        return (L)
-        
-    def get_cat1(df,y):
-        df1 = df[df.columns[1:y]]
-        col_list2= list(df1.columns.values)
-        for i in range(0,len(df1.columns)):
-            x= col_list2[i] #column name
-            x1 = df1.iloc[:,[i]].dropna(axis=0) #get values of column name, drop NAs
-            cats= x1[x].unique() #get unique categories 
-            
-            counts= x1[x].value_counts() #get counts of each category
-            #print(float(counts.sum()))
-            print (counts)
-            if 0 in cats:
-                pcts = get_percent(counts) #get proportion of each category
-            else:
-                pcts= get_percent1(counts)
-                
-            print (pcts)
-            df1.loc[:,[x]] = df.loc[:,[x]].fillna(value=np.random.choice(cats, p=pcts),axis=1)
-            #randomly choose from unique categories\
-            #based on their proportion in the dataset, replace NAs with this category
-            #print (df1.loc[:,[x]])
-        return df1
-        
-    def get_num1(df, y):
-        df2= df[df.columns[1:y]]#get numeric
-        #print(df2)
-        col_list= list(df2.columns.values)
-        for i in range(1,len(df2.columns)):
-             x= col_list[i]
-             x1 = df2.iloc[:,[i]].dropna(axis=0)
-             df2.loc[:,[x]] = df2.loc[:,[x]].fillna(value=np.random.choice(x1[x]), axis=1)#replace NAs with random choice from actual distibution
-        return df2
-    
-    def get_cat2(df, y):
-        dfx = df[df.columns[1:y]]
-        #df1= dfx.select_dtypes(include=['object'])#categorical
-        col_list= list(dfx.columns.values)
-        for i in range(0,len(dfx.columns)):
-            x= col_list[i] #column name
-            x1 = dfx.iloc[:,[i]].dropna(axis=0)
-            m= stats.mode(x1) #get mode without NAs
-            p = m[0].tolist()
-            p= p[0]
-            p= p[0]
-            p = ''.join(str(p))
-            #p= mode(x1)
-            #p = pd.Series(m[0]) #put in series
-            dfx.loc[:,[x]] = dfx.loc[:,[x]].fillna(value=p,axis=1) #replace NAs with mode
-        return dfx
-        
-    def get_num2(df, y):
-        dfx = df[df.columns[1:y]]#get numeric
-        #print (df3)
-        col_list= list(dfx.columns.values)
-        for i in range(0,len(dfx.columns)):
-	        x= col_list[i]
-	        x1 = dfx.iloc[:,[i]].dropna(axis=0)
-	        med= np.median(x1)
-	        dfx.loc[:,[x]] = df.loc[:,[x]].fillna(value=med) #replace NAs with median
-    
-    if mv == 1: #choice 1, impute missing values with random choice from a distribution
-        #print (mv)
-        #df1= df.select_dtypes(include=['object'])#get categorical
-        col_list= list(df.columns.values)
-        #print(col_list)
-        y= len(col_list)
-        print("Replacing NA's for ", y, " columns")
-        if dtype == 'c':
-            df1= get_cat1(df, y)
-        elif dtype == 'b':
-            df1= get_cat1(df, y)
-        elif dtype == 'c':
-            df1= get_num1(df, y)
-        else:
-            print ("need -dtype : n=numeric, c=categorical, b=binary")
+###### Parse input parameters #######
 
-        frames  = [df0, df1] #put all frames back together ##need to add back class
-        df= pd.concat(frames, axis=1)
-    
-    elif mv == 2: #this option imputes median or mode for either numeric or categorical data respectively
-        col_list= list(df.columns.values)
-        y= len(col_list)
-        print("Replacing NA's for ", y, " columns")
-        if dtype == 'c':
-            df1= get_cat2(df, y)
-        elif dtype == 'b':
-            df1= get_cat2(df, y)
-        elif dtype == 'c':
-            df1= get_num2(df, y)
-        else:
-            print ("need -dtype : n=numeric, c=categorical, b=binary")
-	            
-        frames  = [df0, df1] #put all frames back together
-        df= pd.concat(frames, axis=1)
-        
-    elif mv == 0:
-        df = df.dropna(axis=0)   #third option, also default, remove all rows with NA, thereby leaving out missing values
+parser = argparse.ArgumentParser(
+	description='Code to:\n [1] remove/impute NAs,\n [2] t/f one-hot-encode categorical features,\n [3] t/f remove duplicate rows,\n \
+	 [4] keep/drop columns.',
+	epilog='https://github.com/ShiuLab/ML_Pipeline/')
 
-    df.to_csv(path_or_buf=str(DF)+".NAimputed.txt", sep="\t", header=True)
-    
-if __name__ == '__main__':
-	main()
+# Info about input data
+parser.add_argument('-df', help='Feature & class dataframe for ML, (example: example_binary.txt) ', required=True)
+parser.add_argument('-y_name', help='Name of column in Y_file to predict', default='Class')
+parser.add_argument('-sep', help='Deliminator', default='\t')
+
+# Imputation parameters
+parser.add_argument('-na_method', help='Mode for inputation (options: drop, mean, median, mode). Will default to mode if feature is categorical (i.e. a string)', default='median')
+parser.add_argument('-drop_percent', help='If > drop_percent of data is missing, feature will be dropped instead of imputed', default=0.5)
+
+# One-Hot-Encoding Parameters
+parser.add_argument('-onehot', help='t/f. If onehot encoding should be done if a column contains strings', default='t')
+parser.add_argument('-onehot_list', help='list of columns to be one-hot-encoded (will default to any column of type object - i.e. strings)', default='default')
+
+# Other parameters
+parser.add_argument('-remove_dups', help='t/f. Removes rows with duplicate row names (first column value)', default='t')
+parser.add_argument('-keep', help='List of column names to keep, drop the rest (except index and y_name) - note this can be done in ML_classification/ML_regression', default='na')
+parser.add_argument('-drop', help='List of column names to drop', default='na')
+
+if len(sys.argv) == 1:
+	parser.print_help()
+	sys.exit(0)
+args = parser.parse_args()
+
+###### Read in data #######
+
+df = pd.read_csv(args.df, sep=args.sep, index_col=0)
+df = df.replace(['?', 'NA', 'na', 'n/a', '', '.'], np.nan)
+
+print('Snapshot of input data...')
+print(df.iloc[:5, :5])
+
+df_classes = df[args.y_name]
+df = df.drop(args.y_name, 1)
+
+###### Remove NAs with too much data missing or if na_method = 0 #######
+
+print('\n\n### Dropping/imputing NAs... ###')
+cols_with_na = df.columns[df.isna().any()].tolist()
+print('\nNumber of columns with NAs: %i' % len(cols_with_na))
+
+dropped = []
+if len(cols_with_na) > 0:
+	if args.na_method == 'drop':
+		df = df.drop(cols_with_na, 1)
+	else:
+		for col in cols_with_na:
+			missing = df.loc[:, col].isnull().sum()
+			miss_pct = missing / len(df)
+			if miss_pct > args.drop_percent:
+				dropped.append(col)
+
+if len(dropped) > 0:
+	print('Features dropped because missing > %.2f%% of data: %s' % (args.drop_percent * 100, dropped))
+	df.drop(dropped, 1, inplace=True)
+
+cols_to_impute = [x for x in cols_with_na if x not in dropped]
+print('Number of columns to impute: %i' % len(cols_to_impute))
+
+###### Impute remaining NAs ####### 
+
+if len(cols_to_impute) > 0 and args.na_method != 'drop':
+	for col in cols_to_impute:
+		col_type = df[col].dtypes
+
+		if col_type == 'object':
+			df[col].fillna(df[col].mode()[0], inplace=True)
+
+		elif args.na_method == 'mean':
+			df[col].fillna(df[col].mean(), inplace=True)
+
+		elif args.na_method == 'median':
+			df[col].fillna(df[col].median(), inplace=True)
+
+		else:
+			print('Need to specify method for imputation')
+			quit()
+
+###### One-Hot-Encode any categorical features ####### 
+
+if args.onehot.lower() == 't':
+	print('\n\n### One Hot Encoding... ###')
+	if args.onehot_list == 'default':
+		cols_cat = list(df.select_dtypes(include=['object']).columns)
+	else:
+		with open(args.onehot_list) as f:
+			cols_cat = f.read().splitlines()
+
+	print('\nFeatures to one-hot-encode: %s' % cols_cat)
+	start_shape = df.shape
+
+	for col in cols_cat:
+		df = pd.concat([df, pd.get_dummies(df[col], prefix=col)], axis=1)
+		df.drop([col], axis=1, inplace=True)
+
+	end_shape = df.shape
+	print('Dataframe shape (rows, cols) before and after one-hot-encoding:\nBefore: %s\nAfter: %s' % (start_shape, end_shape))
+
+###### Remove duplicate rows #######
+
+if args.remove_dups.lower() in ['t', 'true']:
+	dups_count = df.index.size - df.index.nunique()
+	print('\nNumber of duplicate row names to delete: %i' % dups_count)
+
+	df = df[~df.index.duplicated(keep='first')]
+
+###### Keep/Drop given columns #######
+
+if args.keep.lower() != 'na':
+	print('Using subset of features from: %s' % args.keep)
+	with open(args.keep) as f:
+		f_keep = f.read().strip().splitlines()
+		f_keep = [args.y_name] + f_keep
+	df = df.loc[:, f_keep]
+
+if args.drop.lower() != 'na':
+	print('Dropping features from: %s' % args.drop)
+	with open(args.drop) as f:
+		f_drop = f.read().strip().splitlines()
+	df = df.drop(f_drop, axis=1)
+
+###### Add class column back in and save ######
+
+df = pd.concat([df_classes, df], axis=1)
+print('\nSnapshot of imputed data...')
+print(df.iloc[:5, :5])
+
+save_name = args.df.replace('.txt','') + '_mod.txt'
+df.to_csv(save_name, sep=args.sep, header=True)
+
+print('\nOutput file saved as: %s' % save_name)
+print('\nDone!')
