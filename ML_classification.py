@@ -52,7 +52,7 @@ def main():
 	# Grid Search Method
 	gs_group = parser.add_argument_group(title='CONTROL GRID SEARCH BEHAVIOR')
 	gs_group.add_argument('-gs', help='t/f if grid search over parameter space is desired.', type=str, default='t')
-	gs_group.add_argument('-gs_reps', '-gs_n', help='Number of Grid Search Reps (will append results if SAVE_GridSearch.csv exists)', type=int, default=10)
+	gs_group.add_argument('-gs_reps', '-gs_n', help='Number of Grid Search Reps (will append results if args.save_GridSearch.csv exists)', type=int, default=10)
 	gs_group.add_argument('-gs_score', help='Metric used to select best parameters', type=str, default='roc_auc')
 	gs_group.add_argument('-gs_type', help='Full grid search or randomized search (full/random)', type=str, default='full')
 	gs_group.add_argument('-gs_full', help='t/f Output full results from the grid search', type=str, default='f')

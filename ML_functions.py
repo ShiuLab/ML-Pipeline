@@ -35,12 +35,61 @@ class fun(object):
 		for j in range(gs_n):
 			tmp_l = []
 			for cl in class_ids_dict:
-				bal_samp = rn.sample(class_ids_dict[cl],min_size)
-				tmp_l = tmp_l+bal_samp
+				bal_samp = rn.sample(class_ids_dict[cl], min_size)
+				tmp_l = tmp_l + bal_samp
 			bal_list.append(tmp_l)
 		return bal_list
-	
-	
+
+	def param_space(ALG, GS_TYPE, n):
+		"Define the parameter space for the grid search."
+		from numpy import random as npr
+
+		dist_max_features = npr.choice(list(np.arange(0.01, 1., 0.01)) + ['sqrt', 'log2', None], n)
+		dist_max_depth = npr.randint(1, 50, n)
+		dist_C = npr.uniform(1e-10, 10, n)
+		dist_degree = npr.randint(2, 4, n)
+		dist_gamma = npr.uniform(1e-7, 1, n)
+		dist_learnrate = npr.uniform(1e-5, 1, n)
+		dist_intscaling = npr.uniform(0, 10, n)
+		dist_penalty = npr.choice(['l1', 'l2'], n)
+		dist_nestimators = npr.choice(range(100, 1000, 100), n)
+
+		if GS_TYPE.lower() == 'rand' or GS_TYPE.lower() == 'random':
+			if ALG.lower() == 'rf':
+				parameters = {'max_depth': dist_max_depth, 'max_features': dist_max_features, 'n_estimators': dist_nestimators}
+			elif ALG.lower() == "svm":
+				parameters = {'C': dist_C}
+			elif ALG.lower() == 'svmpoly':
+				parameters = {'kernel': ['poly'] * n, 'C': dist_C, 'degree': dist_degree, 'gamma': dist_gamma}
+			elif ALG.lower() == 'svmrbf':
+				parameters = {'kernel': ['rbf'] * n, 'C': dist_C, 'gamma': dist_gamma}
+			elif ALG.lower() == 'logreg':
+				parameters = {'C': dist_C, 'intercept_scaling': dist_intscaling, 'penalty': dist_penalty}
+			elif ALG.lower() == 'gb':
+				parameters = {'learning_rate': dist_learnrate, 'max_depth': dist_max_depth, 'max_features': dist_max_features, 'n_estimators': dist_nestimators}
+			else:
+				print('Grid search is not available for the algorithm selected')
+				exit()
+
+		else:
+			if ALG.lower() == 'rf':
+				parameters = {'max_depth': [3, 5, 10], 'max_features': [0.1, 0.5, 'sqrt', 'log2', None], 'n_estimators': [100,500,1000]}
+			elif ALG.lower() == "svm":
+				parameters = {'C': [0.001, 0.01, 0.1, 0.5, 1, 10, 50, 100]}
+			elif ALG.lower() == 'svmpoly':
+				parameters = {'kernel': ['poly'], 'C': [0.001, 0.01, 0.1, 0.5, 1, 10, 100], 'degree': [2, 3], 'gamma': np.logspace(-5, 1, 7)}
+			elif ALG.lower() == 'svmrbf':
+				parameters = {'kernel': ['rbf'], 'C': [0.001, 0.01, 0.1, 0.5, 1, 10, 100], 'gamma': np.logspace(-5, 1, 7)}
+			elif ALG.lower() == 'logreg':
+				parameters = {'C': [0.001, 0.01, 0.1, 0.5, 1, 10, 50], 'intercept_scaling': [0.1, 0.5, 1, 2, 5, 10],'penalty': ['l1','l2']}
+			elif ALG.lower() == 'gb':
+				parameters = {'learning_rate': [0.0001, 0.001, 0.01, 0.1, 1], 'max_depth': [3, 5, 10], 'max_features': [0.1, 0.5, 'sqrt', 'log2', None], 'n_estimators': [100,500,1000]}
+			else:
+				print('Grid search is not available for the algorithm selected')
+				exit()
+
+		return parameters
+
 	def GridSearch(df, SAVE, ALG, classes, min_size, gs_score, n, cv_num, n_jobs, GS_REPS, GS_TYPE, POS, NEG, gs_full):
 		""" Perform a parameter sweep using GridSearchCV implemented in SK-learn.
 		Need to edit the hard code to modify what parameters are searched
@@ -49,39 +98,14 @@ class fun(object):
 		from sklearn.model_selection import RandomizedSearchCV
 		from sklearn.preprocessing import StandardScaler
 
-		
 		start_time = time.time()
-		
-		### NOTE: The returned top_params will be in alphabetical order - to be consistent add any additional 
-		###       parameters to test in alphabetical order
-		if ALG.lower() == 'rf':
-			parameters = {'max_depth':[3, 5, 10], 'max_features': [0.1, 0.5, 'sqrt', 'log2', None], 'n_estimators': [100,500,1000]}
-			
-		elif ALG.lower() == "svm":
-			parameters = {'C':[0.001, 0.01, 0.1, 0.5, 1, 10, 50]}
-		
-		elif ALG.lower() == 'svmpoly':
-			parameters = {'kernel': ['poly'], 'C':[0.001,0.01, 0.1, 0.5, 1, 10, 50],'degree': [2,3,4], 'gamma': np.logspace(-5,1,7)}
+		n_iter = 10
+		parameters = fun.param_space(ALG, GS_TYPE, n_iter)
 
-		elif ALG.lower() == 'svmrbf':
-			parameters = {'kernel': ['rbf'], 'C': [0.001, 0.01, 0.1, 0.5, 1, 10, 50], 'gamma': np.logspace(-5,1,7)}
-		
-		elif ALG.lower() == 'logreg':
-			parameters = {'C': [0.001, 0.01, 0.1, 0.5, 1, 10, 50], 'intercept_scaling': [0.1, 0.5, 1, 2, 5, 10],'penalty': ['l1','l2']}	
-
-		elif ALG.lower() == 'gb':
-			parameters = {'learning_rate': [0.01, 0.1, 0.5, 1],'max_depth': [3, 5, 10], 'max_features': [0.1, 0.5, 'sqrt', 'log2', None],'n_estimators': [100,500,1000]}	
-
-		else:
-			print('Grid search is not available for the algorithm selected')
-			exit()
-		
-		gs_results = pd.DataFrame(columns = ['mean_test_score','params'])
+		gs_results = pd.DataFrame(columns=['mean_test_score', 'params'])
 		
 		bal_ids_list = []
 		for j in range(n):
-			
-			
 			# Build balanced dataframe and define x & y
 			df1 = pd.DataFrame(columns=list(df))
 			for cl in classes:
@@ -93,7 +117,7 @@ class fun(object):
 			if j < GS_REPS:
 				print("Round %s of %s"%(j+1,GS_REPS))
 				y = df1['Class']
-				x = df1.drop(['Class'], axis=1) 
+				x = df1.drop(['Class'], axis=1)
 				
 				# Build model, run grid search with 10-fold cross validation and fit
 				if ALG.lower() == 'rf':
@@ -117,25 +141,25 @@ class fun(object):
 					gs_score = 'average_precision'
 
 				if GS_TYPE.lower() == 'rand' or GS_TYPE.lower() == 'random':
-					grid_search = RandomizedSearchCV(model, parameters, scoring = gs_score, n_iter = 10, cv = cv_num, n_jobs = n_jobs, pre_dispatch=2*n_jobs, return_train_score=True)
+					grid_search = RandomizedSearchCV(model, param_distributions=parameters, scoring=gs_score, n_iter=n_iter, cv=cv_num, n_jobs=n_jobs, pre_dispatch=2 * n_jobs, return_train_score=True)
 				else:
-					grid_search = GridSearchCV(model, parameters, scoring = gs_score, cv = cv_num, n_jobs = n_jobs, pre_dispatch=2*n_jobs, return_train_score=True)
+					grid_search = GridSearchCV(model, param_grid=parameters, scoring=gs_score, cv=cv_num, n_jobs=n_jobs, pre_dispatch=2 * n_jobs, return_train_score=True)
 				
 				if len(classes) == 2:
-					y = y.replace(to_replace = [POS, NEG], value = [1,0])
+					y = y.replace(to_replace=[POS, NEG], value=[1, 0])
 				
 				grid_search.fit(x, y)
 				
 				# Add results to dataframe
 				j_results = pd.DataFrame(grid_search.cv_results_)
-				gs_results = pd.concat([gs_results, j_results[['params','mean_test_score']]])
+				gs_results = pd.concat([gs_results, j_results[['params', 'mean_test_score']]])
 			
 		# Break params into seperate columns
 		gs_results2 = pd.concat([gs_results.drop(['params'], axis=1), gs_results['params'].apply(pd.Series)], axis=1)
 		param_names = list(gs_results2)[1:]
-		
+
 		if gs_full.lower() == 't' or gs_full.lower() == 'true':
-			gs_results2.to_csv(SAVE + "_GridSearchFULL.txt")		
+			gs_results2.to_csv(SAVE + "_GridSearchFULL.txt")	
 		
 		# Find the mean score for each set of parameters & select the top set
 		gs_results_mean = gs_results2.groupby(param_names).mean()
@@ -160,38 +184,17 @@ class fun(object):
 		from sklearn.preprocessing import StandardScaler
 		
 		start_time = time.time()
-		
-		### NOTE: The returned top_params will be in alphabetical order - to be consistent add any additional 
-		###       parameters to test in alphabetical order
-		### NOTE2: sk-learn uses the conventation that higher scores are better than lower scores, so gs_score is
-		###       the negative MSE, so the largest value is the best parameter combination.
-		if ALG.lower() == 'rf':
-			parameters = {'max_depth':[3, 5, 10], 'max_features': [0.1, 0.5, 'sqrt', 'log2', None]}
-			
-		elif ALG.lower() == "svm":
-			#parameters = {'kernel': ['linear'], 'C':[0.01, 0.1, 0.5, 1, 10, 50, 100]}
-			parameters = {'C':[0.01, 0.1, 0.5, 1, 10, 50, 100]}
-		elif ALG.lower() == 'svmpoly':
-			parameters = {'kernel': ['poly'], 'C':[0.01, 0.1, 0.5, 1, 10, 100],'degree': [2,3], 'gamma': np.logspace(-5,1,7)}
+		n_iter = 10
+		parameters = fun.param_space(ALG, GS_TYPE, n_iter)
 
-		elif ALG.lower() == 'svmrbf':
-			parameters = {'kernel': ['rbf'], 'C': [0.01, 0.1, 0.5, 1, 10, 100], 'gamma': np.logspace(-5,1,7)}
-
-		elif ALG.lower() == 'gb':
-			parameters = {'learning_rate': [0.0001, 0.001, 0.01, 0.1, 1], 'max_features': [0.1, 0.5, 'sqrt', 'log2', None], 'max_depth': [3, 5, 10]}	
-
-		else:
-			print('Grid search is not available for the algorithm selected')
-			exit()
-			
 		y = df['Y']
-		x = df.drop(['Y'], axis=1) 
+		x = df.drop(['Y'], axis=1)
 
-		gs_results = pd.DataFrame(columns = ['mean_test_score','params'])
+		gs_results = pd.DataFrame(columns=['mean_test_score', 'params'])
 		
 		#if j < GS_REPS:
 		for j in range(GS_REPS):
-			print("Round %s of %s"%(j+1,GS_REPS))
+			print("Round %s of %s" % (j + 1, GS_REPS))
 			
 			# Build model
 			if ALG.lower() == 'rf':
@@ -209,14 +212,14 @@ class fun(object):
 			
 			# Run grid search with 10-fold cross validation and fit
 			if GS_TYPE.lower() == 'rand' or GS_TYPE.lower() == 'random':
-				grid_search = RandomizedSearchCV(model, parameters, scoring = gs_score, n_iter = 10, cv = cv_num, n_jobs = n_jobs, pre_dispatch=2*n_jobs, return_train_score=True)
+				grid_search = RandomizedSearchCV(model, parameters, scoring=gs_score, n_iter=n_iter, cv=cv_num, n_jobs=n_jobs, pre_dispatch=2 * n_jobs, return_train_score=True)
 			else:
-				grid_search = GridSearchCV(model, parameters, scoring = gs_score, cv = cv_num, n_jobs = n_jobs, pre_dispatch=2*n_jobs, return_train_score=True)
+				grid_search = GridSearchCV(model, parameters, scoring=gs_score, cv=cv_num, n_jobs=n_jobs, pre_dispatch=2 * n_jobs, return_train_score=True)
 			grid_search.fit(x, y)
 			
 			# Add results to dataframe
 			j_results = pd.DataFrame(grid_search.cv_results_)
-			gs_results = pd.concat([gs_results, j_results[['params','mean_test_score']]])
+			gs_results = pd.concat([gs_results, j_results[['params', 'mean_test_score']]])
 		
 		# Break params into seperate columns
 		gs_results2 = pd.concat([gs_results.drop(['params'], axis=1), gs_results['params'].apply(pd.Series)], axis=1)

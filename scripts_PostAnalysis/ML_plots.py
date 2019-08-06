@@ -6,11 +6,11 @@ Plots mean score over the balanced runs with stdev error bars.
 
 To run:
 $ export PATH=/mnt/home/azodichr/miniconda3/bin:$PATH
-$ python ML_plots.py [SAVE_NAME] POS_ID NEG_ID name1 [Path_to_1st_scores_file] name3 [Path_to_2nd_scores_file] etc.
+$ python ML_plots.py [args.save_NAME] POS_ID NEG_ID name1 [Path_to_1st_scores_file] name3 [Path_to_2nd_scores_file] etc.
 
 
 """
-import sys, os
+import sys, os, argparse
 import pandas as pd
 import numpy as np
 import matplotlib
@@ -19,24 +19,33 @@ from collections import OrderedDict
 from cycler import cycler
 plt.switch_backend('agg')
 from sklearn.metrics import roc_curve, auc, confusion_matrix
-def warn(*args, **kwargs):
-    pass
-import warnings
-warnings.warn = warn
-# 
-if len(sys.argv) <= 1:
-  print(__doc__)
-  exit()
 
-SAVE = sys.argv[1]
-POS = sys.argv[2]
-NEG = sys.argv[3]
+import warnings
+warnings.filterwarnings("ignore")
+
+###### Parse input parameters #######
+
+parser = argparse.ArgumentParser(
+	description='Code to make ROC and PR plots from multiple ML runs (need _scores.txt files).',
+	epilog='https://github.com/ShiuLab/ML_Pipeline/')
+
+# Info about input data
+parser.add_argument('-save', help='Output save name', default='plots')
+parser.add_argument('-cl_train', help='Positive and negative class label (pos,neg), where pos is first in -cl_train', default=['1','0'], nargs='+', type=str)
+parser.add_argument('-scores', help='List of scores files (e.g. -scores test_SVM_scores.txt, test_RF_scores.txt)', required=True, nargs='+', type=str)
+parser.add_argument('-names', help='List of names to assign to each score file (e.g. -names SVM, RF)', required=True, nargs='+', type=str)
+
+if len(sys.argv)==1:
+	parser.print_help()
+	sys.exit(0)
+args = parser.parse_args()
+
+POS, NEG = args.cl_train[0], args.cl_train[1]
 items = OrderedDict()
 
 # Organize all _scores and _BalancedIDs files into dictionary
-for i in range (4,len(sys.argv),2):
-  print(sys.argv[i])
-  items[sys.argv[i]] = [sys.argv[i+1], sys.argv[i+1].replace('_scores.txt', '_BalancedIDs')]
+for i in range(len(args.names)):
+  items[args.names[i]] = [args.scores[i], args.scores[i].replace('_scores.txt', '_BalancedIDs')]
 
 
 n_lines = len(items)
@@ -50,7 +59,6 @@ for i in items:
   # Read in scores and which genes were part of the balanced run for each run number
   df_proba = pd.read_csv(items[i][0], sep='\t', index_col = 0)
   n = len([c for c in df_proba.columns if c.lower().startswith('score_')])
-  print(df_proba.head())
   balanced_ids = []
   with open(items[i][1], 'r') as ids:
     balanced_ids = ids.readlines()
@@ -62,7 +70,7 @@ for i in items:
   
   # For each balanced run
   for k in range(0, n): 
-    print("Working on",i,k)
+    print("Processing model %s, replicate %i" % (i,k))
     FPR = []
     TPR = []
     precis = []
@@ -102,7 +110,7 @@ colors = ['#a1d581','#fea13c','#8abedc','#8761ad','#f27171','#9a9a9a']
 
 # Plot the ROC Curve
 f = plt.figure()
-plt.title('ROC Curve: ' + SAVE, fontsize=18)
+plt.title('ROC Curve: ' + args.save, fontsize=18)
 count = 0
 for i in items:
   #c = colors(count/float(n_lines))
@@ -119,15 +127,15 @@ plt.ylabel('True Positive Rate', fontsize=16)
 plt.xlabel('False Positive Rate', fontsize=16)
 plt.show()
 
-filename = SAVE + "_ROCcurve.png"
+filename = args.save + "_ROCcurve.png"
 plt.savefig(filename)
-filename_pdf = SAVE + "_ROCcurve.pdf"
+filename_pdf = args.save + "_ROCcurve.pdf"
 f.savefig(filename_pdf, bbox_inches='tight')
 plt.clf()
 
 # Plot the Precision-Recall Curve
 f = plt.figure()
-plt.title('PR Curve: ' + SAVE, fontsize=18)
+plt.title('PR Curve: ' + args.save, fontsize=18)
 count2 = 0
 for i in items:
   #c = colors(count2/float(n_lines))
@@ -144,9 +152,9 @@ plt.ylabel('Precision', fontsize=16)
 plt.xlabel('Recall', fontsize=16)
 plt.show()
 
-filename = SAVE + "_PRcurve.png"
+filename = args.save + "_PRcurve.png"
 plt.savefig(filename)
-filename_pdf = SAVE + "_PRcurve.pdf"
+filename_pdf = args.save + "_PRcurve.pdf"
 f.savefig(filename_pdf, bbox_inches='tight')
 plt.close()
 

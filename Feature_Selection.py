@@ -595,8 +595,9 @@ if __name__ == "__main__":
       features = f.read().splitlines()
       features = ['Class'] + features
     df = df.loc[:,features]
-  print(df.head())
   
+  print('\nSnapshot of data:')
+  print(df.iloc[:6, :5])
 
   # Run feature selection
   df_use = df.copy()
