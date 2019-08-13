@@ -22,14 +22,14 @@ import math
 class fun(object):
 	def __init__(self, filename):
 		self.tokenList = open(filename, 'r')
-	
+
 	def EstablishBalanced(df, classes, min_size, gs_n):
 		""" Defines which instances will be used for each balanced dataset """
 		class_ids_dict = {}
 		for cl in classes:
-			cl_ids = list(df[df["Class"]==cl].index)
+			cl_ids = list(df[df["Class"] ==cl].index)
 			class_ids_dict[cl] = cl_ids
-		
+
 		# Build a list of lists containing the IDs for balanced datasets
 		bal_list = []
 		for j in range(gs_n):
@@ -73,7 +73,7 @@ class fun(object):
 
 		else:
 			if ALG.lower() == 'rf':
-				parameters = {'max_depth': [3, 5, 10], 'max_features': [0.1, 0.5, 'sqrt', 'log2', None], 'n_estimators': [100,500,1000]}
+				parameters = {'max_depth': [3, 5, 10], 'max_features': [0.1, 0.5, 'sqrt', 'log2', None], 'n_estimators': [100, 500, 1000]}
 			elif ALG.lower() == "svm":
 				parameters = {'C': [0.001, 0.01, 0.1, 0.5, 1, 10, 50, 100]}
 			elif ALG.lower() == 'svmpoly':
@@ -81,7 +81,7 @@ class fun(object):
 			elif ALG.lower() == 'svmrbf':
 				parameters = {'kernel': ['rbf'], 'C': [0.001, 0.01, 0.1, 0.5, 1, 10, 100], 'gamma': np.logspace(-5, 1, 7)}
 			elif ALG.lower() == 'logreg':
-				parameters = {'C': [0.001, 0.01, 0.1, 0.5, 1, 10, 50], 'intercept_scaling': [0.1, 0.5, 1, 2, 5, 10],'penalty': ['l1','l2']}
+				parameters = {'C': [0.001, 0.01, 0.1, 0.5, 1, 10, 50], 'intercept_scaling': [0.1, 0.5, 1, 2, 5, 10], 'penalty': ['l1','l2']}
 			elif ALG.lower() == 'gb':
 				parameters = {'learning_rate': [0.0001, 0.001, 0.01, 0.1, 1], 'max_depth': [3, 5, 10], 'max_features': [0.1, 0.5, 'sqrt', 'log2', None], 'n_estimators': [100,500,1000]}
 			else:
