@@ -8,27 +8,68 @@ from sklearn.preprocessing import Imputer
 ###### Parse input parameters #######
 
 parser = argparse.ArgumentParser(
-	description='Code to:\n [1] remove/impute NAs,\n [2] t/f one-hot-encode categorical features,\n [3] t/f remove duplicate rows,\n \
-	 [4] keep/drop columns.',
+	description='Code to:\n'+\
+				' [1] remove/impute NAs,\n'+\
+				' [2] t/f one-hot-encode categorical features,\n'+\
+				' [3] t/f remove duplicate rows,\n'+\
+				' [4] keep/drop columns.',
 	epilog='https://github.com/ShiuLab/ML_Pipeline/')
 
 # Info about input data
-parser.add_argument('-df', help='Feature & class dataframe for ML, (example: example_binary.txt) ', required=True)
-parser.add_argument('-y_name', help='Name of column in Y_file to predict', default='Class')
-parser.add_argument('-sep', help='Deliminator', default='\t')
+parser.add_argument(
+	'-df', 
+	help='Feature & class dataframe. Must be specified',
+	required=True)
+parser.add_argument(
+	'-y_name', 
+	help='Name of lable column in dataframe, default=Class',
+	default='Class')
+parser.add_argument(
+	'-sep',
+	help='Deliminator, default="\t"',
+	default='\t')
 
 # Imputation parameters
-parser.add_argument('-na_method', help='Mode for inputation (options: drop, mean, median, mode). Will default to mode if feature is categorical (i.e. a string)', default='median')
-parser.add_argument('-drop_percent', help='If > drop_percent of data is missing, feature will be dropped instead of imputed', default=0.5)
+parser.add_argument(
+	'-na_method', 
+	help='Mode for inputation (options: drop, mean, median, mode). Will '+\
+		'default to mode if feature is categorical (i.e. a string), '+\
+		'otherwise default=median',
+	default='median')
+parser.add_argument( #### Shiu: this is ambiguous, should be -drop_proportion
+	'-drop_percent', 
+	help='If > drop_percent of data is missing, feature will be dropped '+\
+		'instead of imputed, default=0.5', 
+	default=0.5)
 
 # One-Hot-Encoding Parameters
-parser.add_argument('-onehot', help='t/f. If onehot encoding should be done if a column contains strings', default='t')
-parser.add_argument('-onehot_list', help='list of columns to be one-hot-encoded (will default to any column of type object - i.e. strings)', default='default')
+parser.add_argument(
+	'-onehot', 
+	help='t/f. If onehot encoding should be done if a column contains '+\
+		'strings, default = t', 
+	default='t')
+parser.add_argument(
+	'-onehot_list', 
+	help='list of columns to be one-hot-encoded (will default to default to '+\
+		'any column of type object - i.e. strings)',
+	default='default')
 
 # Other parameters
-parser.add_argument('-remove_dups', help='t/f. Removes rows with duplicate row names (first column value)', default='t')
-parser.add_argument('-keep', help='List of column names to keep, drop the rest (except index and y_name) - note this can be done in ML_classification/ML_regression', default='na')
-parser.add_argument('-drop', help='List of column names to drop', default='na')
+parser.add_argument(
+	'-remove_dups', 
+	help='t/f. Removes rows with duplicate row names (1st column value),' +\
+		'default=t',
+	default='t')
+parser.add_argument(
+	'-keep', 
+	help='List of column names to keep, drop the rest (except index and '+\
+		'y_name) - note this can be done in ML_classification/ML_regression, '+\
+		'default="na"', 
+	default='na')
+parser.add_argument(
+	'-drop', 
+	help='List of column names to drop, default="na"', 
+	default='na')
 
 if len(sys.argv) == 1:
 	parser.print_help()
@@ -43,7 +84,13 @@ df = df.replace(['?', 'NA', 'na', 'n/a', '', '.'], np.nan)
 print('Snapshot of input data...')
 print(df.iloc[:5, :5])
 
-df_classes = df[args.y_name]
+# Shiu: Catch situaton when label column name is incorrectly specified
+try:
+	df_classes = df[args.y_name]
+except KeyError:
+	print("\nERR: y_name is specified as %s: does not exist\n" % args.y_name)
+	sys.exit(0)
+	
 df = df.drop(args.y_name, 1)
 
 ###### Remove NAs with too much data missing or if na_method = 0 #######
@@ -51,6 +98,16 @@ df = df.drop(args.y_name, 1)
 print('\n\n### Dropping/imputing NAs... ###')
 cols_with_na = df.columns[df.isna().any()].tolist()
 print('\nNumber of columns with NAs: %i' % len(cols_with_na))
+
+# Shiu: Fix two issues,
+#  1) drop_percent is misleading and people can be giving percent number
+#  2) If user does provide a drop_percent, it is not properly converted to
+#     a floating point number and a TypeError will be thrown.
+args.drop_percent = float(args.drop_percent)
+if args.drop_percent > 1 or args.drop_percent < 0:
+	print('\nERR: drop_percent is between 0 and 1, but %f is specified\n' %\
+		args.drop_percent)
+	sys.exit(0)
 
 dropped = []
 if len(cols_with_na) > 0:
@@ -64,7 +121,8 @@ if len(cols_with_na) > 0:
 				dropped.append(col)
 
 if len(dropped) > 0:
-	print('Features dropped because missing > %.2f%% of data: %s' % (args.drop_percent * 100, dropped))
+	print('\nFeatures dropped because missing > %.2f%% of data: %s' % \
+		(args.drop_percent * 100, dropped))
 	df.drop(dropped, 1, inplace=True)
 
 cols_to_impute = [x for x in cols_with_na if x not in dropped]
@@ -107,7 +165,8 @@ if args.onehot.lower() == 't':
 		df.drop([col], axis=1, inplace=True)
 
 	end_shape = df.shape
-	print('Dataframe shape (rows, cols) before and after one-hot-encoding:\nBefore: %s\nAfter: %s' % (start_shape, end_shape))
+	print('Dataframe shape (rows, cols) before and after one-hot-encoding:\n'+\
+		'Before: %s\nAfter: %s' % (start_shape, end_shape))
 
 ###### Remove duplicate rows #######
 
