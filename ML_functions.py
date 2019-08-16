@@ -89,10 +89,10 @@ class fun(object):
 				'intercept_scaling': [0.1, 0.5, 1, 2, 5, 10],
 				'penalty': ['l1','l2']}
 			elif ALG.lower() == 'gb':
-				parameters = {'learning_rate': [0.0001, 0.001, 0.01, 0.1, 1],
+				parameters = {'learning_rate': [0.1, 0.001, 0.01, 0.1, 1],
 				'max_depth': [3, 5, 10],
 				'max_features': [0.1, 0.5, 'sqrt', 'log2', None],
-				'n_estimators': [100,500,1000]}
+				'n_estimators': [100, 500, 1000]}
 			else:
 				print('Grid search is not available for the algorithm selected')
 				exit()
@@ -294,7 +294,7 @@ class fun(object):
 	def DefineReg_GB(n_estimators, learning_rate, max_features, max_depth, 
 		n_jobs, j):
 		from sklearn.ensemble import GradientBoostingRegressor
-		reg = GradientBoostingRegressor(loss='deviance',
+		reg = GradientBoostingRegressor(loss='ls',
 			learning_rate=learning_rate,
 			max_features=max_features,
 			max_depth=max_depth,
@@ -668,8 +668,8 @@ class fun(object):
 			Accuracy_test = (TP_test + TN_test) / (TP_test + TN_test +
 				FP_test + FN_test)
 			F1_test = (2 * TP_test) / ((2 * TP_test) + FP_test + FN_test)
-			return TP, TN, FP, FN, TPR, FPR, FNR, Precision, Accuracy, F1,
-				Precision_test, Accuracy_test, F1_test
+			return (TP, TN, FP, FN, TPR, FPR, FNR, Precision, Accuracy, F1,
+				Precision_test, Accuracy_test, F1_test)
 		else:
 			return TP, TN, FP, FN, TPR, FPR, FNR, Precision, Accuracy, F1
 
