@@ -288,6 +288,8 @@ def main():
 			else:
 				params2use = "No Grid Search... Default parameters used..."
 			print("Grid search done. Time: %f s" % (time.time() - start_time))
+	else:
+		params2use = "No Grid Search... Default parameters used..."
 
 	####### Run ML models #######
 	start_time = time.time()
