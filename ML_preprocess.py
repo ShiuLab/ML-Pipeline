@@ -78,8 +78,8 @@ args = parser.parse_args()
 
 ###### Read in data #######
 
+df = pd.read_csv(args.df, sep=args.sep, index_col=0)
 
-df = pd.read_csv(args.df, sep=args.sep, index_col=0, encoding='latin1')
 df = df.replace(['?', 'NA', 'na', 'n/a', '', '.'], np.nan)
 
 print('Snapshot of input data...')
