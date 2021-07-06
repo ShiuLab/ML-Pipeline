@@ -123,7 +123,10 @@ def main():
 	
 	# Complex transformations of input parameters
 	if ',' in args.cl_train:
-		args.cl_train = args.cl_train.strip().split(',')
+		if args.cl_train == '1,0':
+			args.cl_train = [1,0]
+		else:
+			args.cl_train = args.cl_train.strip().split(',')
 		args.pos = args.cl_train[0]
 	if args.apply != 'all':
 		if ',' in args.apply:
