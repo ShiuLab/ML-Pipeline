@@ -2,7 +2,6 @@ import sys, os, argparse
 import pandas as pd
 import numpy as np
 from scipy import stats
-from sklearn.preprocessing import Imputer
 
 
 ###### Parse input parameters #######
