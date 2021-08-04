@@ -110,8 +110,9 @@ if a.type.lower() == 'c' or a.type.lower() == 'classificaton':
 		use_list = a.use.strip().split(',')
 
 	print('Pulling test set from classes: %s' % str(use_list))
+	min_size = (df.groupby('Class').size()).min() - 1
 	for cl in use_list:
-		temp = df[(df['Class']==cl)] 
+		temp = df[df['Class']==cl].sample(min_size, random_state=42) 
 		temp_sample = pull_sample(temp, a.p, a.n)
 		keep_test = list(temp_sample.index)
 		test.extend(keep_test)
