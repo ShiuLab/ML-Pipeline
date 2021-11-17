@@ -175,7 +175,7 @@ if args.remove_dups.lower() in ['t', 'true']:
 	print('\nNumber of duplicate row names to delete: %i' % dups_count)
 
 	df = df[~df.index.duplicated(keep='first')]
-
+	df_classes = df_classes[~df_classes.index.duplicated(keep='first')]
 ###### Keep/Drop given columns #######
 
 if args.keep.lower() != 'na':
