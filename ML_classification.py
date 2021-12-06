@@ -392,13 +392,15 @@ def main():
 
 		# Run ML algorithm on balanced datasets.
 		if args.test != '':
-			result, current_scores, result_test = \
+			# also return the fitted clf to be saved, Peipei Wang, 12/06/2021
+			clf, result, current_scores, result_test = \
 				ML.fun.BuildModel_Apply_Performance(df1, clf, args.cv_num,
 					df_notSel, apply_unk, df_unknowns, test_df, classes,
 					args.pos, NEG, j, args.alg, args.threshold_test)
 			results_test.append(result_test)
 		else:
-			result, current_scores = ML.fun.BuildModel_Apply_Performance(df1,
+			# also return the fitted clf to be saved, Peipei Wang, 12/06/2021
+			clf, result, current_scores = ML.fun.BuildModel_Apply_Performance(df1,
 				clf, args.cv_num, df_notSel, apply_unk, df_unknowns, test_df,
 				classes, args.pos, NEG, j, args.alg, args.threshold_test)
 
@@ -416,6 +418,10 @@ def main():
 	################################
 	### Unpack & Save ML Results ###
 	################################
+
+	## save the fitted model, Peipei Wang, 12/06/2021
+	import joblib
+	joblib.dump(clf,args.save + "_models.pkl")
 
 	## Make empty dataframes
 	conf_matrices = pd.DataFrame(columns=np.insert(arr=classes.astype(np.str),

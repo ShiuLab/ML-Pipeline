@@ -456,10 +456,11 @@ class fun(object):
 				result_test = fun.Performance_MC(test_df['Class'], test_pred,
 					classes)
 
+		# also return the fitted clf to be saved, Peipei Wang, 12/06/2021
 		if not isinstance(test_df, str):
-			return result,current_scores,result_test
+			return clf, result,current_scores,result_test
 		else:
-			return result,current_scores
+			return clf, result,current_scores
 
 	def Run_Regression_Model(df, reg, cv_num, ALG, df_unknowns, test_df,
 		cv_sets, j):
@@ -525,10 +526,11 @@ class fun(object):
 				importances = "na"
 				print("Cannot get importance scores")
 
+		# also return the fitted reg to be saved, Peipei Wang, 12/06/2021
 		if not isinstance(test_df, str):
-			return result, cv_pred_df, importances, result_test
+			return reg, result, cv_pred_df, importances, result_test
 		else:
-			return result, cv_pred_df, importances
+			return reg, result, cv_pred_df, importances
 
 	def Performance(y, cv_pred, scores, clf, clf2, classes, POS, POS_IND,
 		NEG, ALG, THRSHD_test):

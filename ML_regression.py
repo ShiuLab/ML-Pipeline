@@ -134,7 +134,11 @@ def main():
 
 	####### Load Dataframe & Pre-process #######
 
-	df = pd.read_csv(args.df, sep=args.sep, index_col=0)
+	#df = pd.read_csv(args.df, sep=args.sep, index_col=0)
+	# load dataframe using fread, in case that the dataframe may be too large, Peipei Wang, 12/06/2021
+	df = dt.fread(args.df,header=True,sep=args.sep)
+	df = df.to_pandas()
+	df = df.set_index(df.columns[0], drop=True)
 
 	# If features  and class info are in separate files, merge them: 
 	if args.df2 != '':
@@ -322,13 +326,14 @@ def main():
 			quit()
 
 		# Run ML algorithm.
+		# also return the fitted reg to be saved, Peipei Wang, 12/06/2021
 		if args.test != '':
-			result, cv_pred, importance, result_test = ML.fun.Run_Regression_Model(
+			reg, result, cv_pred, importance, result_test = ML.fun.Run_Regression_Model(
 				df, reg, args.cv_num, args.alg, df_unknowns, test_df,
 				args.cv_sets, j)
 			results_test.append(result_test)
 		else:
-			result, cv_pred, importance = ML.fun.Run_Regression_Model(
+			reg, result, cv_pred, importance = ML.fun.Run_Regression_Model(
 				df, reg, args.cv_num, args.alg, df_unknowns,
 				test_df, args.cv_sets, j)
 
@@ -347,6 +352,10 @@ def main():
 
 	####### Unpack ML results #######
 	timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+	## save the fitted model, Peipei Wang, 12/06/2021
+	import joblib
+	joblib.dump(reg,args.save + "_models.pkl")
 
 	mses, evss, r2s, cors = [], [], [], []
 	for r in results:
