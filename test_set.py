@@ -70,7 +70,7 @@ if a.skip != '':
 
 # Check for Nas
 if df.isnull().values.any() == True:
-	if drop_na.lower() == 't' or drop_na.lower() == 'true':
+	if a.drop_na.lower() == 't' or a.drop_na.lower() == 'true':
 		start_dim = df.shape
 		df = df.dropna(axis=0)
 		print('Dropping rows with NA values changed the dimensions from %s to %s.' 
