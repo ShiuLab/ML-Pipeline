@@ -1,30 +1,18 @@
+"""
+PURPOSE: Functions for Shiu Lab ML-Pipeline Random Forest regression and
+classification models
+"""
 import sys
 import pandas as pd
 import numpy as np
 import time
 import random as rn
 import math
+import ML_functions as ML
 
 class fun(object):
 	def __init__(self, filename):
 		self.tokenList = open(filename, 'r')
-
-	def EstablishBalanced(df, classes, min_size, gs_n):
-		""" Defines which instances will be used for each balanced dataset """
-		class_ids_dict = {}
-		for cl in classes:
-			cl_ids = list(df[df["Class"] == cl].index)
-			class_ids_dict[cl] = cl_ids
-
-		# Build a list of lists containing the IDs for balanced datasets
-		bal_list = []
-		for j in range(gs_n):
-			tmp_l = []
-			for cl in class_ids_dict:
-				bal_samp = rn.sample(class_ids_dict[cl], min_size)
-				tmp_l = tmp_l + bal_samp
-			bal_list.append(tmp_l)
-		return bal_list
 
 	def param_space(GS_TYPE, n):
 		"Define the parameter space for the grid search."
@@ -119,8 +107,8 @@ class fun(object):
 		
 		# Find the mean score for each set of parameters & select the top set
 		gs_results_mean = gs_results2.groupby(param_names).mean()
-		gs_results_mean = gs_results_mean.sort_values('mean_test_score', 0,
-			ascending=False)
+		gs_results_mean = gs_results_mean.sort_values(by='mean_test_score', 
+			axis=0, ascending=False)
 		top_params = gs_results_mean.index[0]
 
 		print("Parameter sweep time: %f seconds" % (time.time() - start_time))
@@ -202,7 +190,7 @@ class fun(object):
 	def DefineClf_RandomForest(n_estimators, max_depth, max_features, j, n_jobs):
 		from sklearn.ensemble import RandomForestClassifier
 		clf = RandomForestClassifier(n_estimators=int(n_estimators),
-			max_depth=max_depth,
+			max_depth=int(max_depth),
 			max_features=max_features,
 			criterion='gini',
 			random_state=j,
@@ -219,6 +207,108 @@ class fun(object):
 			n_jobs=n_jobs)
 		return reg
 	
+	def Run_Classification_Model(df, clf, cv_num, df_notSel, apply_unk,
+		df_unknowns, test_df, classes, POS, NEG, j, THRSHD_test):
+		from sklearn.model_selection import cross_val_predict
+
+		# Data from balanced dataframe
+		y = df['Class']
+		X = df.drop(['Class'], axis=1)
+
+		# For LinearSVM need to have calibrated classifier to get probability
+		# scores, but not for importance scores
+		clf2 = 'pass'
+
+		# Obtain the predictions using 10 fold cross validation
+		# (uses KFold cv by default):
+		cv_proba = cross_val_predict(estimator=clf, X=X, y=y, cv=int(cv_num),
+			method='predict_proba')
+		cv_pred = cross_val_predict(estimator=clf, X=X, y=y, cv=cv_num)
+
+		# Fit a model using all data and apply to 
+		# (1) instances that were not selected using cl_train
+		# (2) instances with unknown class
+		# (3) test instances
+		clf.fit(X,y)
+
+		notSel_proba = clf.predict_proba(df_notSel.drop(['Class'], axis=1))
+		if apply_unk == True:
+			unk_proba = clf.predict_proba(df_unknowns.drop(['Class'], axis=1))
+		if not isinstance(test_df, str):
+			test_proba = clf.predict_proba(test_df.drop(['Class'], axis=1))
+			test_pred = clf.predict(test_df.drop(['Class'], axis=1))
+
+		# Evaluate performance
+		if len(classes) == 2:
+			i = 0
+			for clss in classes:
+				if clss == POS:
+					POS_IND = i
+					break
+				i += 1
+			scores = cv_proba[:, POS_IND]
+
+			# Generate run statistics from balanced dataset scores
+			result = ML.fun.Performance(y, cv_pred, scores, clf, clf2, classes,
+				POS, POS_IND, NEG, 'rf', THRSHD_test)
+
+			#Generate data frame with all scores
+			score_columns=["score_%s"%(j)]
+			df_sel_scores = pd.DataFrame(data=cv_proba[:, POS_IND], 
+				index=df.index, columns=score_columns)
+			df_notSel_scores = pd.DataFrame(data=notSel_proba[:,POS_IND],
+				index=df_notSel.index, columns=score_columns)
+			current_scores = pd.concat([df_sel_scores, df_notSel_scores],
+				axis=0)
+			if apply_unk == True:
+				df_unk_scores = pd.DataFrame(data=unk_proba[:, POS_IND],
+					index=df_unknowns.index, columns=score_columns)
+				current_scores =  pd.concat([current_scores,df_unk_scores],
+					axis=0)
+			if not isinstance(test_df, str):
+				df_test_scores = pd.DataFrame(data=test_proba[:,POS_IND],
+					index=test_df.index, columns=score_columns)
+				current_scores =  pd.concat([current_scores, df_test_scores],
+					axis=0)
+				scores_test = test_proba[:,POS_IND]
+				result_test = ML.fun.Performance(test_df['Class'], test_pred,
+					scores_test, clf, clf2, classes, POS, POS_IND, NEG, 'rf',
+					THRSHD_test)
+
+		else:
+			# Generate run statistics from balanced dataset scores
+			result = ML.fun.Performance_MC(y, cv_pred, classes)
+
+			#Generate data frame with all scores
+			score_columns = []
+			for clss in classes:
+				score_columns.append("%s_score_%s"%(clss, j))
+
+			df_sel_scores = pd.DataFrame(data=cv_proba, index=df.index,
+				columns=score_columns)
+			df_notSel_scores = pd.DataFrame(data=notSel_proba,
+				index=df_notSel.index, columns=score_columns)
+			current_scores = pd.concat([df_sel_scores, df_notSel_scores],
+				axis=0)
+			if apply_unk:
+				df_unk_scores = pd.DataFrame(data=unk_proba,
+					index=df_unknowns.index, columns=score_columns)
+				current_scores =  pd.concat([current_scores, df_unk_scores],
+					axis=0)
+			if not isinstance(test_df, str):
+				df_test_scores = pd.DataFrame(data=test_proba,
+					index=test_df.index, columns=score_columns)
+				current_scores = pd.concat([current_scores, df_test_scores],
+					axis=0)
+				result_test = ML.fun.Performance_MC(test_df['Class'], test_pred,
+					classes)
+
+		# also return the fitted clf to be saved, Peipei Wang, 12/06/2021
+		if not isinstance(test_df, str):
+			return clf, result, current_scores, result_test
+		else:
+			return clf, result, current_scores
+		
 	def Run_Regression_Model(df, reg, cv_num, df_unknowns, test_df,
 		cv_sets, j):
 		from sklearn.model_selection import cross_val_predict
