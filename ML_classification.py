@@ -143,6 +143,7 @@ def main():
 	###################################
 
 	df = pd.read_csv(args.df, sep=args.sep, index_col=0)
+	print(df.head())
 
 	# If features  and class info are in separate files, merge them: 
 	if args.df2 != '':
@@ -151,6 +152,7 @@ def main():
 		df = pd.concat([df_class[args.y_name], df], axis=1, join='inner')
 		print('Merging the X and Y dfs. Dim change: %s to %s (instance, feat).'
 			% (str(start_dim), str(df.shape)))
+		print(f"df after concat args.y_name and df: {df.head()}")
 
 	# Specify class column - default = Class
 	if args.y_name != 'Class':
@@ -163,6 +165,7 @@ def main():
 			features = f.read().strip().splitlines()
 			features = ['Class'] + features
 		df = df.loc[:, features]
+		print(f"df after filtering features: {df.head()}")
 
 	# Check for Nas
 	if df.isnull().values.any():
@@ -205,15 +208,19 @@ def main():
 	# Remove classes that won't be included in the training (e.g. unknowns)
 	if args.cl_train != 'all':
 		df = df[(df['Class'].isin(args.cl_train))]
+		print(f"df after filtering classes: {df.head()}")
 
 	# Separte test intances from training/validation 
 	if args.test !='':
 		df_all = df.copy()
+		print(f"df_all: {df_all.head()}")
 		print('Removing test instances to apply model on later...')
 		with open(args.test) as test_file:
 			test_instances = test_file.read().splitlines()
+			print(test_instances)
 		try:
 			test_df = df.loc[test_instances, :]
+			print(test_df)
 			df = df.drop(test_instances)
 		except:
 			test_instances = [int(x) for x in test_instances]
@@ -405,8 +412,13 @@ def main():
 				classes, args.pos, NEG, j, args.alg, args.threshold_test)
 
 		results.append(result)
+		print(f"This is results_test, class line 408: {results_test}")
+		print(f"This is result_test, class line 409: {result_test}")
+		print(f"This is results, class line 410: {results}")	
 		try:
+			print(f"df_proba, line 412: {df_proba.iloc[:,0]}")
 			df_proba = pd.concat([df_proba, current_scores], axis=1)
+			print(f"This is df_proba: {df_proba.iloc[:,0]}")
 		except:
 			print('\n\nSomething went wrong merging the probability scores...'
 				'Check if you have duplicate instance names in your df!')
@@ -442,6 +454,8 @@ def main():
 			cmatrix['Class'] = classes
 			conf_matrices = pd.concat([conf_matrices, cmatrix])
 
+			print(f"Confusion matrix for balanced training dataset {count}:\n{cmatrix}")
+
 		# For binary predictions
 		if 'importances' in r:
 			if str(r['importances']) != 'na':
@@ -463,6 +477,33 @@ def main():
 			f1_temp_array = np.insert(arr=r['f1_MC'], obj=0,
 				values=r['macro_f1'])
 			f1_array = np.append(f1_array, [f1_temp_array], axis=0)
+			print(f"f1_array, class line 470: {f1_array}")
+
+	# # empty matrices for test set for MC, Brianna Brown, 02/26/2024
+	# conf_matrices_test = pd.DataFrame(columns=np.insert(arr=classes.astype(np.str),
+	# 	obj=0, values='Class'), dtype=float)
+	# accuracies_test = []
+	# f1_array_test = np.array([np.insert(arr=classes.astype(np.str),
+	# 	obj=0, values='M')])
+
+	# # for Multi-class predictions - test set ONLY output Brianna Brown 02/26/2024
+	# count_test = 0
+	# for r in results_test:
+	# 	count_test += 1
+	# 	if 'cm' in r:
+	# 		cmatrix_test = pd.DataFrame(r['cm'], columns=classes)
+	# 		cmatrix_test['Class'] = classes
+	# 		conf_matrices_test = pd.concat([conf_matrices_test, cmatrix_test])
+
+	# 		print(f"Confusion matrix for test dataset {count_test}:\n{cmatrix_test}")
+
+	# 	if 'accuracy' in r:
+	# 		accuracies_test.append(r['accuracy'])
+	# 	if 'macro_f1' in r:
+	# 		f1_temp_array_test = np.insert(arr=r['f1_MC'], obj=0,
+	# 			values=r['macro_f1'])
+	# 		f1_array_test = np.append(f1_array_test, [f1_temp_array_test], axis=0)
+	# 		print(f"f1_array, class line 479: {f1_array_test}")
 
 	# Output for both binary and multiclass predictions
 	timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -472,6 +513,13 @@ def main():
 	if args.cm.lower() in ['true','t']:
 		cm_mean.to_csv(args.save + "_cm.csv",sep="\t")
 		done = ML.fun.Plot_ConMatrix(cm_mean, args.save)
+	
+	# # Plot confusion matrix (% predicted as each class) based on test set 
+	# # for Multi-Class Brianna Brown 02/26/2024
+	# cm_mean_test = conf_matrices_test.groupby('Class').mean()
+	# if args.cm.lower() in ['true','t']:
+	# 	cm_mean_test.to_csv(args.save + "_cm_test.csv",sep="\t")
+	# 	done_test = ML.fun.Plot_ConMatrix(cm_mean_test, args.save + "_test")
 
 	# Unpack results from the test set
 	if args.test!='':
@@ -496,6 +544,7 @@ def main():
 					values=r_test['macro_f1'])
 				f1_array_test = np.append(f1_array_test, [f1_temp_test_array],
 					axis=0)
+				print(f"f1_array_test, class line 496: {f1_array_test}")
 
 ###### Multiclass Specific Output ######
 	if len(classes) > 2:
@@ -510,7 +559,7 @@ def main():
 			df_proba.insert(loc=1, column=class_nm + '_score_stdev',
 				value=df_proba[class_proba_cols].std(axis=1))
 			summary_cols.insert(0, class_nm + '_score_stdev')
-
+		print(f"df_proba after inserting stdev, class line 520:{df_proba}")
 		for class_nm in reversed(classes):
 			summary_cols.insert(0,class_nm +'_score_Median')
 			mc_score_columns.append(class_nm +'_score_Median')
@@ -519,6 +568,7 @@ def main():
 				c.startswith(class_nm+'_score_')]
 			df_proba.insert(loc=1, column=class_nm + '_score_Median',
 				value=df_proba[class_proba_cols].median(axis=1))
+		print(f"df_proba after inserting median, class line 529:{df_proba}")
 
 		# Find the max mc_score and set to Prediction column 
 		# (remove the _score_Median string)
@@ -526,13 +576,13 @@ def main():
 			value=df_proba[mc_score_columns].idxmax(axis=1))
 		df_proba['Prediction'] = \
 			df_proba.Prediction.str.replace('_score_Median', '')
-
+		print(f"df_proba after inserting prediction, class line 536:{df_proba}")
 		# Count the # of times an instance of class x is predicted as class y 		
 		summary_df_proba = df_proba[['Class', 'Prediction',
 			class_nm + '_score_Median']].groupby(['Class',
 				'Prediction']).agg('count').unstack(level=1)
 		summary_df_proba.columns = summary_df_proba.columns.droplevel()
-
+		print(f"summary_df_proba, class line 543:{summary_df_proba}")
 		# Check to make sure each class was predicted at least once
 		for cl in classes:
 			if cl not in list(summary_df_proba):
@@ -651,8 +701,9 @@ def main():
 			value=df_proba['Class'])
 		df_proba[Pred_name] = np.where(df_proba['Mean'] >= final_threshold,
 			args.pos, NEG)
-
+		
 		# Summarize % of each class predicted as POS and NEG		
+		# NOTE: This includes BOTH training and test instances
 		summary_df_proba = df_proba[['Class', Pred_name, 'Mean']].groupby([
 			'Class', Pred_name]).agg('count').unstack(level=1)
 		summary_df_proba.columns = summary_df_proba.columns.droplevel()
@@ -677,6 +728,25 @@ def main():
 			out_scores.write("ID\t" + pd.DataFrame.to_csv(df_proba, 
 				sep="\t").strip() + "\n")
 		out_scores.close()
+
+		# Summarize % of each class predicted as POS and NEG in TEST set ONLY
+		testset_df_proba = df_proba[df_proba.index.isin(test_instances)]
+		print(f"testset_df_proba: {testset_df_proba.head()}")
+		# Unstack multi-level indexing
+		testset_df_proba = testset_df_proba[['Class', Pred_name, 'Mean']].groupby([
+			'Class', Pred_name]).agg('count').unstack(level=1) 
+		testset_df_proba.columns = testset_df_proba.columns.droplevel()
+		try:
+			testset_df_proba['n_total'] = (testset_df_proba[args.pos] +
+				testset_df_proba[NEG])
+			testset_df_proba[str(NEG) + '_perc'] = (testset_df_proba[NEG] /
+				testset_df_proba['n_total'])
+		except:
+			testset_df_proba['n_total'] = testset_df_proba[args.pos]
+			testset_df_proba[str(NEG) + '_perc'] = 0
+			print('Warning: No instances were classified as negative!')
+		testset_df_proba[str(args.pos) + '_perc'] = (testset_df_proba[args.pos] /
+			testset_df_proba['n_total'])
 
 		# Get model preformance scores using final_threshold
 		if args.test != '':
