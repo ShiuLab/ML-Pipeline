@@ -1,0 +1,49 @@
+---
+req_group                    # Required input
+  df: example_binary.txt     # Feature & class dataframe for ML
+  alg: RF                    # ML Algorithm to run (RF, SVM, VMpoly, SVMrbf, GB, LogReg
+
+inp_group:                   # Optional input
+  df2: ''                    # Class data (if not in -df). Need to provide -y_name
+  sep: '\t'                  # Deliminator
+  y_name: Class              # Name of column in Y_file to predict
+  test: ''                   # File with testing lines
+  feat: all                  # File with list of features (from x) to include
+
+pipln_group:                 # Control pipeline behavior
+  cl_train: all              # Classes to include in training, if binary, first listed = pos
+  pos: 1                     # Name of positive class for binary classifier (or from -cl_train)
+  apply: ''                  # all or list of non-training class labels that the models should be applied to
+  n_jobs: 1                  # Number of processors for parallel computing (max for HPCC = 14)
+  n: 100                     # Number of replicates (unique balanced datasets)
+  threshold_test: F1         # Metric used to define prediction score threshold for classification (F1 or accuracy)
+  x_norm: f                  # t/f to normalize features (default to T for SVM based algs unless "force_false"))
+  drop_na: f                 # t/f Drop rows with NAs
+  cv_num: 10                 # Cross validation fold #
+  min_size: ''               # Number instances to downsample to (default = # instances from smallest class')
+	
+gs_group:                    # Control grid search behavior
+  gs: t                      # t/f if grid search over parameter space is desired
+  gs_reps: 10                # Number of Grid Search Reps (will append if args.save_GridSearch.csv exists)
+  gs_score: roc_auc          # Metric used to select best parameters
+  gs_type: full              # Full grid search or randomized search (full/random)
+  gs_full: f                 # t/f Output full results from the grid search
+  
+out_group:                   # Output arguments
+  save: ''                   # prefix for output files. CAUTION: will overwrite!
+  tag: ''                    # Identifier string to add to RESULTS output line
+  cm: f                      # t/f Output the confusion matrix & confusion matrix figure
+  plots: f                   # t/f Output ROC and PR curve plots for each model (see ML_plots.py to post-plot
+  short: f                   # Set to T to output only summary prediction scores
+
+param_grop:                  # Default Hyperparameters
+  n_estimators: 500          # RF/GB parameter. Grid Search [100, 500, 1000]
+  max_depth: 5               # RF/GB parameter. Grid Search [3, 5, 10]
+  max_features: sqrt         # RF/GB parameter. Grid Search [0.1, 0.5, sqrt, log2, None]
+  lr: 0.1                    # GB parameter. Grid Search [0.001, 0.01, 0.1, 0.5, 1]
+  kernel: ''                 # SVM parameter - not in grid search use -alg SVM, SVMrbf, or SVMpoly
+  C: 1.0                     # SVM/LogReg parameter. Grid Search [0.001, 0.01, 0.1, 0.5, 1, 10, 50]
+  gamma: 1                   # SVMrbf/SVMpoly parameter. Grid Search [np.logspace(-5,1,7)]
+  degree: 2                  # SVMpoly parameter. Grid Search [2,3,4]
+  penalty: l2                # LogReg parameter. Grid Search [2,3,4]
+  intercept_scaling: 1.0     # LogReg parameter. Grid Search [0.1, 0.5, 1, 2, 5, 10]
